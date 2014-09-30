@@ -34,11 +34,12 @@
 # consistent diagonal : either a slash diagonal with hps signs = (+1 or None) or a backslash diagonal with hps signs = (-1 or None)
 
 from myMaths import combinations
-import myTools
 import collections
 import itertools
 import math
 import sys
+
+import myTools
 
 # p_tbO_g={+1:%+1, -1:%-1, None:%None}, percentages of each tb orientation in genome_tb
 # p_tbO is a dict containing the percentages for each chromosome

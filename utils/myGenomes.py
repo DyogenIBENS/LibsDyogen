@@ -9,7 +9,7 @@ import sys
 import itertools
 import collections
 
-from .. import enum
+import enum
 
 import myFile
 

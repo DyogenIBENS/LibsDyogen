@@ -1,7 +1,6 @@
 
 # Module de dessin d'un karyotype
 
-import sys
 import itertools
 
 import myTools

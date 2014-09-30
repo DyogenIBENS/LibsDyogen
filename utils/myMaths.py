@@ -6,8 +6,9 @@
 # This is free software, you may copy, modify and/or distribute this work under the terms of the GNU General Public License, version 3 (GPL v3) or later and the CeCiLL v2 license in France
 
 import math
-import myTools
 import operator
+
+import myTools
 
 #############################
 # Fonctions de statistiques #

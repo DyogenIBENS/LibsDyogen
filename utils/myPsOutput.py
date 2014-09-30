@@ -1,3 +1,4 @@
+import myMaths
 
 # Module d'ecriture dans un fichier PostScript
 
@@ -118,7 +119,6 @@ def getLinearGradient(colors, nelem):
 
 
 def getCubicGradient(colors, nelem):
-    import myMaths
     l = len(colors)
     tmp = (l-1.)/(nelem-1.)
     interpol = myMaths.myInterpolator.getMultDim(myMaths.myInterpolator.oneDimCubic, range(l), colors)

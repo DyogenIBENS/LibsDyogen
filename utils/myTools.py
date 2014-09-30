@@ -7,12 +7,13 @@
 
 import os
 import sys
-# FIXME not the good way to import
-from .. import enum
 import itertools
 import time
 import string
 import warnings
+
+import enum
+
 from functools import wraps
 
 import myFile

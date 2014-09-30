@@ -40,13 +40,14 @@ import copy
 import itertools
 import collections
 # FIXME not the good way to import
-from .. import enum
 
 import myTools
 import myGenomes
 import myProbas
 import myFile
 import myMaths
+
+import enum
 
 # For parallel computation
 from multiprocessing import Queue, Process, Manager, Lock
