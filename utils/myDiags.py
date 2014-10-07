@@ -535,8 +535,8 @@ def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
             # after this step genes that have no homolog in the other genome are marked None
             # 'gNsInCommon' is also called the set of 'anchor genes' in bibliography
             (gNsInCommon, gNsInG1notInG2, gNsInG2notInG1) = crossGeneContent(g1, g2)
-            removedGNs1 = gNsInG1notInG2 + set([None])
-            removedGNs2 = gNsInG2notInG1 + set([None])
+            removedGNs1 = gNsInG1notInG2 | set([None])
+            removedGNs2 = gNsInG2notInG1 | set([None])
             (g1, mG1f2G1o, (nCL1, nGL1)) =\
                 remapCoFilterContentAndSize(g1, removedGNs1,
                                             minChromLength,
