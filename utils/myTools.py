@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# PhylDiag v1.02
+# LibsDyogen
 # python 2.7
 # Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
 # mail : hrc@ens.fr or jlucas@ens.fr
@@ -198,6 +198,27 @@ class memoizeMethod(object):
 #    Obj.add_to(1) # not enough arguments
 #    Obj.add_to(1, 2) # returns 3, result is not cached
 #    """
+
+# Check is an excecutable is accessible
+# This may be usefull to check if a plugged external programm has been added to
+# the PATH environment variable.
+def which(program):
+    import os
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+    return None
+
 
 # iterator of adjacent components of a list
 class myIterator:

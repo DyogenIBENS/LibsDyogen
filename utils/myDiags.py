@@ -323,7 +323,7 @@ def strandProduct(sa,sb):
 # ouputs :
 #       M : mh or mhp depending on whether gc1 and gc2 are chromosomes written in genes or in tbs
 #               M is a dict of dict : M[i1][i2] = hpSign, this structure is lighter since M is a sparse matrix
-#       locG2 : a dict {...,f:[(i2,s2)],...} with i2 the indices of the genes on gc2. For each f locG2 gives all its genes positions in the chromosome 2
+#       locG2 : a dict {..., f:[(i2,s2)],...} with i2 the indices of the genes on gc2. For each f locG2 gives all its genes positions in the chromosome 2
 # f : family, often the ancGene index
 ###################################################################################################################################
 def homologyMatrix(gc1,gc2):
@@ -404,6 +404,8 @@ def findDiagType(i1,i2,M,consistentSwDType):
         else:
             diagType = None
     return diagType
+
+
 #
 # Extract sbs in a pairwise comparison of two chromosomes
 ############################################################
@@ -591,7 +593,7 @@ def recommendedGap(nbHps, targetProba, N12, N1, N2, p_hpSign=None, maxGapThresho
     #return g
 
 # Number of non-empty value in the mh or the mhp
-@myTools.tictac
+#@myTools.tictac
 @myTools.verbose
 def numberOfHomologies(g1,g2,verbose=True):
     nbHomologies = {}
@@ -633,7 +635,9 @@ def max_g_of(diag):
 # because of collections.Counter
 @myTools.minimalPythonVersion((2,7))
 @myTools.verbose
-def statisticalValidation(listOfDiags, g1_tb, g2_tb, N12s, p_hpSign, pThreshold=0.001, NbOfHomologiesThreshold=50, validateImpossToCalc_mThreshold=3, verbose=True):
+def statisticalValidation(listOfDiags, g1_tb, g2_tb, N12s, p_hpSign,
+                          pThreshold=0.001, NbOfHomologiesThreshold=50,
+                          validateImpossToCalc_mThreshold=3, verbose=True):
     def  calculateCharacteristics(diag):
         if len(diag) == 3:
             ((c1,l1_tb),(c2,l2_tb),la_tb) = diag
@@ -834,8 +838,8 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
         pass
     else:
         raise TypeError('g1 and/or g2 must be either myGenomes.Genome or dict')
-    #step 1 : remove genes specific to each lineage
-    ################################################
+    #step 1 :filter genomes and rewrite in tandem blocks if needed
+    ##############################################################
     # rewrite genomes by family names (ie ancGene names)
     g1_aID = myMapping.labelWithAncGeneID(g1, ancGenes)
     g2_aID = myMapping.labelWithAncGeneID(g2, ancGenes)
@@ -859,6 +863,7 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
     print >> sys.stderr, "genome 1 rewritten in tbs, contains %s tbs" % sum([len(g1_tb[c1]) for c1 in g1_tb])
     print >> sys.stderr, "genome 2 rewritten in tbs, contains %s tbs" % sum([len(g2_tb[c2]) for c2 in g2_tb])
     #TODO, optimise next step
+
     # second level of verbosity
     verbose2 = True if (len(g1) > 500 or len(g2) > 500) else False
     N12s, N12_g = numberOfHomologies(g1_tb, g2_tb, verbose=verbose2)
@@ -971,6 +976,7 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
         # sbsGenSV[i] = ((c1, [[mGf2GoC1.new[i1] for i1 in tb1] for tb1 in l1]),
         #                (c2, [[mGf2GoC2.new[i2] for i2 in tb2] for tb2 in l2]), la, pVal)
         sbsGenSV[i] = ((c1, l1), (c2, l2), la, pVal)
+
     return sbsGenSV
 
 
