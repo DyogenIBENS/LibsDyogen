@@ -829,7 +829,7 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
                                 nbHpsRecommendedGap=2,
                                 targetProbaRecommendedGap=0.01,
                                 validateImpossToCalc_mThreshold=3,
-                                multiProcess=True,
+                                multiProcess=False,
                                 verbose=True):
     if isinstance(g1, myGenomes.Genome) and isinstance(g2, myGenomes.Genome):
         g1 = g1.intoDict()
