@@ -7,8 +7,8 @@
 
 import math
 import operator
-
 import myTools
+
 
 #############################
 # Fonctions de statistiques #
@@ -277,9 +277,9 @@ class myInterpolator:
 # Generateur de valeurs aleatoires #
 ####################################
 class randomValue:
-
     import bisect
     import random
+    import sys
 
     # Renvoie un indice au hasard dans l, compte tenu des valeurs de l, qui indiquent une frequence d'apparition
     #############################################################################################################
@@ -296,11 +296,21 @@ class randomValue:
         return lambda : randomValue.bisect.bisect_left(newl, randomValue.random.random() * m) - 1
 
 
-    # Distribution VonMises restreinte a [0,1] et centree sur une moyenne
+    # Adapted von Mises distribution in [0,1]
     ######################################################################
     @staticmethod
     def myVonMises(mean, kappa):
-        r = randomValue.random.vonmisesvariate(0, kappa) / (2*math.pi) + mean
+
+        # WARNING!! in Python version 2.7.3, vonmisesvariate(0,K) variates from
+        # -pi to +pi. This bug (as in the official documentation it goes well from
+        #  0 to 2*pi) was fixed in Pyhton 2.7.4
+        if randomValue.sys.version_info <= (2, 7, 3):
+            vmrv = randomValue.random.vonmisesvariate(0, kappa) / math.pi
+        else :
+            vmrv = randomValue.random.vonmisesvariate(math.pi, kappa) / \
+                   math.pi - 1
+        # vmrv - a von-Mises random variable between -1 and 1, mean = 0
+        r = vmrv/2 + mean
         if r < 0:
             return mean * abs(r) / (0.5-mean)
         elif r > 1:
