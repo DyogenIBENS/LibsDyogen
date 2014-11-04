@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-# PhylDiag v1.02
+# LibsDyogen
 # python 2.7
-# Copyright © 2013 IBENS/Dyogen : Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
+# Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
 # mail : hrc@ens.fr or jlucas@ens.fr
 # This is free software, you may copy, modify and/or distribute this work under the terms of the GNU General Public License, version 3 (GPL v3) or later and the CeCiLL v2 license in France
 
@@ -14,7 +14,7 @@ The following code is a lightweight wrapper around SVG files. The metaphor
 is to construct a scene, add objects to it, and then write it to a file
 to display it.
 
-Warning, some svgclass may request the drawHomologyMatrix.css file, copied at the end of this file
+Warning, some svgclass may request the styleForHomologyMatrixWithSBs.css file, copied at the end of this file
 Rq : this css file is consistent with genomicus notations
 """
 
@@ -36,7 +36,7 @@ class Scene:
         #       " <g style=\"fill-opacity:1.0; stroke:black;\n",
         #       "  stroke-width:1;\">\n"]
         var= ['<?xml version="1.0" encoding="utf-8" standalone="no"?>\n',
-                '<?xml-stylesheet type="text/css" href="drawHomologyMatrix.css" ?>\n', #Attention, necessite le fichier css avec la charte graphique de genomicus
+                '<?xml-stylesheet type="text/css" href="styleForHomologyMatrixWithSBs.css" ?>\n', #Attention, necessite le fichier css avec la charte graphique de genomicus
                 '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n',
                 #"<svg height=\"%spt\" version=\"1.1\" viewBox=\"0 0 %s %s\" width=\"%spt\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n" % (self.height, self.width, self.height, self.width),
                 "<svg height=\"100%%\" version=\"1.1\" viewBox=\"0 0 %s %s\" width=\"100%%\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n" % (self.width, self.height),

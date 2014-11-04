@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# PhylDiag v1.02
+# LibsDyogen
 # python 2.7
 # Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
 # mail : hrc@ens.fr or jlucas@ens.fr
@@ -199,58 +199,26 @@ class memoizeMethod(object):
 #    Obj.add_to(1, 2) # returns 3, result is not cached
 #    """
 
+# Check is an excecutable is accessible
+# This may be usefull to check if a plugged external programm has been added to
+# the PATH environment variable.
+def which(program):
+    import os
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
-# Matthieu's queue manager for parallel computations
-def myPool(nbThreads, func, largs):
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+    return None
 
-    # Librairies
-    import multiprocessing
-    import cStringIO
-
-    # Sauvegarde des descripteurs
-    backstdout = sys.stdout
-    backstderr = sys.stderr
-
-    # Semaphores
-    sys.stdout = sys.stderr
-    manager = multiprocessing.Manager()
-    sys.stdout = backstdout
-    queue = manager.Queue()
-
-    def newfunc(i, args):
-        queue.put( (i, func(*args), sys.stdout.getvalue(), sys.stderr.getvalue()) )
-
-    def joinnext():
-        (p,r,out,err) = queue.get()
-        proc.pop(p).join()
-        backstdout.write(out)
-        backstderr.write(err)
-        return (p,r)
-
-    try:
-        nrun = 0
-        proc = {}
-        for (i,x) in enumerate(largs):
-
-            if nrun == nbThreads:
-                yield joinnext()
-                nrun -= 1
-
-            # Lancement d'un nouveau processus
-            proc[i] = multiprocessing.Process(target=newfunc, args=(i,x))
-            sys.stdout = cStringIO.StringIO()
-            sys.stderr = cStringIO.StringIO()
-            proc[i].start()
-            sys.stdout = backstdout
-            sys.stderr = backstderr
-            nrun += 1
-
-        while len(proc) > 0:
-            yield joinnext()
-
-    finally:
-        sys.stdout = backstdout
-        sys.stderr = backstderr
 
 # iterator of adjacent components of a list
 class myIterator:
@@ -335,7 +303,7 @@ class myCombinator:
         if len(d) == 0:
             # None, the obj is added just like it is
             i = len(grp)
-            grp.append(list(obj))
+            grp.append(list(set(obj)))
             for x in obj:
                 dic[x] = i
             return grp
@@ -343,10 +311,11 @@ class myCombinator:
             i = d.pop()
             grpiextend = grp[i].extend
             for x in d:
-                grpx = grp[x]
-                grpiextend(grpx)
-                for y in grpx:
+                grpiextend(grp[x])
+                for y in grp[x]:
                     dic[y] = i
+                #FIXME not del grp[x] ?
+                # see reduce and "empty sets"
                 grp[x] = []
             dd = [x for x in obj if x not in dic]
             for x in dd:
@@ -366,6 +335,9 @@ class myCombinator:
     def reduce(self):
         self.__init__(self)
 
+    # reset combinator
+    def reset(self):
+        self.__init__()
 
 # add more options to a specific module
 __moduleoptions = []

@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
+<<<<<<< HEAD
 # PhylDiag v1.02
 # python 2.7.3 - 2.7.8
+=======
+# LibsDyogen
+# python 2.7
+>>>>>>> 9a7eeeb543c26e23b4690fa87b0b3283f61a789f
 # Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
 # mail : hrc@ens.fr or jlucas@ens.fr
 # This is free software, you may copy, modify and/or distribute this work under the terms of the GNU General Public License, version 3 (GPL v3) or later and the CeCiLL v2 license in France

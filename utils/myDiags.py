@@ -46,12 +46,10 @@ import myGenomes
 import myProbas
 import myFile
 import myMaths
+import myMapping
+import myMultiprocess
 
 import enum
-
-# For parallel computation
-from multiprocessing import Queue, Process, Manager, Lock
-import multiprocessing
 
 FilterType = enum.Enum('None', 'InCommonAncestor', 'InBothSpecies')
 
@@ -75,23 +73,24 @@ def frameDistance(f,(x0,y0),(x1,y1), diagType):
     return res
 
 # Diagonal Pseudo Distance
-def DPD((x0,y0),(x1,y1), diagType):
-    f=lambda (x0,y0),(x1,y1) : 2*max(abs(x1-x0),abs(y1-y0))-min(abs(x1-x0),abs(y1-y0))
+def DPD((x0,y0), (x1,y1), diagType):
+    def f((x0,y0), (x1,y1)):
+        return 2 * max(abs(x1-x0), abs(y1-y0)) - min(abs(x1-x0), abs(y1-y0))
     return frameDistance(f,(x0,y0),(x1,y1), diagType)
 
 # Chebyshev Distance
-def CD((x0,y0),(x1,y1), diagType):
-    f=lambda (x0,y0),(x1,y1) : max(abs(x1-x0), abs(y1-y0))
+def CD((x0, y0), (x1, y1), diagType):
+    f = lambda (x0,y0), (x1,y1): max(abs(x1-x0), abs(y1-y0))
     return frameDistance(f,(x0,y0),(x1,y1), diagType)
 
 # Manhattan Distance
 def MD((x0,y0),(x1,y1), diagType):
-    f=lambda (x0,y0),(x1,y1) : abs(x1-x0) + abs(y1-y0)
+    f = lambda (x0,y0), (x1,y1): abs(x1-x0) + abs(y1-y0)
     return frameDistance(f,(x0,y0),(x1,y1), diagType)
 
 # Euclidean Distance
 def ED((x0,y0),(x1,y1), diagType):
-    f=lambda (x0,y0),(x1,y1) : round(math.sqrt((x1-x0)**2 + (y1-y0)**2))
+    f = lambda (x0,y0), (x1,y1): round(math.sqrt((x1-x0)**2 + (y1-y0)**2))
     return frameDistance(f,(x0,y0),(x1,y1), diagType)
 
 #
@@ -324,7 +323,7 @@ def strandProduct(sa,sb):
 # ouputs :
 #       M : mh or mhp depending on whether gc1 and gc2 are chromosomes written in genes or in tbs
 #               M is a dict of dict : M[i1][i2] = hpSign, this structure is lighter since M is a sparse matrix
-#       locG2 : a dict {...,f:[(i2,s2)],...} with i2 the indices of the genes on gc2. For each f locG2 gives all its genes positions in the chromosome 2
+#       locG2 : a dict {..., f:[(i2,s2)],...} with i2 the indices of the genes on gc2. For each f locG2 gives all its genes positions in the chromosome 2
 # f : family, often the ancGene index
 ###################################################################################################################################
 def homologyMatrix(gc1,gc2):
@@ -332,7 +331,7 @@ def homologyMatrix(gc1,gc2):
     #M={}
     #locG2 = {}
     #for (i2,(f2,s2)) in enumerate(gc2):
-    #       if f2 != -1:
+    #       if f2 != None:
     #               if f2 not in locG2:
     #                       locG2[f2]=[]
     #                       locG2[f2].append( (i2,s2) ) # LOCalisation on Gc 2
@@ -345,7 +344,7 @@ def homologyMatrix(gc1,gc2):
     #2 faster than 1
     locG2 = {}
     for (i2,(f,s2)) in enumerate(gc2):
-        if f != -1:
+        if f != None:
             if f not in locG2:
                 locG2[f]=[]
             locG2[f].append( (i2,s2) ) # LOCalisation on Gc 2
@@ -355,7 +354,7 @@ def homologyMatrix(gc1,gc2):
         return (M, locG2)
 
     for (i1,(f,s1)) in enumerate(gc1):
-        if f !=-1 and f in locG2: #TODO : remove by advance the f == -1 from gc1
+        if f !=None and f in locG2: #TODO : remove by advance the f == None from gc1
             M[i1]={}
             for (i2,s2) in locG2[f]:
                 M[i1][i2]= strandProduct(s1,s2)
@@ -367,13 +366,13 @@ def homologyMatrix(gc1,gc2):
     #if len(gc1) < len(gc2):
     #       (gc1,gc2) = (gc2,gc1)
     #       switchedGCs = True
-    #       if f != -1:
+    #       if f != None:
     #               if f not in locG2:
     #                       locG2[f]=[]
     #               locG2[f].append( (i2,s2) ) # LOCalisation on Gc 2
     #M={}
     #for (i1,(f,s1)) in enumerate(gc1):
-    #       if f != -1 and f in locG2: #TODO : remove by advance the f == -1 from gc1
+    #       if f != None and f in locG2: #TODO : remove by advance the f == None from gc1
     #               M[i1]={}
     #               for (i2,s2) in locG2[f]:
     #                       M[i1][i2]= strandProduct(s1,s2)
@@ -405,11 +404,13 @@ def findDiagType(i1,i2,M,consistentSwDType):
         else:
             diagType = None
     return diagType
+
+
 #
 # Extract sbs in a pairwise comparison of two chromosomes
 ############################################################
 @myTools.verbose
-def extractSbsInPairCompChr(c1, c2, gc1, gc2, gapMax=0, distanceMetric = 'DPD', consistentSwDType=True, verbose = True):
+def extractSbsInPairCompChr(c1, c2, gc1, gc2, gapMax=0, distanceMetric = 'DPD', consistentSwDType=True, verbose=False):
     print >> sys.stderr, "(PPID = %s, PID = %s) start to extract diagonals on G1[%s]_vs_G2[%s]" % (os.getppid(), os.getpid(), c1, c2)
     listOfDiags = []
     (M,locG2) = homologyMatrix(gc1, gc2)
@@ -419,13 +420,13 @@ def extractSbsInPairCompChr(c1, c2, gc1, gc2, gapMax=0, distanceMetric = 'DPD', 
     l1=[]
     l2=[]
     diagType = None
-    i1_old = -1
+    i1_old = None
 
     #TODO scan M instead of gc1 : impossible since 'dict size cannot change during a loop over its items'
     # scan M from left to right
     for (i1,(f,_)) in enumerate(gc1):
         # f in locG2 means that i1 has at least one homolog on gc2, locG2 never changes, that is why we iterate over locG2
-        if f != -1 and f in locG2:
+        if f != None and f in locG2:
             i1_old=i1
             # scan M from bottom to top
             for (i2,_) in locG2[f]: # the family name of the gene at index i2 is the same as f
@@ -487,74 +488,16 @@ def extractSbsInPairCompChr(c1, c2, gc1, gc2, gapMax=0, distanceMetric = 'DPD', 
     listOfDiags = [((c1, diag[1]), (c2, diag[2]), diag[3]) for diag in listOfDiags] #FIXME diagType=diag[0] could be added as an information on the diagonal here
     return listOfDiags
 
-# FIXME : cut and paste into myTools the part corresponding to the management of the multiprocess
-# Wrapper used to print the % of the task progression
-#######################################################
-def wrapper_extractSbsPairCompChr(input, kwargs, output, NbOfTasks, listOfPercentage, lock):
-    for args in iter(input.get, 'STOP'):
-        result = extractSbsInPairCompChr(*args, **kwargs)
-        output.put(result)
-        progress = 100-100*(input.qsize()) / NbOfTasks
-        lock.acquire()
-        if progress in listOfPercentage:
-            print >> sys.stderr, "%s" % progress + '%'
-            listOfPercentage.remove(progress)
-        lock.release()
 
-# FIXME : cut and paste into myTools the part corresponding to the management of the multiprocess
-# Multiprocess queue
-#####################
-@myTools.verbose
-def extractSbsInPairCompGenomesMultiprocess(g1 , g2, gapMax=-1 ,distanceMetric='DPD', consistentSwDType=True, verbose=True):
-    manager = Manager()
-    lock = Lock() # Lock is used to give priority to one process in order that it is not disturbed by other process
-    listOfPercentage = manager.list() # Manager is used to manage objects which are shared among process
-    for i in [j for j in range(0,101,5)[1:]]:
-        listOfPercentage.append(i)
+def crossGeneContent(g1, g2):
+    # create a set with all gene names
+    geneNames1 = myMapping.setOfGeneNames(g1)
+    geneNames2 = myMapping.setOfGeneNames(g2)
+    gNsInCommon = geneNames1.intersection(geneNames2)
+    gNsInG1notInG2 = geneNames1 - gNsInCommon
+    gNsInG2notInG1 = geneNames2 - gNsInCommon
+    return (gNsInCommon, gNsInG1notInG2, gNsInG2notInG1)
 
-    NUMBER_OF_PROCESSES = multiprocessing.cpu_count() * 2
-    TASKS = [(c1, c2, g1[c1], g2[c2]) for (c1,c2) in itertools.product([c1 for c1 in g1],[c2 for c2 in g2])]
-    KWARGS = {'gapMax':gapMax, 'distanceMetric':distanceMetric, 'consistentSwDType':consistentSwDType, 'verbose':False}
-
-    # Create queues
-    task_queue = Queue()
-    done_queue = Queue()
-
-    # Submit tasks
-    for task in TASKS :
-        task_queue.put(task)
-
-    # Start worker processes
-    print >> sys.stderr, "synteny block extraction"
-    for i in range(NUMBER_OF_PROCESSES):
-        Process(target=wrapper_extractSbsPairCompChr, args=(task_queue, KWARGS, done_queue, int(task_queue.qsize()), listOfPercentage, lock)).start()
-
-    # Get and print results
-    # 'Unordered results:'
-    for i in range(len(TASKS)):
-        for listOfDiags in  done_queue.get():
-            yield listOfDiags
-
-    # Tell child processes to stop
-    for i in range(NUMBER_OF_PROCESSES):
-        task_queue.put('STOP')
-
-    return
-
-# Rewrite genomes as a list of ancGeneIds
-# ancGeneId can be considered as a family name
-def labelWithAncGeneID(genome, ancGenes):
-    newGenome = {}
-    for c in genome.keys():
-        #assert len(genome[c]) >=1
-        # Genome.getPosition(name) returns a set of GenePosition that corresponds to the positions of the gene g.names in the ancGene file.
-        # Gene position is a namedtuple : GenePosition(chromosome=value, index=value)
-        tmp = [(ancGenes.getPosition([gn]),s)  for (gn,s) in genome[c]]
-        #assert all([len(g) <= 1 for (g,_) in tmp]) # DEBUG assertion, verify that there is only one ancGene ID for each gene
-        #assert set(len(x[0]) for x in tmp).issubset(set([0,1]))
-        #assert set(list(x[0])[0].chromosome for x in tmp if len(x[0]) > 0).issubset([None])
-        newGenome[c] = [(g.pop().index if len(g) > 0 else -1, strand) for (g,strand) in tmp] # WARNING g.pop() remove and return a random element from set g
-    return newGenome
 
 # Depending on the filterType parameter:
 #       - filterType = FilterType.None (genomes are not filtered)
@@ -563,96 +506,52 @@ def labelWithAncGeneID(genome, ancGenes):
 # Returns (g1,g2,trans1,trans2)
 #      - g1 the genome 'g1' rewritten with ancGenes ID
 #       - trans1 = { ..., newi:oldi, ...} with newi, the index of a gene in 'g1' and oldi the index of the same gene in the original genome 'g1'
-def filter(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
+def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
     # Mark genes that are not in the intersection for future removal
-    # Marking is done by switching (g,s) into (-1,s)
+    # Marking is done by switching (g,s) into (None,s)
     # warning : modifies g1 and g2
-    def markGeneIntersection(g1,g2):
-        def usedValues(genome): # create a set with all gene names
-            val = set()
-            for x in genome.itervalues():
-                val.update(i for (i,_) in x)
-            return val
-        # Rewrite genomes using the intersection
-        # genes in intersection are kept other are changed into -1
-        def rewrite(genome, inters):
-            for c in genome:
-                genome[c] = [(i,s) if i in inters else (-1,s) for (i,s) in genome[c]]
-        val1 = usedValues(g1)
-        val2 = usedValues(g2)
-        inters = val1.intersection(val2)
-        rewrite(g1, inters)
-        rewrite(g2, inters)
-    # Remove too small chromosomes
-    # warning : modifies genome
-    def filterSize(genome):
-        flag = False
-        for c in genome.keys():
-            if len(genome[c]) < minChromLength:
-                flag = True
-                del genome[c]
-        return flag
-    # Remove genes that are marked -1
-    # Warning : modifies genome
-    def filterContent(genome):
-        transNewToOld = collections.defaultdict(dict)
-        for c in genome:
-            tmp = [(i,x) for (i,x) in enumerate(genome[c]) if x[0] != -1] # i corresponds to indices of the non-filtered genome
-            transNewToOld[c] = dict((newi,oldi) for (newi,(oldi,_)) in enumerate(tmp)) # here newi corresponds to indices of the filtered genome and oldi corresponds to indices of the non-filtered genome
-            # oldi : index of gene before filtering
-            # newi : index of gene after filtering
-            genome[c] = [x for (_,x) in tmp]
-        return transNewToOld
-
     if keepOriginal:
         g1 = copy.deepcopy(g1_orig)
         g2 = copy.deepcopy(g2_orig)
     else:
-        g1=g1_orig
-        g2=g2_orig
-    g1filt2g1origin = collections.defaultdict(dict)
-    g2filt2g2origin = collections.defaultdict(dict)
+        g1 = g1_orig
+        g2 = g2_orig
+
+    remapFilterSize = myMapping.remapFilterSize
+    remapCoFilterContentAndSize = myMapping.remapCoFilterContentAndSize
 
     # In all cases filtering on length
     # All genes are conserved
     if filterType == FilterType.None:
-        filterSize(g1)
-        filterSize(g2)
+        (g1, mG1f2G1o, (nCL1, nGL1)) = remapFilterSize(g1, minChromLength)
+        (g2, mG2f2G2o, (nCL2, nGL2)) = remapFilterSize(g2, minChromLength)
     # Only genes herited from an ancestral genes are conserved
     elif filterType == FilterType.InCommonAncestor:
-        g1filt2g1origin = filterContent(g1)
-        g2filt2g2origin = filterContent(g2)
-        filterSize(g1)
-        filterSize(g2)
+        (g1, mG1f2G1o, (nCL1, nGL1)) = remapCoFilterContentAndSize(g1, set([None]), minChromLength)
+        (g2, mG2f2G2o, (nCL2, nGL2)) = remapCoFilterContentAndSize(g2, set([None]), minChromLength)
     # Only conserve genes present in both extant genomes
     elif filterType == FilterType.InBothSpecies:
-        old_g1filt2g1origin = {}
-        old_g2filt2g2origin = {}
+        mG1f2G1o = None
+        mG2f2G2o = None
         while True:
-            markGeneIntersection(g1,g2) # after this step genes that have no homolog in the other genome are marked -1
-            tmp_g1filt2g1origin = filterContent(g1)
-            tmp_g2filt2g2origin = filterContent(g2)
-            if len(old_g1filt2g1origin) > 0 or len(old_g2filt2g2origin) > 0:
-                if len(old_g1filt2g1origin) == 0 or len(old_g2filt2g2origin) == 0:
-                    raise RuntimeError('one of the two dictionnaries for back-translating indices is empty')
-                new_g1filt2g1origin = collections.defaultdict(dict)
-                for c in tmp_g1filt2g1origin:
-                    for newi in tmp_g1filt2g1origin[c]:
-                        new_g1filt2g1origin[c][newi] = old_g1filt2g1origin[c][tmp_g1filt2g1origin[c][newi]]
-                old_g1filt2g1origin = new_g1filt2g1origin
-                new_g2filt2g2origin = collections.defaultdict(dict)
-                for c in tmp_g2filt2g2origin:
-                    for newi in tmp_g2filt2g2origin[c]:
-                        new_g2filt2g2origin[c][newi] = old_g2filt2g2origin[c][tmp_g2filt2g2origin[c][newi]]
-                old_g2filt2g2origin = new_g2filt2g2origin
-            else:
-                old_g1filt2g1origin = tmp_g1filt2g1origin
-                old_g2filt2g2origin = tmp_g2filt2g2origin
-            useful = filterSize(g1) or filterSize(g2)
-            if not useful: # if a chromosome has been removed because of the filtering on the length, the filtering is performed once more
+            # after this step genes that have no homolog in the other genome are marked None
+            # 'gNsInCommon' is also called the set of 'anchor genes' in bibliography
+            (gNsInCommon, gNsInG1notInG2, gNsInG2notInG1) = crossGeneContent(g1, g2)
+            removedGNs1 = gNsInG1notInG2 | set([None])
+            removedGNs2 = gNsInG2notInG1 | set([None])
+            (g1, mG1f2G1o, (nCL1, nGL1)) =\
+                remapCoFilterContentAndSize(g1, removedGNs1,
+                                            minChromLength,
+                                            mOld=mG1f2G1o)
+            (g2, mG2f2G2o, (nCL2, nGL2)) =\
+                remapCoFilterContentAndSize(g2, removedGNs2,
+                                            minChromLength,
+                                            mOld=mG2f2G2o)
+            hasChanged = (nGL1 > 0) or (nGL2 > 0)
+            # If a chromosome has been removed because of the filtering on the length,
+            # the filtering is performed once more.
+            if not hasChanged:
                 break
-        g1filt2g1origin = old_g1filt2g1origin
-        g2filt2g2origin = old_g2filt2g2origin
     else:
         # impossible case
         raise
@@ -662,56 +561,8 @@ def filter(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
     #       for (i,(g,s)) in enumerate(g2[c]):
     #               print >> sys.stderr, c, "\t", s, "\t", g2.lstGenes[c][trans2[c][i]].names[0]
 
-    return (g1, g2, g1filt2g1origin, g2filt2g2origin)
+    return ((g1, mG1f2G1o, (nCL1, nGL1)), (g2, mG2f2G2o, (nCL2, nGL2)))
 
-# Inputs :
-#       genome_aID = [..., (aID,s), ...] with 'aID' the line number of the gene in the ancGene ans 's' the strand of the gene in the genome
-# Outputs :
-#       genome_tb and tb2g are two dics
-#       for each chromosome c
-#               genome_tb[c] = [..., (aID,s), ...] the rewritten genome into TBs. A TB is caracterized by its 'aID' and its strand, either 0,1 or None
-#               tb2g[c] (TB to genes) = [..., [i1,i2,i3], ...] contains as many lists as TBs. Each TB has a list [i1,i2,i3] which contains indices of the genes in 'genome_aID'
-#               g2tb[c] (gene to TB) = [i_tb1, itb1, i_tb2, ...] for each gene of genome_aID the index of its tb in genome_tb
-#####################################################################################################################################
-def rewriteInTb(genome_aID):
-    #TODO? it may be interesting to merge tbs that are closer or equal to a user defined trheshold 'tandemGap', introduce gappedTandemBlocks as in i-ADHoRe
-    # in i-ADHoRe genes are remapped on the first paralog
-
-    # the rewritten genome
-    genome_tb = {} # Need to keep dictionnaries because there is often a gap in chromosome notations
-    tb2g = {}
-    N_GTD_g = 0 # Number of Genic Tandem Duplication global
-    for c in genome_aID:
-        # temp values
-        old_aID = None
-        old_s = None
-        genome_tb[c]=[]
-        tb2g[c]=[]
-        for i,(aID,s) in enumerate(genome_aID[c]):
-            # if the current gene is not a paralog of the previous gene
-            if aID != old_aID:
-                # start a new TB
-                genome_tb[c].append((aID,s))
-                # add the current gene index to the new tb component of tb2g
-                tb2g[c].append([i])
-            else:
-            # aID == old_aID:
-                # if the current gene has a different orientation than the previous paralog, the orientation of the tb is set to unknown
-                if s != old_s:
-                    genome_tb[c][-1] = (genome_tb[c][-1][0],None)
-                # The index of the current gene is added to the last tb
-                tb2g[c][-1].append(i)
-                N_GTD_g += 1
-            old_aID = aID
-            old_s = s
-    return (genome_tb, tb2g, N_GTD_g)
-
-def convertGenomeIntoDicOfChromOfOrderedGenes(genome):
-    newGenome = {} # Warning : it is important to use a dict since there are sometimes a jump in the numerotation of chromosomes in a genome
-    for c in genome.chrList[myGenomes.ContigType.Chromosome] + genome.chrList[myGenomes.ContigType.Scaffold]:
-        assert len(genome.lstGenes[c]) >=1
-        newGenome[c] = [(g.names[0],g.strand) for g in genome.lstGenes[c]]
-    return newGenome
 
 # compute the adviced maximal gap length (in genes) for the diagonal merger
 # We compute the gap that gives the closest probability p-value(sb(nbHps,gap,N12,N1,N2)) to targetProba in an a MHP(N1,N2,N12).
@@ -742,7 +593,7 @@ def recommendedGap(nbHps, targetProba, N12, N1, N2, p_hpSign=None, maxGapThresho
     #return g
 
 # Number of non-empty value in the mh or the mhp
-@myTools.tictac
+#@myTools.tictac
 @myTools.verbose
 def numberOfHomologies(g1,g2,verbose=True):
     nbHomologies = {}
@@ -784,7 +635,9 @@ def max_g_of(diag):
 # because of collections.Counter
 @myTools.minimalPythonVersion((2,7))
 @myTools.verbose
-def filterStatisticalValidation(listOfDiags, g1_tb, g2_tb, N12s, p_hpSign, pThreshold=0.001, NbOfHomologiesThreshold=50, validateImpossToCalc_mThreshold=3, verbose=True):
+def statisticalValidation(listOfDiags, g1_tb, g2_tb, N12s, p_hpSign,
+                          pThreshold=0.001, NbOfHomologiesThreshold=50,
+                          validateImpossToCalc_mThreshold=3, verbose=True):
     def  calculateCharacteristics(diag):
         if len(diag) == 3:
             ((c1,l1_tb),(c2,l2_tb),la_tb) = diag
@@ -938,17 +791,6 @@ def filterStatisticalValidation(listOfDiags, g1_tb, g2_tb, N12s, p_hpSign, pThre
 
     return listOfStatValDiags
 
-# because of collections.Counter
-@myTools.minimalPythonVersion((2,7))
-def numberOfDuplicates(g_aID_filt):
-    # create a long chromosome with all the chromosome genes
-    newG=[]
-    for chr in g_aID_filt.values():
-        chr =  [g for g,_ in chr]
-        newG = newG + chr
-    N_GD_g = sum([duplicates-1 for duplicates in collections.Counter(newG).values()])
-    return (N_GD_g)
-
 
 # Complete procedure to compute synteny blocks (sbs) between 2 genomes, using homology relationships contained in ancGenes
 # Inputs:
@@ -976,60 +818,80 @@ def numberOfDuplicates(g_aID_filt):
 #########################################################################################################################
 @myTools.tictac
 @myTools.verbose
-def extractSbsInPairCompGenomes(g1, g2, ancGenes, gapMax=None, distanceMetric='DPD', pThreshold=0.001, filterType=FilterType.None, consistentSwDType=True, minChromLength=0, nbHpsRecommendedGap=2, targetProbaRecommendedGap=0.01, validateImpossToCalc_mThreshold=3, multiProcess=True, verbose=True):
-
-    if isinstance(g1,myGenomes.Genome) and isinstance(g2,myGenomes.Genome):
-        g1 = convertGenomeIntoDicOfChromOfOrderedGenes(g1)
-        g2 = convertGenomeIntoDicOfChromOfOrderedGenes(g2)
-    elif isinstance(g1,dict) and isinstance(g2,dict):
+def extractSbsInPairCompGenomes(g1, g2, ancGenes,
+                                tandemGapMax=0,
+                                gapMax=None,
+                                distanceMetric='DPD',
+                                pThreshold=0.001,
+                                filterType=FilterType.None,
+                                consistentSwDType=True,
+                                minChromLength=0,
+                                nbHpsRecommendedGap=2,
+                                targetProbaRecommendedGap=0.01,
+                                validateImpossToCalc_mThreshold=3,
+                                multiProcess=True,
+                                verbose=True):
+    if isinstance(g1, myGenomes.Genome) and isinstance(g2, myGenomes.Genome):
+        g1 = g1.intoDict()
+        g2 = g2.intoDict()
+    elif isinstance(g1, dict) and isinstance(g2, dict):
         pass
     else:
         raise TypeError('g1 and/or g2 must be either myGenomes.Genome or dict')
-    #step 1 : remove genes specific to each lineage
-    ################################################
+    #step 1 :filter genomes and rewrite in tandem blocks if needed
+    ##############################################################
     # rewrite genomes by family names (ie ancGene names)
-    g1_aID = labelWithAncGeneID(g1, ancGenes)
-    g2_aID = labelWithAncGeneID(g2, ancGenes)
-    # genes that are not in ancGene have a aID=-1
-    print >> sys.stderr, "genome 1 initially contains %s genes" %  sum([len(g1[c1]) for c1 in g1])
-    print >> sys.stderr, "genome 2 initially contains %s genes" %  sum([len(g2[c2]) for c2 in g2])
-    (g1_aID_filt, g2_aID_filt, filt2origin1, filt2origin2) = filter(g1_aID, g2_aID, filterType, minChromLength) # Must be applied on the two genomes, because of the mode inBothGenomes (InCommonAncestor => not only anchor genes are kept but all genes herited from a gene of the LCA)
-    print >> sys.stderr, "genome 1 after filterType=%s and minChromLength=%s contains %s genes" % (filterType, minChromLength, sum([len(g1_aID_filt[c1]) for c1 in g1_aID_filt]))
-    print >> sys.stderr, "genome 2 after filterType=%s and minChromLength=%s contains %s genes" % (filterType, minChromLength, sum([len(g2_aID_filt[c2]) for c2 in g2_aID_filt]))
-    N_GD_1_g  = numberOfDuplicates(g1_aID_filt)
-    N_GD_2_g  = numberOfDuplicates(g2_aID_filt)
-    print >> sys.stderr, "genome 1 contains %s gene duplicates (initial gene excluded)" % N_GD_1_g
-    print >> sys.stderr, "genome 2 contains %s gene duplicates (initial gene excluded)" % N_GD_2_g
-    (g1_tb, tb2g1, N_GTD_1_g) = rewriteInTb(g1_aID_filt)
-    (g2_tb, tb2g2, N_GTD_2_g) = rewriteInTb(g2_aID_filt)
+    g1_aID = myMapping.labelWithAncGeneID(g1, ancGenes)
+    g2_aID = myMapping.labelWithAncGeneID(g2, ancGenes)
+    # genes that are not in ancGene have a aID=None
+    print >> sys.stderr, "genome 1 initially contains %s genes" % sum([len(g1[c1]) for c1 in g1])
+    print >> sys.stderr, "genome 2 initially contains %s genes" % sum([len(g2[c2]) for c2 in g2])
+    # Must be applied on the two genomes, because of the mode inBothGenomes (InCommonAncestor => not only anchor genes are kept but all genes herited from a gene of the LCA)
+    #mfilt2origin1 -> mGf2Go1
+    ((g1_aID, mGf2Go1, (nCL1, nGL1)), (g2_aID, mGf2Go2, (nCL2, nGL2))) =\
+        filter2D(g1_aID, g2_aID, filterType, minChromLength)
+    print >> sys.stderr, "genome 1 after filterType=%s and minChromLength=%s contains %s genes" %\
+        (filterType, minChromLength, sum([len(g1_aID[c1]) for c1 in g1_aID]))
+    print >> sys.stderr, "genome 2 after filterType=%s and minChromLength=%s contains %s genes" %\
+        (filterType, minChromLength, sum([len(g2_aID[c2]) for c2 in g2_aID]))
+    nGD1 = myMapping.nbDup(g1_aID)[0]
+    nGD2 = myMapping.nbDup(g2_aID)[0]
+    print >> sys.stderr, "genome 1 contains %s gene duplicates (initial gene excluded)" % nGD1
+    print >> sys.stderr, "genome 2 contains %s gene duplicates (initial gene excluded)" % nGD2
+    (g1_tb, mtb2g1, nGTD1) = myMapping.remapRewriteInTb(g1_aID, tandemGapMax=tandemGapMax, mOld=mGf2Go1)
+    (g2_tb, mtb2g2, nGTD2) = myMapping.remapRewriteInTb(g2_aID, tandemGapMax=tandemGapMax, mOld=mGf2Go2)
     print >> sys.stderr, "genome 1 rewritten in tbs, contains %s tbs" % sum([len(g1_tb[c1]) for c1 in g1_tb])
     print >> sys.stderr, "genome 2 rewritten in tbs, contains %s tbs" % sum([len(g2_tb[c2]) for c2 in g2_tb])
     #TODO, optimise next step
-    verbose2 = True if (len(g1) > 500 or len(g2) > 500) else False # second level of verbosity
-    N12s, N12_g = numberOfHomologies(g1_tb,g2_tb,verbose=verbose2)
+
+    # second level of verbosity
+    verbose2 = True if (len(g1) > 500 or len(g2) > 500) else False
+    N12s, N12_g = numberOfHomologies(g1_tb, g2_tb, verbose=verbose2)
     print >> sys.stderr, "pairwise comparison of genome 1 and genome 2 yields %s hps" % N12_g
-    print >> sys.stderr, "genome 1 contains %s tandem duplicated genes (initial gene excluded)" % N_GTD_1_g
-    print >> sys.stderr, "genome 2 contains %s tandem duplicated genes (initial gene excluded)" % N_GTD_2_g
-    N_DD_1_g  = numberOfDuplicates(g1_tb)
-    N_DD_2_g  = numberOfDuplicates(g2_tb)
-    print >> sys.stderr, "genome 1 contains %s dispersed duplicated tbs (initial tb excluded)" % N_DD_1_g
-    print >> sys.stderr, "genome 2 contains %s dispersed duplicated tbs (initial tb excluded)" % N_DD_2_g
-    assert N_DD_1_g + N_GTD_1_g == N_GD_1_g
-    assert N_DD_2_g + N_GTD_2_g == N_GD_2_g
+    print >> sys.stderr, "genome 1 contains %s tandem duplicated genes (initial gene excluded)" % nGTD1
+    print >> sys.stderr, "genome 2 contains %s tandem duplicated genes (initial gene excluded)" % nGTD2
+    nDD1 = myMapping.nbDup(g1_tb)[0]
+    nDD2 = myMapping.nbDup(g2_tb)[0]
+    print >> sys.stderr, "genome 1 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD1
+    print >> sys.stderr, "genome 2 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD2
+    assert nDD1 + nGTD1 == nGD1
+    assert nDD2 + nGTD2 == nGD2
 
     # compute the recommended gapMax parameter
     #########################################
-    (p_hpSign,p_hpSign_g,(sTBG1, sTBG1_g),(sTBG2, sTBG2_g)) = myProbas.statsHpSign(g1_tb,g2_tb,verbose=verbose2)
+    (p_hpSign, p_hpSign_g, (sTBG1, sTBG1_g), (sTBG2, sTBG2_g)) =\
+        myProbas.statsHpSign(g1_tb, g2_tb, verbose=verbose2)
     print >> sys.stderr, "genome 1 tb orientation proba = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG1_g[+1]*100, sTBG1_g[-1]*100, sTBG1_g[None]*100)
     print >> sys.stderr, "genome 2 tb orientation proba = {+1=%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG2_g[+1]*100, sTBG2_g[-1]*100, sTBG2_g[None]*100)
     print >> sys.stderr, "hp sign proba in the 'global' mhp = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%) (probabilities are also calculated for pairwise mhp)" % (p_hpSign_g[+1]*100, p_hpSign_g[-1]*100, p_hpSign_g[None]*100)
-    N1_g=sum([len(g1_tb[c1]) for c1 in g1_tb])
-    N2_g=sum([len(g2_tb[c2]) for c2 in g2_tb])
+    N1_g = sum([len(g1_tb[c1]) for c1 in g1_tb])
+    N2_g = sum([len(g2_tb[c2]) for c2 in g2_tb])
     #Build an average MHP
     #N50 is better than the mean of the chromosome lengths, since it is less sensitive to numerous and very small chromosome lengths
     #N1_N50 = myMaths.myStats.getValueNX(sorted([len(g1_tb[c1]) for c1 in g1_tb]),50) # calculate the N50
     #N2_N50 = myMaths.myStats.getValueNX(sorted([len(g2_tb[c2]) for c2 in g2_tb]),50) # calculate the N50
     #weightedAverage is even better than N50 since it returns a more stable value, not a length of a chromosome of the karyotype, it better reflects the global distribution
+
     def weightedAverage(listOfChrLengths):
         sumLengths = sum(listOfChrLengths)
         return int(sum([(float(chrLength)/sumLengths)*chrLength for chrLength in listOfChrLengths]))
@@ -1040,10 +902,11 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes, gapMax=None, distanceMetric='D
     N1_weightedAverage = weightedAverage([len(g1_tb[c1]) for c1 in g1_tb])
     N2_weightedAverage = weightedAverage([len(g2_tb[c2]) for c2 in g2_tb])
     density = float(N12_g)/(N1_g*N2_g)
-    N12_weightedAverage = int(density*N1_weightedAverage*N2_weightedAverage) # conservation of the density
+    # conservation of the density
+    N12_weightedAverage = int(density*N1_weightedAverage*N2_weightedAverage)
     gap = recommendedGap(nbHpsRecommendedGap, targetProbaRecommendedGap, N12_weightedAverage, N1_weightedAverage, N2_weightedAverage, p_hpSign=p_hpSign_g, verbose=verbose)
     print >> sys.stderr, "recommended gapMax = %s tbs" % gap
-    if gapMax == None:
+    if gapMax is None:
         gapMax = gap
     print >> sys.stderr, "used gapMax = %s tbs" % gapMax
 
@@ -1053,20 +916,27 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes, gapMax=None, distanceMetric='D
     listOfSbs = []
     if multiProcess and (len(g1_tb.keys()) > 1 or len(g2_tb.keys()) > 1):
         # if the multiprocess option is True and if there is more than one pairwise comparison of chromosomes
-        for tmpListOfSbs in extractSbsInPairCompGenomesMultiprocess(g1_tb, g2_tb, gapMax=gapMax, distanceMetric=distanceMetric, consistentSwDType=consistentSwDType, verbose=True):
+        tasks = [(c1, c2, g1_tb[c1], g2_tb[c2]) for (c1, c2) in itertools.product([c1 for c1 in g1_tb], [c2 for c2 in g2_tb])]
+        resGen =  myMultiprocess.multiprocessTasks(extractSbsInPairCompChr, tasks,
+                                                  gapMax=gapMax,
+                                                  distanceMetric=distanceMetric,
+                                                  consistentSwDType=consistentSwDType,
+                                                  verbose=False)
+        for tmpListOfSbs in resGen:
             listOfSbs.append(tmpListOfSbs)
     else:
         nbPairwiseComparisons = len(g1_tb.keys())*len(g2_tb.keys())
-        listOfPercentage = range(0,101,5)[1:]
+        listOfPercentage = range(0, 101, 5)[1:]
         print >> sys.stderr, "synteny block extraction",
-        for (i,(chr1,chr2)) in enumerate(itertools.product(g1_tb.keys(), g2_tb.keys())):
-            tmpListOfSbs = extractSbsInPairCompChr(chr1, chr2, g1_tb[chr1], g2_tb[chr2], gapMax=gapMax, distanceMetric=distanceMetric, consistentSwDType=consistentSwDType, verbose=False)
+        for (i, (chr1, chr2)) in enumerate(itertools.product(g1_tb.keys(), g2_tb.keys())):
+            tmpListOfSbs = extractSbsInPairCompChr(chr1, chr2, g1_tb[chr1], g2_tb[chr2], gapMax=gapMax, distanceMetric=distanceMetric, consistentSwDType=consistentSwDType, verbose=True)
             listOfSbs.extend(tmpListOfSbs)
             progress = int(float(i*100)/nbPairwiseComparisons)
             if progress in listOfPercentage:
                 print >> sys.stderr, "%s" % progress + "%",
                 listOfPercentage.remove(progress)
-        print >> sys.stderr, "" # new line in the print
+        # new line in the print
+        print >> sys.stderr, ""
 
     # setp 4 : statistical validation of putative sbs
     ##################################################
@@ -1074,34 +944,39 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes, gapMax=None, distanceMetric='D
     #print >> sys.stderr, "sTBG1['Y']=%s" % sTBG1['Y']
     #print >> sys.stderr, "sTBG2['Y']=%s" % sTBG2['Y']
     #print >> sys.stderr, "p_hpSign[('Y','Y')]=%s" % p_hpSign[('Y','Y')]
-    sbsGenSV = filterStatisticalValidation(listOfSbs, g1_tb, g2_tb, N12s, p_hpSign, pThreshold = pThreshold, NbOfHomologiesThreshold=50, validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold, verbose=verbose) # SV : statistical validation
+    # 'SV' stands for statistical validation
+    sbsGenSV = statisticalValidation(listOfSbs, g1_tb, g2_tb, N12s, p_hpSign,
+                                     pThreshold=pThreshold,
+                                     NbOfHomologiesThreshold=50,
+                                     validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
+                                     verbose=verbose)
 
     # format output
-    for (i,diag) in enumerate(sbsGenSV):
+    for (i, diag) in enumerate(sbsGenSV):
         # translate from the tb base to gene base
-        ((c1,l1_tb),(c2,l2_tb),la_tb,pVal) = diag
-        tb2gc1 = tb2g1[c1]
-        tb2gc2 = tb2g2[c2]
-        gc1_aID_filt = g1_aID_filt[c1]
-        gc2_aID_filt = g2_aID_filt[c2]
-        filt2originc1 = filt2origin1[c1]
-        filt2originc2 = filt2origin2[c2]
-        la=[]
-        l1=[]
-        l2=[]
+        ((c1, l1_tb), (c2, l2_tb), la_tb, pVal) = diag
+        mtb2gc1 = mtb2g1[c1]
+        mtb2gc2 = mtb2g2[c2]
+        assert mtb2gc1.__class__.__name__ == mtb2gc2.__class__.__name__ == 'Mapping'
+    #mfilt2origin1 -> mGf2Go1
+        #mGf2GoC1 = mGf2Go1[c1]
+        #mGf2GoC2 = mGf2Go2[c2]
+        la = []
+        l1 = []
+        l2 = []
         # convert diags from tb to genes before yielding them
         # each hp corresponds to an ancestral gene
-        for (indx_HP,aGene) in enumerate(la_tb):
+        for (indx_HP, aGene) in enumerate(la_tb):
             indx_tb_g1 = l1_tb[indx_HP]
-            l1.append([indx for indx in tb2gc1[indx_tb_g1]])
+            l1.append([gIndxs for gIndxs in mtb2gc1.new[indx_tb_g1]])
             indx_tb_g2 = l2_tb[indx_HP]
-            l2.append([indx for indx in tb2gc2[indx_tb_g2]])
+            l2.append([gIdxs for gIdxs in mtb2gc2.new[indx_tb_g2]])
             la.append((ancGenes.lstGenes[None][aGene[0]].names[0], aGene[1], aGene[2]))
-        if filterType != FilterType.None:
-            sbsGenSV[i] = ((c1, [[filt2originc1[i1] for i1 in tb1] for tb1 in l1]),
-                           (c2, [[filt2originc2[i2] for i2 in tb2] for tb2 in l2]), la, pVal)
-        else:
-            sbsGenSV[i] = ((c1, l1), (c2, l2), la, pVal)
+        # previously:
+        # sbsGenSV[i] = ((c1, [[mGf2GoC1.new[i1] for i1 in tb1] for tb1 in l1]),
+        #                (c2, [[mGf2GoC2.new[i2] for i2 in tb2] for tb2 in l2]), la, pVal)
+        sbsGenSV[i] = ((c1, l1), (c2, l2), la, pVal)
+
     return sbsGenSV
 
 
@@ -1192,9 +1067,9 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
             la.append((aGname, aGstrand, dist))
         else:
             listOfSbs.append(((c1, l1), (c2, l2), la, pVal))
-            l1 = []
-            l2 = []
-            la = []
+            l1 = [zip(g1s, s1s)]
+            l2 = [zip(g2s, s2s)]
+            la = [(aGname, aGstrand, dist)]
             idSb_old = idSb
     return listOfSbs
 
