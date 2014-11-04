@@ -1067,9 +1067,9 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
             la.append((aGname, aGstrand, dist))
         else:
             listOfSbs.append(((c1, l1), (c2, l2), la, pVal))
-            l1 = []
-            l2 = []
-            la = []
+            l1 = [zip(g1s, s1s)]
+            l2 = [zip(g2s, s2s)]
+            la = [(aGname, aGstrand, dist)]
             idSb_old = idSb
     return listOfSbs
 

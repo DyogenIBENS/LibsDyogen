@@ -77,7 +77,7 @@ def statsTbOrientation(genome_tb):
 
 # returns p_hpSign_g {+1:%+1, -1:%-1, None:%None}, percentages of each hp sign in the 'global' mhp of the pairwise comparison of the two genomes
 # p_hpSign is a dict containing the stats for each pairwise comparisons of chromosomes
-@myTools.tictac
+#@myTools.tictac
 @myTools.verbose
 def statsHpSign(g1_tb, g2_tb, verbose=False):
     # compute statistics on tandem blocks orientations
