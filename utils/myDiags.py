@@ -999,7 +999,7 @@ def extractSbsInPairCompChr(gc1, gc2, gapMax=0, distanceMetric='DPD',
                         break # exit the while loop and iter the for loop
     # merging process, fuse diagonals
     if len(listOfDiags) > 0 and gapMax >= 0:
-        listOfDiags = mergeSbs(listOfDiags, gapMax, gc2, distanceMetric=distanceMetric, verbose=verbose)
+        listOfDiags = mergeSbs(listOfDiags, gapMax, gc2, distanceMetric=distanceMetric, verbose=False)
     return listOfDiags
 
 
@@ -1284,7 +1284,7 @@ def statisticalValidation(sbsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
 
 # Split a sb as soon as one of its gap contains another sb
 # the other sb may be a micro-inversion or a transposition-like sb
-def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True, verbose=False):
+def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True):
 
     # Check if list2 is nested in the gaps of list1
     # list1: contains the indices of the first sb
@@ -1523,6 +1523,7 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True, verbos
         sbsInPairCompWithIds.addToLocation((c1, c2), newSb)
 
     # also remove sbs of only one hp!
+    # TODO print in stderr the reason of the removal
     if removeSingleHpSbs:
         singleHpSbs = set([])
         for (idsb, _, sb) in sbsInPairCompWithIds.iterByOrderedIds():
@@ -1720,16 +1721,16 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
     if identifyBreakpointsWithinGaps:
         while True:
             nbSbsOld = len(list(sbsInPairComp.iteritems2d()))
-            sbsInPairComp = fIdentifyBreakpointsWithinGaps(sbsInPairComp, verbose=verbose)
+            sbsInPairComp = fIdentifyBreakpointsWithinGaps(sbsInPairComp)
             nbSbsNew = len(list(sbsInPairComp.iteritems2d()))
             if nbSbsNew == nbSbsOld:
                 break
 
     if nonOverlappingSbs:
         # TODO, compute the variation of the coverage before and after this step
-        sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=True)
+        sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=verbose)
         # DEBUG, verify that the filtered sbs are not overlapping
-        (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0, verbose=True)
+        (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0, verbose=False)
         assert len(N) == 0
         assert len(O) == 0
 
@@ -1841,37 +1842,63 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
                                  delim='\t')
     sbsInPairComp = myTools.Dict2d(list)
     pVal = 0
-    idSb_old = 0
-    l1 = []
-    l2 = []
-    la = []
+    idSb_old = 'foo'
+    c1_old = 'fooC1'
+    c2_old = 'fooC2'
     for (idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s) in sbsReader:
         aGstrand = int(dist) if aGstrand != 'None' else None
         dist = int(dist) if dist != 'None' else None
         (g1s, s1s) = foo(g1s, s1s, genome1, c1)
         (g2s, s2s) = foo(g2s, s2s, genome2, c2)
-        if idSb == idSb_old:
+        if idSb != idSb_old:
+            if idSb_old == 'foo':
+                # first idSb
+                l1 = list(zip(g1s, s1s))
+                l2 = list(zip(g2s, s2s))
+                la = list((aGname, aGstrand, dist))
+            else:
+                # record the former synteny block that has been parsed
+                # TODO find the diagType
+                if l1[0] < l1[-1]:
+                    if l2[0] < l2[-1]:
+                        diagType = '/'
+                    elif l2[2] > l2[-1]:
+                        diagType = '\\'
+                    else:
+                        # horizontal synteny block
+                        diagType = None
+                else:
+                    # vertical synteny block
+                    diagType = None
+                #if c1_old == '10' and c2_old == '14':
+                #    print >> sys.stderr, 'Hello !', idSb_old
+                #    raw_input()
+                sbsInPairComp[c1_old][c2_old].append(SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal))
+                # start a new sb
+                l1 = list(zip(g1s, s1s))
+                l2 = list(zip(g2s, s2s))
+                la = list((aGname, aGstrand, dist))
+            idSb_old = idSb
+            c1_old = c1
+            c2_old = c2
+        else:
             l1.append(zip(g1s, s1s))
             l2.append(zip(g2s, s2s))
             la.append((aGname, aGstrand, dist))
+    # last idSb
+    # TODO find the diagType
+    if l1[0] < l1[-1]:
+        if l2[0] < l2[-1]:
+            diagType = '/'
+        elif l2[2] > l2[-1]:
+            diagType = '\\'
         else:
-            # TODO find the diagType
-            if l1[0] < l1[-1]:
-                if l2[0] < l2[-1]:
-                    diagType = '/'
-                elif l2[2] > l2[-1]:
-                    diagType = '\\'
-                else:
-                    # horizontal synteny block
-                    diagType = None
-            else:
-                # vertical synteny block
-                diagType = None
-            sbsInPairComp[c1][c2].append((Diagonal(diagType, l1, l2, la), pVal))
-            l1 = [zip(g1s, s1s)]
-            l2 = [zip(g2s, s2s)]
-            la = [(aGname, aGstrand, dist)]
-            idSb_old = idSb
+            # horizontal synteny block
+            diagType = None
+    else:
+        # vertical synteny block
+        diagType = None
+    sbsInPairComp[c1][c2].append(SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal))
     return sbsInPairComp
 
 
