@@ -482,14 +482,17 @@ def checkArgs(args, options, info, showArgs=True):
             else:
                 error_usage("Too many arguments on '%s'" % t)
 
-    if isinstance(args[-1][1], FileList):
+    if len(args[-1])>0 and isinstance(args[-1][1], FileList):
         if args[-1][0] not in valArg:
             valArg[args[-1][0]] = []
         if len(valArg[args[-1][0]]) < args[-1][1].minNbFiles:
             error_usage("Not enough files for '%s'" % args[-1][0])
 
     # there is less than the minimal number of arguments
-    if len(valArg) < len(args):
+    #FIXME, the second part of the condition should be avoided by upstream corrections
+    if len(valArg) < len(args) and not (len(args) == 1 and args[0] == ()):
+        print >> sys.stderr, "valArg=", valArg
+        print >> sys.stderr, "args=", args
         error_usage("Not enough arguments")
 
     valArg.update(valOpt)

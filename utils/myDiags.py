@@ -263,6 +263,10 @@ class queueWithBackup:
 @myTools.verbose
 def mergeSbs(listOfDiags, gapMax, gc2, distanceMetric = 'DPD', verbose = False):
     assert gapMax>=0
+    # assert that the diag elements in listOfDiags are either Diagonal objects
+    # or SyntenyBlock objects
+    assert all(diag.__class__.__name__ == 'Diagonal' for diag in listOfDiags) or\
+        all(diag.__class__.__name__ == 'SyntenyBlock' for diag in listOfDiags)
 
     if distanceMetric == 'DPD':
         print >> sys.stderr, "use Diagonal Pseudo Distance to merge diagonals with a gap up to %s elements" % gapMax
@@ -418,6 +422,10 @@ def mergeSbs(listOfDiags, gapMax, gc2, distanceMetric = 'DPD', verbose = False):
                     diagA.la[i] = (aGN, aGs, dist)
 
                 diagA.dt = dt_res
+                if diagA.__class__.__name__ == SyntenyBlock:
+                    assert diagToFuse.__class__.name__ == SyntenyBlock
+                    diagA.pVal = min(diagA.pVal, diagToFuse.pVal)
+
                 nbFusion += 1
                 nbFusionCurrGap += 1
                 #We still try to merge diags to the new diagA
@@ -723,7 +731,7 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
                             newl1.append(i1)
                             newl2.append(sbt.l2[i])
                             newla.append(sbt.la[i])
-                            truncation = len(sbt.la) - len(newla)
+                    truncation = len(sbt.la) - len(newla)
                     if truncation > 0:
                         print >> sys.stderr, "sb (%s, %s) with %s tbs truncated (-%s tbs) because of sb (%s, %s) with %s tbs" % (c1t, c2t, len(sbt.la), truncation, c1nt, c2nt, len(sbnt.la))
                     sbt.l1 = newl1
@@ -739,7 +747,7 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
                             newl1.append(sbt.l1[i])
                             newl2.append(i2)
                             newla.append(sbt.la[i])
-                            truncation = len(sbt.la) - len(newla)
+                    truncation = len(sbt.la) - len(newla)
                     if truncation > 0:
                         print >> sys.stderr, "sb (%s, %s) with %s tbs truncated (-%s tbs) because of sb (%s, %s) with %s tbs" % (c1t, c2t, len(sbt.la), truncation, c1nt, c2nt, len(sbnt.la))
                     sbt.l1 = newl1
@@ -786,7 +794,7 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
     #        # truncation)
     #        assert overlapMax > 0
             removedIdBecauseEmptySb.add(idsb)
-            print >> sys.stderr, "Removed s (%s,%s) because of truncation (less than 1tb in the sb after truncation)" % (c1, c2)
+            print >> sys.stderr, "Removed sb (%s,%s) because of truncation (less than 1tb in the sb after truncation)" % (c1, c2)
             cptRemovedSbAfterTruncation += 1
     sbsInPairCompWithIds.removeIds(removedIdBecauseEmptySb)
 
@@ -800,7 +808,9 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
     for (idsb, (c1, c2), sb) in sbsInPairCompWithIds.iterByOrderedIds():
         new_sbsInPairComp[c1][c2].append(sb)
 
-    print >> sys.stderr, "Nb sbs before overlap-filtering = %s" % nbSbsBeforeOverlapFiltering
+    # This print is already in the upstream function
+    #print >> sys.stderr, "Nb sbs before overlap-filtering = %s" % nbSbsBeforeOverlapFiltering
+
     assert cptRemovedSbBecauseOfNotAllowedOverlap == nbSbsBeforeOverlapFiltering - len(noOrSmallOverlapIds)
     nbSbsAfterOverlapFiltering = len(list(new_sbsInPairComp.iteritems2d()))
     # Total nb of hps removed
@@ -811,7 +821,8 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
     assert nbSbsAfterOverlapFiltering == nbSbsBeforeOverlapFiltering - (cptRemovedSbAfterTruncation + cptRemovedSbBecauseOfNotAllowedOverlap)
     print >> sys.stderr, "Nb sbs removed because of not allowed overlap = %s" % cptRemovedSbBecauseOfNotAllowedOverlap
     print >> sys.stderr, "Nb sbs removed during truncation = %s" % cptRemovedSbAfterTruncation
-    print >> sys.stderr, "Nb non-overlapping sbs returned = %s" % nbSbsAfterOverlapFiltering
+    # This print is already in the upstream function
+    #print >> sys.stderr, "Nb non-overlapping sbs returned = %s" % nbSbsAfterOverlapFiltering
 
     return new_sbsInPairComp
 
@@ -1546,103 +1557,31 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True):
     return new_sbsInPairComp
 
 
-# Complete procedure to compute synteny blocks (sbs) between 2 genomes, using homology relationships contained in ancGenes
-# Inputs:
-#       g1, g2 : myGenomes.Genome (or dict : {...c:[..., (g,s), ...]}) of the two compared species
-#       ancGenes : myGenomes.Genome define the homology relationships (usually the ancGenes of the LCA of the two compared species)
-#       consistentSwDType :     True  => gene transcription orientations must be consistent with diagonal types ('/' or '\')
-#                               False => Do not take care of gene orientation
-#       gapMax : distance (in tandemblocks) allowed between two diagonals to be merged together. This allows to go over wrong  annotations. But it can also introduce some Fp
-#       minChromLength is the minimal length of the chromosome to be considered
-#       distanceMetric : the distance metric (either MD,DPD,ED or CD)
-#       pThreshold : the probability threshold under which the sb is considered significant
-#       FilterType
-#               InCommonAncestor : all genes herited from a gene of the LCA are kept during the filtering of extant genomes
-#               InBothGenomes : only 'anchor genes' (genes present in both genomes) are kept
-#               None : genomes are not filtered
-# Outputs:
-#       synteny blocks are yielded as (strand,(c1,l1),(c2,l2),la)
-#       c1 : chromosomes of genome 'g1' where there is a synteny block corresponding to the diagonal
-#       l1 : the synteny block on genome 'g1'
-#       l1 = [..., (i,s), ...] with 'i' the index of the gene and 's' its strand in the genome 1 without species specific genes
-#       la = [..., (ancGeneName, ancGeneOrientation, tb width, tb height), ...]]
-#           tb -> tandem block associated with the ancGene in this synteny block
-#           width : length in tandem duplicates on the 1st genome
-#           height: length in tandem duplicates on ths 2nd genome
-#########################################################################################################################
-@myTools.tictac
-@myTools.verbose
-def extractSbsInPairCompGenomes(g1, g2, ancGenes,
-                                filterType=FilterType.None,
-                                tandemGapMax=0,
-                                gapMax=None,
-                                distanceMetric='DPD',
-                                pThreshold=0.001,
-                                overlappingMerge=False,
-                                nonOverlappingSbs=False,
-                                identifyBreakpointsWithinGaps=False,
-                                overlapMax=0,
-                                consistentSwDType=True,
-                                minChromLength=0,
-                                nbHpsRecommendedGap=2,
-                                targetProbaRecommendedGap=0.01,
-                                validateImpossToCalc_mThreshold=3,
-                                multiProcess=False,
-                                verbose=False):
-    # TODO, raise a true warning message
-    if nonOverlappingSbs is False:
-        if overlapMax > 0:
-            print >> sys.stderr, "Warning: the maxAllowedGap specified is not used since the nonOverlappingSbs is False"
-
-    if isinstance(g1, myGenomes.Genome) and isinstance(g2, myGenomes.Genome):
-        g1 = g1.intoDict()
-        g2 = g2.intoDict()
-    elif isinstance(g1, dict) and isinstance(g2, dict):
-        pass
-    else:
-        raise TypeError('g1 and/or g2 must be either myGenomes.Genome or dict')
-    #step 1 :filter genomes and rewrite in tandem blocks if needed
-    ##############################################################
-    # rewrite genomes by family names (ie ancGene names)
-    g1_aID = myMapping.labelWithAncGeneID(g1, ancGenes)
-    g2_aID = myMapping.labelWithAncGeneID(g2, ancGenes)
-    # genes that are not in ancGene have a aID=None
-    print >> sys.stderr, "genome 1 initially contains %s genes" % sum([len(g1[c1]) for c1 in g1])
-    print >> sys.stderr, "genome 2 initially contains %s genes" % sum([len(g2[c2]) for c2 in g2])
-    # Must be applied on the two genomes, because of the mode inBothGenomes (InCommonAncestor => not only anchor genes are kept but all genes herited from a gene of the LCA)
-    #mfilt2origin1 -> mGf2Go1
-    ((g1_aID, mGf2Go1, (nCL1, nGL1)), (g2_aID, mGf2Go2, (nCL2, nGL2))) =\
-        filter2D(g1_aID, g2_aID, filterType, minChromLength)
-    print >> sys.stderr, "genome 1 after filterType=%s and minChromLength=%s contains %s genes" %\
-        (filterType, minChromLength, sum([len(g1_aID[c1]) for c1 in g1_aID]))
-    print >> sys.stderr, "genome 2 after filterType=%s and minChromLength=%s contains %s genes" %\
-        (filterType, minChromLength, sum([len(g2_aID[c2]) for c2 in g2_aID]))
-    nGD1 = myMapping.nbDup(g1_aID)[0]
-    nGD2 = myMapping.nbDup(g2_aID)[0]
-    print >> sys.stderr, "genome 1 contains %s gene duplicates (initial gene excluded)" % nGD1
-    print >> sys.stderr, "genome 2 contains %s gene duplicates (initial gene excluded)" % nGD2
-    (g1_tb, mtb2g1, nGTD1) = myMapping.remapRewriteInTb(g1_aID, tandemGapMax=tandemGapMax, mOld=mGf2Go1)
-    (g2_tb, mtb2g2, nGTD2) = myMapping.remapRewriteInTb(g2_aID, tandemGapMax=tandemGapMax, mOld=mGf2Go2)
-    print >> sys.stderr, "genome 1 rewritten in tbs, contains %s tbs" % sum([len(g1_tb[c1]) for c1 in g1_tb])
-    print >> sys.stderr, "genome 2 rewritten in tbs, contains %s tbs" % sum([len(g2_tb[c2]) for c2 in g2_tb])
-    #TODO, optimise next step
+def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
+                                     filterType=FilterType.None,
+                                     tandemGapMax=0,
+                                     gapMax=None,
+                                     distanceMetric='DPD',
+                                     pThreshold=0.001,
+                                     identifyBreakpointsWithinGaps=False,
+                                     nonOverlappingSbs=False,
+                                     overlapMax=0,
+                                     consistentSwDType=True,
+                                     minChromLength=0,
+                                     nbHpsRecommendedGap=2,
+                                     targetProbaRecommendedGap=0.01,
+                                     validateImpossToCalc_mThreshold=3,
+                                     multiProcess=False,
+                                     verbose=False):
 
     # second level of verbosity
     #verbose2 = verbose if (len(g1) > 500 or len(g2) > 500) else False
-    verbose2 = True
+    verbose2 = False
     N12s, N12_g = numberOfHomologies(g1_tb, g2_tb, verbose=verbose2)
     print >> sys.stderr, "pairwise comparison of genome 1 and genome 2 yields %s hps" % N12_g
-    print >> sys.stderr, "genome 1 contains %s tandem duplicated genes (initial gene excluded)" % nGTD1
-    print >> sys.stderr, "genome 2 contains %s tandem duplicated genes (initial gene excluded)" % nGTD2
-    nDD1 = myMapping.nbDup(g1_tb)[0]
-    nDD2 = myMapping.nbDup(g2_tb)[0]
-    print >> sys.stderr, "genome 1 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD1
-    print >> sys.stderr, "genome 2 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD2
-    assert nDD1 + nGTD1 == nGD1
-    assert nDD2 + nGTD2 == nGD2
-
     # compute the recommended gapMax parameter
     #########################################
+    verbose2 = False
     (p_hpSign, p_hpSign_g, (sTBG1, sTBG1_g), (sTBG2, sTBG2_g)) =\
         myProbas.statsHpSign(g1_tb, g2_tb, verbose=verbose2)
     print >> sys.stderr, "genome 1 tb orientation proba = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG1_g[+1]*100, sTBG1_g[-1]*100, sTBG1_g[None]*100)
@@ -1717,26 +1656,159 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
                                           validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
                                           verbose=verbose)
 
-    # Do this task until no more change (stability!)
-    if identifyBreakpointsWithinGaps:
-        while True:
-            nbSbsOld = len(list(sbsInPairComp.iteritems2d()))
-            sbsInPairComp = fIdentifyBreakpointsWithinGaps(sbsInPairComp)
-            nbSbsNew = len(list(sbsInPairComp.iteritems2d()))
-            if nbSbsNew == nbSbsOld:
-                break
+    cptLoopIter = 0
+    # initialise la condition d'arrêt de la boucle
+    atLeastOneNonOverlappingMerge = False
+    while True:
 
-    if nonOverlappingSbs:
-        # TODO, compute the variation of the coverage before and after this step
-        sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=verbose)
-        # DEBUG, verify that the filtered sbs are not overlapping
-        (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0, verbose=False)
-        assert len(N) == 0
-        assert len(O) == 0
+        if identifyBreakpointsWithinGaps:
+        # Do this task until no more change (stability!)
+            nbSbs = len([sb for (_, sb) in sbsInPairComp.iteritems2d()])
+            print >> sys.stderr, "Nb sbs before identifying breakpoints within gaps = %s" % nbSbs
+            while True:
+                nbSbsOld = len(list(sbsInPairComp.iteritems2d()))
+                sbsInPairComp = fIdentifyBreakpointsWithinGaps(sbsInPairComp)
+                nbSbsNew = len(list(sbsInPairComp.iteritems2d()))
+                if nbSbsNew == nbSbsOld:
+                    break
+            nbSbs = len([sb for (_, sb) in sbsInPairComp.iteritems2d()])
+            print >> sys.stderr, "Nb sbs after identifying breakpoints within gaps = %s" % nbSbs
 
-    #if overlappingMerge:
-    #    sbsInPairComp = mergeOverlappingSbs(sbsInPairComp, overlapMax=gapMax)
-    #   perform once more fIdentifyBreakpointsWithinGaps
+        if nonOverlappingSbs:
+            nbSbs = len([sb for (_, sb) in sbsInPairComp.iteritems2d()])
+            print >> sys.stderr, "Nb sbs before overlap-truncation-filtering = %s" % nbSbs
+            # TODO, compute the variation of the coverage before and after this step
+            sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=verbose)
+            # DEBUG, verify that the filtered sbs are not overlapping
+            (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0, verbose=False)
+            assert len(N) == 0
+            assert len(O) == 0
+            nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
+            print >> sys.stderr, "Nb sbs after overlap-truncation-filtering = %s" % nbSbs
+
+            # mergeNonOverlappingSbs
+            for (c1, c2) in sbsInPairComp.keys2d():
+                # BM: Before Merge
+                nbSbsBM = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
+                sbsInPairComp[c1][c2] = mergeSbs(sbsInPairComp[c1][c2], gapMax, g2_tb[c2], verbose=False)
+                # AM: After Merge
+                nbSbsAM = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
+                assert nbSbsAM <= nbSbsBM
+                atLeastOneNonOverlappingMerge = atLeastOneNonOverlappingMerge or (True if nbSbsAM != nbSbsBM else False)
+            nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
+            print >> sys.stderr, "Nb sbs after merging non-overlapping sbs = %s" % nbSbs
+
+            cptLoopIter += 1
+
+        if atLeastOneNonOverlappingMerge and cptLoopIter <= 30:
+            continue
+        else:
+            # leave the while loop
+            break
+
+    return sbsInPairComp
+
+# Complete procedure to compute synteny blocks (sbs) between 2 genomes, using homology relationships contained in ancGenes
+# Inputs:
+#       g1, g2 : myGenomes.Genome (or dict : {...c:[..., (g,s), ...]}) of the two compared species
+#       ancGenes : myGenomes.Genome define the homology relationships (usually the ancGenes of the LCA of the two compared species)
+#       consistentSwDType :     True  => gene transcription orientations must be consistent with diagonal types ('/' or '\')
+#                               False => Do not take care of gene orientation
+#       gapMax : distance (in tandemblocks) allowed between two diagonals to be merged together. This allows to go over wrong  annotations. But it can also introduce some Fp
+#       minChromLength is the minimal length of the chromosome to be considered
+#       distanceMetric : the distance metric (either MD,DPD,ED or CD)
+#       pThreshold : the probability threshold under which the sb is considered significant
+#       FilterType
+#               InCommonAncestor : all genes herited from a gene of the LCA are kept during the filtering of extant genomes
+#               InBothGenomes : only 'anchor genes' (genes present in both genomes) are kept
+#               None : genomes are not filtered
+# Outputs:
+#       synteny blocks are yielded as (strand,(c1,l1),(c2,l2),la)
+#       c1 : chromosomes of genome 'g1' where there is a synteny block corresponding to the diagonal
+#       l1 : the synteny block on genome 'g1'
+#       l1 = [..., (i,s), ...] with 'i' the index of the gene and 's' its strand in the genome 1 without species specific genes
+#       la = [..., (ancGeneName, ancGeneOrientation, tb width, tb height), ...]]
+#           tb -> tandem block associated with the ancGene in this synteny block
+#           width : length in tandem duplicates on the 1st genome
+#           height: length in tandem duplicates on ths 2nd genome
+#########################################################################################################################
+@myTools.tictac
+@myTools.verbose
+def extractSbsInPairCompGenomes(g1, g2, ancGenes,
+                                filterType=FilterType.None,
+                                tandemGapMax=0,
+                                gapMax=None,
+                                distanceMetric='DPD',
+                                pThreshold=0.001,
+                                identifyBreakpointsWithinGaps=False,
+                                nonOverlappingSbs=False,
+                                overlapMax=0,
+                                consistentSwDType=True,
+                                minChromLength=0,
+                                nbHpsRecommendedGap=2,
+                                targetProbaRecommendedGap=0.01,
+                                validateImpossToCalc_mThreshold=3,
+                                multiProcess=False,
+                                verbose=False):
+    # TODO, raise a true warning message
+    if nonOverlappingSbs is False:
+        if overlapMax > 0:
+            print >> sys.stderr, "Warning: the maxAllowedGap specified is not used since the nonOverlappingSbs is False"
+
+    if isinstance(g1, myGenomes.Genome) and isinstance(g2, myGenomes.Genome):
+        g1 = g1.intoDict()
+        g2 = g2.intoDict()
+    elif isinstance(g1, dict) and isinstance(g2, dict):
+        pass
+    else:
+        raise TypeError('g1 and/or g2 must be either myGenomes.Genome or dict')
+    #step 1 :filter genomes and rewrite in tandem blocks if needed
+    ##############################################################
+    # rewrite genomes by family names (ie ancGene names)
+    g1_aID = myMapping.labelWithAncGeneID(g1, ancGenes)
+    g2_aID = myMapping.labelWithAncGeneID(g2, ancGenes)
+    # genes that are not in ancGene have a aID=None
+    print >> sys.stderr, "genome 1 initially contains %s genes" % sum([len(g1[c1]) for c1 in g1])
+    print >> sys.stderr, "genome 2 initially contains %s genes" % sum([len(g2[c2]) for c2 in g2])
+    # Must be applied on the two genomes, because of the mode inBothGenomes (InCommonAncestor => not only anchor genes are kept but all genes herited from a gene of the LCA)
+    #mfilt2origin1 -> mGf2Go1
+    ((g1_aID, mGf2Go1, (nCL1, nGL1)), (g2_aID, mGf2Go2, (nCL2, nGL2))) =\
+        filter2D(g1_aID, g2_aID, filterType, minChromLength)
+    print >> sys.stderr, "genome 1 after filterType=%s and minChromLength=%s contains %s genes" %\
+        (filterType, minChromLength, sum([len(g1_aID[c1]) for c1 in g1_aID]))
+    print >> sys.stderr, "genome 2 after filterType=%s and minChromLength=%s contains %s genes" %\
+        (filterType, minChromLength, sum([len(g2_aID[c2]) for c2 in g2_aID]))
+    nGD1 = myMapping.nbDup(g1_aID)[0]
+    nGD2 = myMapping.nbDup(g2_aID)[0]
+    print >> sys.stderr, "genome 1 contains %s gene duplicates (initial gene excluded)" % nGD1
+    print >> sys.stderr, "genome 2 contains %s gene duplicates (initial gene excluded)" % nGD2
+    (g1_tb, mtb2g1, nGTD1) = myMapping.remapRewriteInTb(g1_aID, tandemGapMax=tandemGapMax, mOld=mGf2Go1)
+    (g2_tb, mtb2g2, nGTD2) = myMapping.remapRewriteInTb(g2_aID, tandemGapMax=tandemGapMax, mOld=mGf2Go2)
+    print >> sys.stderr, "genome 1 rewritten in tbs, contains %s tbs" % sum([len(g1_tb[c1]) for c1 in g1_tb])
+    print >> sys.stderr, "genome 2 rewritten in tbs, contains %s tbs" % sum([len(g2_tb[c2]) for c2 in g2_tb])
+    #TODO, optimise next step
+    print >> sys.stderr, "genome 1 contains %s tandem duplicated genes (initial gene excluded)" % nGTD1
+    print >> sys.stderr, "genome 2 contains %s tandem duplicated genes (initial gene excluded)" % nGTD2
+    nDD1 = myMapping.nbDup(g1_tb)[0]
+    nDD2 = myMapping.nbDup(g2_tb)[0]
+    print >> sys.stderr, "genome 1 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD1
+    print >> sys.stderr, "genome 2 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD2
+    assert nDD1 + nGTD1 == nGD1
+    assert nDD2 + nGTD2 == nGD2
+
+    sbsInPairComp = extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
+                                                     gapMax=gapMax,
+                                                     distanceMetric=distanceMetric,
+                                                     pThreshold=pThreshold,
+                                                     identifyBreakpointsWithinGaps=identifyBreakpointsWithinGaps,
+                                                     nonOverlappingSbs=nonOverlappingSbs,
+                                                     overlapMax=overlapMax,
+                                                     consistentSwDType=consistentSwDType,
+                                                     nbHpsRecommendedGap=nbHpsRecommendedGap,
+                                                     targetProbaRecommendedGap=targetProbaRecommendedGap,
+                                                     validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
+                                                     multiProcess=multiProcess,
+                                                     verbose=verbose)
 
     # format output
     for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
