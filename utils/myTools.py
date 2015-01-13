@@ -63,6 +63,7 @@ def printTable(table, output):
 def verbose(functionToExcecute):
     @wraps(functionToExcecute) # to avoid changing the name of the function
     def modifiedFunction(*args, **kargs):
+        old_sys_stderr = sys.stderr
         if 'verbose' in kargs:
             if kargs['verbose'] == True:
                 res = functionToExcecute(*args, **kargs)
@@ -71,10 +72,11 @@ def verbose(functionToExcecute):
                 sys.stderr = open(os.devnull, 'w')
                 res = functionToExcecute(*args, **kargs)
                 # **kargs still contains verbose
-                sys.stderr = sys.__stderr__
         else:
             warnings.warn("function %s has no option verbose although it uses a verbose decorator" % functionToExcecute.__name__, category=SyntaxWarning, stacklevel=2)
             res = functionToExcecute(*args, **kargs)
+        sys.stderr = old_sys_stderr
+        # sys.stderr = sys.__stderr__   if you wanna come back to a verbose mode
         return res
     return  modifiedFunction
 

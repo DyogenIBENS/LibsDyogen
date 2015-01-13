@@ -600,8 +600,7 @@ def findOverlapsOnGenome(rankGenome, sbsInPairCompWithIds, sbsGX, overlapMax=0):
     return (N, O, I)
 
 
-@myTools.verbose
-def buildConflictGraph(sbsInPairComp, overlapMax=0, verbose=False):
+def buildConflictGraph(sbsInPairComp, overlapMax=0):
 
     def findOverlaps(sbsInPairCompWithIds, sbsG1, sbsG2, overlapMax=0):
         (N1, O1, I1) = findOverlapsOnGenome(1, sbsInPairCompWithIds, sbsG1, overlapMax=overlapMax)
@@ -650,7 +649,7 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
     # edges in Bafna 1996)
 
     @myTools.verbose
-    def solveConflictGraph(sbsInPairCompWithIds, V, N, verbose=verbose):
+    def solveConflictGraph(sbsInPairCompWithIds, V, N, verbose=False):
         # as descibed at the easiest algorithm for the 'IR' problem in Bafna
         # 1996:
         # We solve the conflict graph by taking vertices from highest weights to
@@ -704,7 +703,7 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
         return noOrSmallOverlapIds
 
     @myTools.verbose
-    def truncateSbsWithSmallOverlap(sbsInPairCompWithIds, O, verbose=verbose):
+    def truncateSbsWithSmallOverlap(sbsInPairCompWithIds, O, verbose=False):
         id2sb = sbsInPairCompWithIds.getItemById
         id2location = sbsInPairCompWithIds.getItemLocationById
         sortedO = list(O.keys())
@@ -759,8 +758,8 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
             sortedO.sort(key=lambda idsb: len(id2sb(idsb).la))
             setO = set(sortedO)
         return sbsInPairCompWithIds
-
-    (sbsInPairCompWithIds, V, N, O, I, (sbsG1, sbsG2)) = buildConflictGraph(sbsInPairComp, overlapMax=overlapMax, verbose=verbose)
+    (sbsInPairCompWithIds, V, N, O, I, (sbsG1, sbsG2)) =\
+        buildConflictGraph(sbsInPairComp, overlapMax=overlapMax)
     nbSbsBeforeOverlapFiltering = len(V)
     noOrSmallOverlapIds = solveConflictGraph(sbsInPairCompWithIds, V, N, verbose=verbose)
     # DEBUG assertion
@@ -1662,9 +1661,10 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
     while True:
 
         if identifyBreakpointsWithinGaps:
-        # Do this task until no more change (stability!)
+            # Do this task until no more change (stability!)
             nbSbs = len([sb for (_, sb) in sbsInPairComp.iteritems2d()])
-            print >> sys.stderr, "Nb sbs before identifying breakpoints within gaps = %s" % nbSbs
+            if cptLoopIter == 0:
+                print >> sys.stderr, "Nb sbs before identifying breakpoints within gaps = %s" % nbSbs
             while True:
                 nbSbsOld = len(list(sbsInPairComp.iteritems2d()))
                 sbsInPairComp = fIdentifyBreakpointsWithinGaps(sbsInPairComp)
@@ -1672,19 +1672,22 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
                 if nbSbsNew == nbSbsOld:
                     break
             nbSbs = len([sb for (_, sb) in sbsInPairComp.iteritems2d()])
-            print >> sys.stderr, "Nb sbs after identifying breakpoints within gaps = %s" % nbSbs
+            if cptLoopIter == 0:
+                print >> sys.stderr, "Nb sbs after identifying breakpoints within gaps = %s" % nbSbs
 
         if nonOverlappingSbs:
             nbSbs = len([sb for (_, sb) in sbsInPairComp.iteritems2d()])
-            print >> sys.stderr, "Nb sbs before overlap-truncation-filtering = %s" % nbSbs
+            if cptLoopIter == 0:
+                print >> sys.stderr, "Nb sbs before overlap-truncation-filtering = %s" % nbSbs
             # TODO, compute the variation of the coverage before and after this step
-            sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=verbose)
+            sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=False)
             # DEBUG, verify that the filtered sbs are not overlapping
-            (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0, verbose=False)
+            (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0)
             assert len(N) == 0
             assert len(O) == 0
             nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
-            print >> sys.stderr, "Nb sbs after overlap-truncation-filtering = %s" % nbSbs
+            if cptLoopIter == 0:
+                print >> sys.stderr, "Nb sbs after overlap-truncation-filtering = %s" % nbSbs
 
             # mergeNonOverlappingSbs
             for (c1, c2) in sbsInPairComp.keys2d():
@@ -1696,13 +1699,47 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
                 assert nbSbsAM <= nbSbsBM
                 atLeastOneNonOverlappingMerge = atLeastOneNonOverlappingMerge or (True if nbSbsAM != nbSbsBM else False)
             nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
-            print >> sys.stderr, "Nb sbs after merging non-overlapping sbs = %s" % nbSbs
+            if cptLoopIter == 0:
+                print >> sys.stderr, "Nb sbs after merging non-overlapping sbs = %s" % nbSbs
 
-            cptLoopIter += 1
+        cptLoopIter += 1
 
         if atLeastOneNonOverlappingMerge and cptLoopIter <= 30:
             continue
         else:
+            if cptLoopIter  > 1:
+                # the first merge non-overlapping sbs was usefull, thus other
+                # iterations of
+                # IdentifyBreakpointsWithinGaps|nonOverlappingSbs|mergeNonOverlappingSbs
+                # were performed.
+                print >> sys.stderr, "IdentifyBreakpointsWithinGaps|nonOverlappingSbs|mergeNonOverlappingSbs was repeated %s times" % (cptLoopIter - 1)
+
+                # Always finish by identifyBreakpointsWithinGaps followed by
+                # nonOverlappingSbs without a merge
+                if identifyBreakpointsWithinGaps:
+                    # Do this task until no more change (stability!)
+                    nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
+                    print >> sys.stderr, "Nb sbs before identifying breakpoints within gaps = %s" % nbSbs
+                    while True:
+                        nbSbsOld = len(list(sbsInPairComp.iteritems2d()))
+                        sbsInPairComp = fIdentifyBreakpointsWithinGaps(sbsInPairComp)
+                        nbSbsNew = len(list(sbsInPairComp.iteritems2d()))
+                        if nbSbsNew == nbSbsOld:
+                            break
+                    nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
+                    print >> sys.stderr, "Nb sbs after identifying breakpoints within gaps = %s" % nbSbs
+                if nonOverlappingSbs:
+                    nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
+                    print >> sys.stderr, "Nb sbs before overlap-truncation-filtering = %s" % nbSbs
+                    # TODO, compute the variation of the coverage before and after this step
+                    sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=False)
+                    # DEBUG, verify that the filtered sbs are not overlapping
+                    (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0)
+                    assert len(N) == 0
+                    assert len(O) == 0
+                    nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
+                    print >> sys.stderr, "Nb sbs after overlap-truncation-filtering = %s" % nbSbs
+                # No merge non-overlapping sbs
             # leave the while loop
             break
 
