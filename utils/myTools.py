@@ -11,6 +11,7 @@ import itertools
 import time
 import string
 import warnings
+import collections
 
 import enum
 
@@ -62,6 +63,7 @@ def printTable(table, output):
 def verbose(functionToExcecute):
     @wraps(functionToExcecute) # to avoid changing the name of the function
     def modifiedFunction(*args, **kargs):
+        old_sys_stderr = sys.stderr
         if 'verbose' in kargs:
             if kargs['verbose'] == True:
                 res = functionToExcecute(*args, **kargs)
@@ -70,10 +72,11 @@ def verbose(functionToExcecute):
                 sys.stderr = open(os.devnull, 'w')
                 res = functionToExcecute(*args, **kargs)
                 # **kargs still contains verbose
-                sys.stderr = sys.__stderr__
         else:
             warnings.warn("function %s has no option verbose although it uses a verbose decorator" % functionToExcecute.__name__, category=SyntaxWarning, stacklevel=2)
             res = functionToExcecute(*args, **kargs)
+        sys.stderr = old_sys_stderr
+        # sys.stderr = sys.__stderr__   if you wanna come back to a verbose mode
         return res
     return  modifiedFunction
 
@@ -379,7 +382,7 @@ def checkArgs(args, options, info, showArgs=True):
             print >> sys.stderr, "\n", info
         sys.exit(1)
 
-    def putValue(typ, val, v):
+    def putValue(typ, authorisedVals, v):
         # instantiate the value depending on the type
         if typ == bool:
             # Type booleen
@@ -399,9 +402,9 @@ def checkArgs(args, options, info, showArgs=True):
         else:
             # otherwise the builder is used
             res = typ(v)
-            if isinstance(val, list) and (res not in val):
+            if isinstance(authorisedVals, list) and (res not in authorisedVals):
                 # non authorised parameter value
-                error_usage("'%s' is not among %s" % (res,myFile.myTSV.printLine(val, '/')))
+                error_usage("'%s' is not among %s" % (res,myFile.myTSV.printLine(authorisedVals, '/')))
         return res
 
     valOpt = {}
@@ -481,17 +484,178 @@ def checkArgs(args, options, info, showArgs=True):
             else:
                 error_usage("Too many arguments on '%s'" % t)
 
-    if isinstance(args[-1][1], FileList):
+    if len(args[-1])>0 and isinstance(args[-1][1], FileList):
         if args[-1][0] not in valArg:
             valArg[args[-1][0]] = []
         if len(valArg[args[-1][0]]) < args[-1][1].minNbFiles:
             error_usage("Not enough files for '%s'" % args[-1][0])
 
     # there is less than the minimal number of arguments
-    if len(valArg) < len(args):
+    #FIXME, the second part of the condition should be avoided by upstream corrections
+    if len(valArg) < len(args) and not (len(args) == 1 and args[0] == ()):
+        print >> sys.stderr, "valArg=", valArg
+        print >> sys.stderr, "args=", args
         error_usage("Not enough arguments")
 
     valArg.update(valOpt)
     if showArgs:
         print >> sys.stderr, "Arguments:", valArg
     return valArg
+
+class DefaultOrderedDict(collections.OrderedDict):
+    # Source: http://stackoverflow.com/a/6190500/562769
+    def __init__(self, type, *a, **kw):
+        self.type = type
+        if hasattr(type, '__call__'): # isinstance(type, collections.Callable): Not working
+            raise TypeError('first argument must be callable')
+        collections.OrderedDict.__init__(self, type)
+
+    def __getitem__(self, key):
+        #try:
+        return collections.OrderedDict.__getitem__(self, key)
+        #except KeyError:
+        #    return self.__missing__(key)
+
+    def __missing__(self, key):
+        self[key] = self.type()
+        return self[key]
+
+    def __reduce__(self): # optional, for pickle support
+        if self.default_factory is None:
+            args = tuple()
+        else:
+            args = self.default_factory,
+        return type(self), args, None, None, iter(self.items())
+
+    def copy(self):
+        return self.__copy__()
+
+    def __copy__(self):
+       return type(self)(self.type, self)
+
+    def __deepcopy__(self, memo):
+        import copy
+        return type(self)(self.default_factory,
+                          copy.deepcopy(self.items()))
+
+    def __repr__(self):
+        return 'OrderedDefaultDict(%s, %s)' % (self.default_factory,
+                                               collections.OrderedDict.__repr__(self))
+
+# This class is usefull for recording many informations (either a list of items
+# or a value) for each cell of a matrix of whole genome comparisons. See
+# myDiags.py for instance.
+class Dict2d(collections.defaultdict):
+    # Idea to make something more general
+    #def multi_dimensions(n, type):
+    #    """ Creates an n-dimension dictionary where the n-th dimension is of type 'type' """
+    #    if n <= 1:
+    #        return type()
+    #    return collections.defaultdict(lambda: multi_dimensions(n-1, type))
+
+    def __init__(self, type):
+        self.type = type
+        collections.defaultdict.__init__(self, lambda: collections.defaultdict(type))
+
+    def iteritems2d(self):
+        assert self.type == list
+        for (k1, k2) in self.keys2d():
+            for item in self[k1][k2]:
+                yield ((k1, k2), item)
+
+    def __add__(self, other):
+        assert isinstance(other, Dict2d)
+        res = Dict2d(self.type)
+        for (k1, k2) in self.keys2d():
+            res[k1][k2] = self.type(self[k1][k2])
+        for (k1, k2) in other.keys2d():
+            # if 'typ' was 'list', concatenate the lists
+            # if 'typ' was int, add ints in 2D cells
+            res[k1][k2] += self.type(other[k1][k2])
+        return res
+
+    def keys2d(self):
+        return [(k1, k2) for k1 in collections.defaultdict.__iter__(self) for k2 in collections.defaultdict.__iter__(self[k1])]
+
+    def values2d(self):
+        return [self[k1][k2] for (k1, k2) in self.keys2d()]
+
+    def intoList(self):
+        res = []
+        for ((k1, k2), item) in self.iteritems2d():
+            res.append(((k1, k2), item))
+        return res
+
+class OrderedDict2dOfLists(Dict2d):
+    def __init__(self):
+        Dict2d.__init__(self, list)
+        self.id2location = {}
+        self.location2id = collections.defaultdict(lambda: collections.defaultdict(list))
+        self.orderedIds = []
+        self.maxId = 0
+
+    def identifyItems(self):
+        # FIXME
+        # reinitialise data
+        self.id2location = {}
+        self.location2id = collections.defaultdict(lambda: collections.defaultdict(list))
+        self.orderedIds = []
+        self.maxId = 0
+        # fill data
+        for (k1, k2) in self.keys2d():
+            for (idx, item) in enumerate(self[k1][k2]):
+                self.maxId += 1
+                self.id2location[self.maxId] = (k1, k2, idx)
+                self.location2id[k1][k2].append(self.maxId)
+                self.orderedIds.append(self.maxId)
+        assert len(self.location2id[k1][k2]) == len(self[k1][k2])
+        return self.id2location
+
+    def getItemById(self, id):
+        (k1, k2, idx) = self.id2location[id]
+        return self[k1][k2][idx]
+
+    def getItemLocationById(self, id):
+        # (k1, k2, idx) = self.id2location[id]
+        return self.id2location[id]
+
+    def iterByOrderedIds(self):
+        for id in self.orderedIds:
+            (k1, k2, idx) = self.id2location[id]
+            yield (id, (k1, k2), self.getItemById(id))
+
+    def removeIds(self, setOfRemovedIds):
+        copyOrderedIds = list(self.orderedIds) # need a deep copy
+        for id in copyOrderedIds:
+            if id in setOfRemovedIds:
+                (k1, k2, idx) = self.getItemLocationById(id)
+                # remove the item of self[k1][k2] at the index 'idx'
+                del self[k1][k2][idx]
+                del self.id2location[id]
+                del self.location2id[k1][k2][idx]
+                self.orderedIds.remove(id)
+                for (higherSbIdx, higherSbId) in enumerate(self.location2id[k1][k2][idx:]):
+                    higherSbIdx = higherSbIdx + idx
+                    self.id2location[higherSbId] = (k1, k2, higherSbIdx)
+                assert len(self.location2id[k1][k2]) == len(self[k1][k2])
+                if len(self[k1][k2]) == 0:
+                    del self[k1][k2]
+                    if len(self[k1]) == 0:
+                        del self[k1]
+        # DEBUG assertion
+        #for k1 in self:
+        #    for k2 in self[k1]:
+        #        assert len(self[k1][k2])>0, "k1=%s, k2=%s" % (k1, k2)
+
+    def keepIds(self, setOfKeptIds):
+        allIds = set([id for (id, _, _) in self.iterByOrderedIds()])
+        setOfRemovedIds = allIds - setOfKeptIds
+        self.removeIds(setOfRemovedIds)
+
+    def addToLocation(self, (k1, k2), item):
+        self.maxId += 1
+        self[k1][k2].append(item)
+        self.id2location[self.maxId] = (k1, k2, len(self[k1][k2]) - 1)
+        self.location2id[k1][k2].append(self.maxId)
+        assert len(self.location2id[k1][k2]) == len(self[k1][k2])
+        self.orderedIds.append(self.maxId)

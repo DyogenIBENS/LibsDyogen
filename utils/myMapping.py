@@ -207,7 +207,6 @@ def remap(genome, genomeMapping, assertCollapsedGenesHaveSameName=True):
         raise TypeError('Not a known type of genome')
     return newGenome
 
-
 def remapCoFilterContentAndSize(genome, removedNames, minChromLength, mOld=None):
     assert type(removedNames) == set
     assert type(genome) == dict or genome.__class__.__name__ == 'Genome'
@@ -231,6 +230,34 @@ def remapCoFilterContentAndSize(genome, removedNames, minChromLength, mOld=None)
     #    maxOldIdx = max([max(oldIdxs) for oldIdxs in mfilt2old[c].new])
     #    assert maxOldIdx < len(chrom)
     return (newGenome, mf2old, (nbChrLoss, nbGeneLoss))
+
+
+# TODO FIXME
+def remapFilterGeneLength(genome, minGeneLengthInBp, mOld=None):
+    assert type(genome) == dict or genome.__class__.__name__ == 'Genome'
+    (mf2old, (nbChrLoss, nbGeneLoss)) = mapFilterGeneLength(genome, minGeneLengthInBp)
+    newGenome = remap(genome, mf2old, assertCollapsedGenesHaveSameName=False)
+    return (newGenome, mf2old, (nbChrLoss, nbGeneLoss))
+
+# TODO FIXME
+def mapFilterGeneLength(genome, minGeneLengthInBp, mOld=None):
+    nbChrLoss = 0
+    nbGeneLoss = 0
+    mfilt2old = {}
+    for (c, chrom) in genome:
+        newIdx = []
+        for (i, gene) in enumerate(chrom):
+            # FIXME: access gene length
+            if gene.length < minGeneLengthInBp:
+                nbGeneLoss += 1
+                continue
+            else:
+                newIdx.append([i])
+        if len(newIdx) > 0:
+            mfilt2old[c] = Mapping(newIdx)
+        else:
+            nbChrLoss += 1
+    return (mfilt2old, (nbChrLoss, nbGeneLoss))
 
 
 def remapFilterSize(genome, minChromLength, mOld=None):
