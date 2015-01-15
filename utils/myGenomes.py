@@ -349,12 +349,12 @@ class Genome:
 
     # search gene locations given by its names
     def getPositions(self, names):
-        return set( (gene for s in names if s in self.dicGenes for gene in self.dicGenes[s]) )
+        return set([gene for s in names if s in self.dicGenes for gene in self.dicGenes[s]])
 
     # search a gene location given by its names
     # FIXME : only consider one position ?
     def getPosition(self, names):
-        return set( (self.dicGenes[s][0] for s in names if s in self.dicGenes) )
+        return set([self.dicGenes[s][0] for s in names if s in self.dicGenes])
 
 
     # return other names of a gene (assuming that this gene is only present at one location)
