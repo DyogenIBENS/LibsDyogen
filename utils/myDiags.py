@@ -1931,19 +1931,34 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
         gXs = gXs.split(' ')
         nbTandemDup = len(sXs)
         assert len(sXs) == len(gXs) == nbTandemDup, "sXs=%s, gXs=%s and nbTandemDup=%s" % (sXs, gXs, nbTandemDup)
-        gXs = gXs.split(' ')
+        new_sXs = []
+        new_gXs = []
         for i in range(nbTandemDup):
             gN = gXs[i]
-            gXs[i] = genome.getPosition([gN])
+            # FIXME take the first occurence genome.getPosition([gN])'.pop()' ?
+            assert len(genome.getPositions([gN])) == 1
+            genePos = genome.getPosition([gN]).pop()
+            chromosome = genePos.chromosome
+            assert chr == chromosome
+            index = genePos.index
+            #gXs[i] = genome.lstGenes[chromosome][index].names[0]
+            new_gXs.append(index)
             s = sXs[i]
             if s == '+':
-                sXs[i] = +1
+                # insert at index 'i'
+                assert len(new_sXs) == i
+                new_sXs.append(+1)
             elif s == '-':
-                sXs[i] = -1
+                # insert at index 'i'
+                assert len(new_sXs) == i
+                new_sXs.append(-1)
             else:
                 raise
-            assert genome.lstGenes[chr][gXs[i]].strand == sXs[i]
-        return (gXs, sXs)
+            #FIXME
+            #assert genome.lstGenes[chromosome][index].strand == new_sXs[i], "len(genome.lstGenes[chr])=%s, index=%s" % (len(genome.lstGenes[chr]), gXs[i].index)
+        assert len(new_gXs) == len(new_sXs)
+        assert len(new_gXs) == len(gXs) and len(new_sXs) == len(sXs)
+        return (new_gXs, new_sXs)
 
     sbsReader =\
         myFile.myTSV.readTabular(fileName,
@@ -1955,6 +1970,8 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
     c1_old = 'fooC1'
     c2_old = 'fooC2'
     for (idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s) in sbsReader:
+        c1 = myGenomes.commonChrName(c1)
+        c2 = myGenomes.commonChrName(c2)
         aGstrand = int(dist) if aGstrand != 'None' else None
         dist = int(dist) if dist != 'None' else None
         (g1s, s1s) = foo(g1s, s1s, genome1, c1)
@@ -1962,16 +1979,18 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
         if idSb != idSb_old:
             if idSb_old == 'foo':
                 # first idSb
-                l1 = list(zip(g1s, s1s))
-                l2 = list(zip(g2s, s2s))
+                tmpl1 = list(zip(g1s, s1s))
+                tmpl2 = list(zip(g2s, s2s))
                 la = list((aGname, aGstrand, dist))
             else:
                 # record the former synteny block that has been parsed
                 # TODO find the diagType
-                if l1[0] < l1[-1]:
-                    if l2[0] < l2[-1]:
+
+                assert tmpl1[0][0] <= tmpl1[-1][0], "%s <= %s" % (tmpl1[0][0], tmpl1[-1][0])
+                if tmpl1[0][0] < tmpl1[-1][0]:
+                    if tmpl2[0][0] < tmpl2[-1][0]:
                         diagType = '/'
-                    elif l2[2] > l2[-1]:
+                    elif tmpl2[0][0] > tmpl2[-1][0]:
                         diagType = '\\'
                     else:
                         # horizontal synteny block
@@ -1982,24 +2001,27 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
                 #if c1_old == '10' and c2_old == '14':
                 #    print >> sys.stderr, 'Hello !', idSb_old
                 #    raw_input()
+                l1 = [idx for (idx, s) in tmpl1]
+                l2 = [idx for (idx, s) in tmpl2]
                 sbsInPairComp[c1_old][c2_old].append(SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal))
                 # start a new sb
-                l1 = list(zip(g1s, s1s))
-                l2 = list(zip(g2s, s2s))
+                tmpl1 = list(zip(g1s, s1s))
+                tmpl2 = list(zip(g2s, s2s))
                 la = list((aGname, aGstrand, dist))
             idSb_old = idSb
             c1_old = c1
             c2_old = c2
         else:
-            l1.append(zip(g1s, s1s))
-            l2.append(zip(g2s, s2s))
+            tmpl1.extend(zip(g1s, s1s))
+            tmpl2.extend(zip(g2s, s2s))
             la.append((aGname, aGstrand, dist))
     # last idSb
     # TODO find the diagType
-    if l1[0] < l1[-1]:
-        if l2[0] < l2[-1]:
+    assert tmpl1[0][0] <= tmpl1[-1][0]
+    if tmpl1[0][0] < tmpl1[-1][0]:
+        if tmpl2[0][0] < tmpl2[-1][0]:
             diagType = '/'
-        elif l2[2] > l2[-1]:
+        elif tmpl2[0][0] > tmpl2[-1][0]:
             diagType = '\\'
         else:
             # horizontal synteny block
@@ -2007,6 +2029,8 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
     else:
         # vertical synteny block
         diagType = None
+    l1 = g1s
+    l2 = g2s
     sbsInPairComp[c1][c2].append(SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal))
     return sbsInPairComp
 
