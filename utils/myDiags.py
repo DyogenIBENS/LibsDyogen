@@ -406,7 +406,7 @@ def mergeSbs(listOfDiags, gapMax, gc2, distanceMetric = 'DPD', verbose = False):
                 diagA.l1.extend(diagToFuse.l1)
                 diagA.l2.extend(diagToFuse.l2)
                 # Compute the new dist with currGap
-                diagToFuse.la = [(aGN, aGs, dist+diagToFuse.la[-1][2]+currGap) for (aGN, aGs, dist) in diagToFuse.la]
+                diagToFuse.la = [(aGN, aGs, dist+diagA.la[-1][2]+currGap) for (aGN, aGs, dist) in diagToFuse.la]
                 diagA.la.extend(diagToFuse.la)
                 # Previous diagonals without diagTypes have now a diagType and
                 # all ancestral genes can now be oriented.
