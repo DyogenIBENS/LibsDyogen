@@ -239,10 +239,12 @@ def pValue(m,g,la,lb,nab,na,nb,p_hpSign,verbose=True):
     except:
         print >> sys.stderr, "Warning: not able to compute pValue(%s,%s,%s,%s,%s,%s,%s) for unknown reasons" % (m,g,la,lb,nab,na,nb)
         return None
-    if p_w >= 0.01:
+    if pw is None:
+        return None
+    elif pw >= 0.01:
         pVal = 1 - math.pow(1 - pw, nw)
     else:
-        #here we consider that p_w is << 1, thus we can perform a linearistaion (see Taylor-Young formula "(1-u)^a ~= 1-a*u" when p_w -> 0)
+        #here we consider that pw is << 1, thus we can perform a linearistaion (see Taylor-Young formula "(1-u)^a ~= 1-a*u" when p_w -> 0)
         pVal = nw*pw
     return pVal
 
