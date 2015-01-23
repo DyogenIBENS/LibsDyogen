@@ -18,6 +18,14 @@ import utils.myGenomes
 OrthosFilterType = enum.Enum('None', 'InCommonAncestor', 'InBothSpecies')
 
 
+def loadConservedPairsAnc(filename):
+    pairwiseDiags = []
+    f = utils.myFile.openFile(filename, "r")
+    for l in f:
+        t = l.split("\t")
+        pairwiseDiags.append(((int(t[0]), int(t[1])), (int(t[2]), int(t[3])), int(t[4])))
+    f.close()
+    return pairwiseDiags
 
 #
 # Chargement d'un fichier de paires conservees
@@ -57,6 +65,142 @@ def loadIntegr(filename):
 	f.close()
 	print >> sys.stderr, utils.myMaths.myStats.txtSummary([len(x[0]) for x in integr]), "+", len(singletons), "singletons OK"
 	return (integr,singletons)
+
+#
+# Extrait toutes les diagonales entre deux genomes (eventuellement des singletons)
+# Pour optimiser, on demande 
+#   genome1 qui est un dictionnaire qui associe a chaque chromosome 
+#     la liste des numeros des genes ancestraux sur ce chromosome
+#   dic2 qui associe a un numero de gene ancestral ses positions sur le genome 2
+########################################################################################
+def iterateDiags(genome1, dic2, sameStrand):
+
+	l1 = []
+	l2 = []
+	la = []
+	lastPos2 = []
+	lastS1 = 0
+	
+	# Parcours du genome 1
+	for (i1,(j1,s1)) in enumerate(genome1):
+		presI2 = dic2[j1] if j1 >= 0 else []
+		
+		# On regarde chaque orthologue du gene
+		for ((c2,i2,s2), (lastC2,lastI2,lastS2)) in itertools.product(presI2, lastPos2):
+			# Chromosomes differents -> indiscutable
+			if c2 != lastC2:
+				continue
+			# Meme brin
+			if sameStrand:
+				# Les brins initiaux imposent le sens de parcours (+1 ou -1)
+				if i2 != lastI2 + lastS1*lastS2:
+					continue
+				# Le nouveau brin doit etre coherent
+				if lastS1*s1 != lastS2*s2:
+					continue
+			else:
+				# On demande juste que les deux genes soient cote a cote
+				if abs(i2-lastI2) != 1:
+					continue
+			
+			# On a passe tous les tests, c'est OK
+			# On ecrit l'orthologue que l'on a choisi pour le coup d'avant (utile en cas de one2many, aucun effet si one2one)
+			l2[-1] = (lastI2,lastS2)
+			l2.append((i2,s2))
+			lastPos2 = [(c2,i2,s2)]
+			break
+
+		# On n'a pas trouve de i2 satisfaisant, c'est la fin de la diagonale
+		else:
+			# On l'enregistre si elle n'est pas vide
+			if len(l2) > 0:
+				yield (lastPos2[0][0], l1, l2, la)
+			# On recommence a zero
+			lastPos2 = presI2
+			l1 = []
+			la = []
+			# Pour que les diagonales de longueur 1 soient correctes
+			l2 = [presI2[0][1:]] if len(presI2) > 0 else []
+		
+		l1.append((i1,s1))
+		la.append(j1)
+		lastS1 = s1
+	
+	if len(l2) > 0:
+		yield (lastPos2[0][0], l1, l2, la)
+
+
+#
+# Proxy de generateur gerant la remise differee d'elements
+############################################################
+class queueWithBackup:
+
+	def __init__(self, gen):
+		self.gen = gen
+		self.backup = collections.deque()
+		self.todofirst = []
+	
+	def __iter__(self):
+		return self
+	
+	# Le prochain element renvoye vient soit du buffer, soit du generateur principal
+	def next(self):
+		if len(self.todofirst) > 0:
+			return self.todofirst.pop()
+		return self.gen.next()
+	
+	# L'element reinsere est mis en attente
+	def putBack(self, x):
+		self.backup.appendleft(x)
+	
+	# Les elements sauvegardes sont mis dans un buffer de sortie et deviennent prioritaires
+	def rewind(self):
+		self.todofirst.extend(self.backup)
+		self.backup = collections.deque()
+
+
+#
+# Lit les diagonales et les fusionne si elles sont separees par un trou pas trop grand
+########################################################################################
+def diagMerger(diagGen, sameStrand, largeurTrou):
+	
+	diagGen = queueWithBackup( (l1, l2, la, c2, l1[0][1]/l2[0][1], (min(l1)[0],max(l1)[0]), (min(l2)[0],max(l2)[0])) for (c2,l1,l2,la) in diagGen )
+
+	# On rassemble des diagonales separees par une espace pas trop large
+	for (la1,la2,laa,ca2,sa,(_,fina1),(deba2,fina2)) in diagGen:
+		for curr in diagGen:
+			(lb1,lb2,lba,cb2,sb,(debb1,finb1),(debb2,finb2)) = curr
+			
+			# Trou trop grand sur l'espece 1, aucune chance de le continuer
+			if debb1 > (fina1+largeurTrou+1):
+				diagGen.putBack(curr)
+				break
+			
+			# Chromosomes differents de l'espece 2
+			if ca2 != cb2:
+				ok = False
+			elif sameStrand:
+				if sa != sb:
+					ok = False
+				elif sa > 0:
+					ok = (fina2 < debb2 <= (fina2+largeurTrou+1))
+				else:
+					ok = (finb2 < deba2 <= (finb2+largeurTrou+1))
+			else:
+				ok = (min(abs(deba2-finb2), abs(debb2-fina2)) <= (largeurTrou+1))
+			
+			if ok:
+				la1.extend(lb1)
+				la2.extend(lb2)
+				laa.extend(lba)
+				fina1 = finb1
+				deba2 = min(deba2,debb2)
+				fina2 = max(fina2,finb2)
+			else:
+				diagGen.putBack(curr)
+
+		yield (ca2,la1,la2,laa)
+		diagGen.rewind()
 
 #
 # Procedure complete de calculs des diagonales a partir de 2 genomes, des orthologues et de certains parametres
