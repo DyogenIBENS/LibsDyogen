@@ -51,9 +51,10 @@ import myMultiprocess
 
 import enum
 
-FilterType = enum.Enum('None', 'InCommonAncestor', 'InBothSpecies')
+FilterType = enum.Enum('InCommonAncestor', 'InBothSpecies', 'None')
 
 
+# TODO, write a diagonal class that is made for tbs containing genes
 class Diagonal():
     def __init__(self, *args, **kargs):
         if len(args) == 4 and (isinstance(args[0], str) or args[0] is None)\
@@ -151,6 +152,39 @@ class Diagonal():
         else:
             max_g = None
         return (m, max_g, lw1, lw2, l1_min, l1_max, l2_min, l2_max)
+
+    def truncate(self, range1, range2):
+        # range1 = (begining, end) on chromosome 1
+        # range2 = (begining, end) on chromosome 2
+        assert len(range1) == 2 and len(range2) == 2
+        assert all([isinstance(item, int) for item in self.l1]) and\
+            all([isinstance(item, int) for item in self.l2])
+        new_l1 = []
+        new_l2 = []
+        new_la = []
+        assert len(self.l1) == len(self.l2) == len(self.la)
+        for (idxH, aG) in enumerate(self.la):
+            i1 = self.l1[idxH]
+            i2 = self.l2[idxH]
+            if (range1[0] <= i1 and i1 <= range1[1]) and (range2[0] <= i2 and i2 <= range2[1]):
+                new_l1.append(i1)
+                new_l2.append(i2)
+                new_la.append(aG)
+            # FIXME, self.lX being lists is not a normal case of the Diagonal
+            # object. this condition is for current convenience purpose. It
+            # should be replaced y a more general Diagonal object that allow to
+            # use self.lX being lists. minOnGX(), beg() and end() should be
+            # changed in consequence.
+            # if isinstance(tb1, list) and isinstance(tb2, list):
+            #    new_tb1 = [g1Idx for g1Idx in tb1 if (range1[0] <= g1Idx and g1Idx <= range1[1])]
+            #    new_tb2 = [g2Idx for g2Idx in tb2 if (range2[0] <= g2Idx and g2Idx <= range2[1])]
+            #    if len(new_tb1) > 0 and len(new_tb2) > 0:
+            #        new_l1.append(new_tb1)
+            #        new_l2.append(new_tb2)
+            #        new_la.append(aG)
+        self.l1 = new_l1
+        self.l2 = new_l2
+        self.la = new_la
 
     def __repr__(self):
         return "\ndiagType=%s\nl1=%s\nl2=%s\nla=%s\n" % (self.dt, self.l1, self.l2, self.la)
@@ -406,7 +440,7 @@ def mergeSbs(listOfDiags, gapMax, gc2, distanceMetric = 'DPD', verbose = False):
                 diagA.l1.extend(diagToFuse.l1)
                 diagA.l2.extend(diagToFuse.l2)
                 # Compute the new dist with currGap
-                diagToFuse.la = [(aGN, aGs, dist+diagToFuse.la[-1][2]+currGap) for (aGN, aGs, dist) in diagToFuse.la]
+                diagToFuse.la = [(aGN, aGs, dist+diagA.la[-1][2]+currGap) for (aGN, aGs, dist) in diagToFuse.la]
                 diagA.la.extend(diagToFuse.la)
                 # Previous diagonals without diagTypes have now a diagType and
                 # all ancestral genes can now be oriented.
@@ -617,12 +651,18 @@ def buildConflictGraph(sbsInPairComp, overlapMax=0):
         I = concatenateDictsOfSets(I1, I2)
         return (N, O, I)
 
-    sbsInPairCompWithIds = myTools.OrderedDict2dOfLists()
-    for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
-        new_sb = SyntenyBlock(sb)
-        #sbsInPairCompWithIds[c1][c2].append(new_sb)
-        sbsInPairCompWithIds.addToLocation((c1, c2), new_sb)
-    #sbsInPairCompWithIds.identifyItems()
+    if sbsInPairComp.__class__.__name__ == 'Dict2d':
+        sbsInPairCompWithIds = myTools.OrderedDict2dOfLists()
+        for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
+            new_sb = SyntenyBlock(sb)
+            #sbsInPairCompWithIds[c1][c2].append(new_sb)
+            sbsInPairCompWithIds.addToLocation((c1, c2), new_sb)
+        #sbsInPairCompWithIds.identifyItems()
+    elif sbsInPairComp.__class__.__name__ == 'OrderedDict2dOfLists':
+        # this condition allows to keep former ids
+        sbsInPairCompWithIds = sbsInPairComp
+    else:
+        raise TypeError('sbsInPairComp is either a Dict2D or an OrderedDict2dOfLists')
     (V, (sbsG1, sbsG2)) = buildSetOfVertices(sbsInPairCompWithIds)
     (N, O, I) = findOverlaps(sbsInPairCompWithIds, sbsG1, sbsG2, overlapMax=overlapMax)
     return (sbsInPairCompWithIds, V, N, O, I, (sbsG1, sbsG2))
@@ -659,38 +699,33 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
         # method "getItemById" of sbsInPairCompWithIds"
         id2sb = sbsInPairCompWithIds.getItemById
         id2location = sbsInPairCompWithIds.getItemLocationById
-        Vcopy = set(V)
         # sort V by increasing weights
-        sortedV = sorted([v for v in Vcopy], key=lambda iDsb: len(id2sb(iDsb).la))
-
+        sortedV = sorted([int(v) for v in V], key=lambda iDsb: len(id2sb(iDsb).la))
         noOrSmallOverlapIds = set([])
         removedSbsBecauseOfOverlap = set([])
-        while len(Vcopy) > 0:
+        while len(sortedV) > 0:
             iD_selectedSb = sortedV.pop()
             # SB Not Removed
             sbnr = id2sb(iD_selectedSb)
             (c1nr, c2nr, _) = id2location(iD_selectedSb)
-            Vcopy.remove(iD_selectedSb)
             noOrSmallOverlapIds.add(iD_selectedSb)
             # update the edges
-            for iD_removedSb in N[iD_selectedSb]:
+            while len(N[iD_selectedSb]) > 0:
+                iD_removedSb = N[iD_selectedSb].pop()
+                N[iD_removedSb].remove(iD_selectedSb)
                 # SB Removed
                 sbr = id2sb(iD_removedSb)
                 (c1r, c2r, _) = id2location(iD_removedSb)
                 print >> sys.stderr, "sb (%s, %s) with %s tbs is removed because of unallowed overlap with sb (%s, %s) with %s tbs" %\
                     (c1r, c2r, len(sbr.la), c1nr, c2nr, len(sbnr.la))
                 for iD_needUpdateSb in N[iD_removedSb]:
-                    N[iD_needUpdateSb] = N[iD_needUpdateSb] - N[iD_removedSb]
-                    # if N[iD_needUpdateSb] is empty, it will be output as a
-                    # non-overlapping sb latter
+                    N[iD_needUpdateSb].remove(iD_removedSb)
+                    if len(N[iD_needUpdateSb]) == 0:
+                        del N[iD_needUpdateSb]
                 del N[iD_removedSb]
                 removedSbsBecauseOfOverlap.add(iD_removedSb)
-                try:
-                   Vcopy.remove(iD_removedSb)
-                except:
-                    pass
+                sortedV.remove(iD_removedSb)
             del N[iD_selectedSb]
-            sortedV = [idSb for idSb in sortedV if idSb in Vcopy]
 
         assert len(V) == len(noOrSmallOverlapIds) + len(removedSbsBecauseOfOverlap), "%s = %s + %s" %\
             (len(V), len(noOrSmallOverlapIds), len(removedSbsBecauseOfOverlap))
@@ -795,12 +830,18 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
             removedIdBecauseEmptySb.add(idsb)
             print >> sys.stderr, "Removed sb (%s,%s) because of truncation (less than 1tb in the sb after truncation)" % (c1, c2)
             cptRemovedSbAfterTruncation += 1
+
     sbsInPairCompWithIds.removeIds(removedIdBecauseEmptySb)
+    # DEBUG
+    if __debug__:
+        (sbsInPairCompWithIds, V, N, O, I, (sbsG1, sbsG2)) =\
+            buildConflictGraph(sbsInPairCompWithIds, overlapMax=0)
+        assert len(N) == 0, N
+        assert len(O) == 0, O
 
         #assert set(O.keys()) >= noOrSmallOverlapIds
         # FIXME, is it right to do that ?
         #O = dict([(iDsba, iDsbb)  for (iDsba, iDsbb) in O.iteritems() if ((iDsba in noOrSmallOverlapIds) and (iDsbb in noOrSmallOverlapIds))])
-
         #assert len(noOrSmallOverlapIds) == len([a for a in new_sbsInPairComp])
 
     new_sbsInPairComp = myTools.Dict2d(list)
@@ -1381,6 +1422,9 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True):
             newl1 = sb.l1[xBeg:xEnd]
             newl2 = sb.l2[xBeg:xEnd]
             newla = sb.la[xBeg:xEnd]
+            if newla[0][2] > 1:
+                newla = [(aG, aGs, (dist - newla[0][2] + 1)) for (aG, aGs, dist) in newla]
+            assert newla[0][2] == 1
             # Here we assign the former pVal to all sub-sbs. The
             # hypothesis is to consider that since the sub-sbs were
             # neighbours within the former sb, their significances have
@@ -1682,9 +1726,10 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
             # TODO, compute the variation of the coverage before and after this step
             sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=False)
             # DEBUG, verify that the filtered sbs are not overlapping
-            (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0)
-            assert len(N) == 0
-            assert len(O) == 0
+            if __debug__:
+                (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0)
+                assert len(N) == 0, N
+                assert len(O) == 0, O
             nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
             if cptLoopIter == 0:
                 print >> sys.stderr, "Nb sbs after overlap-truncation-filtering = %s" % nbSbs
@@ -1936,7 +1981,7 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
         for i in range(nbTandemDup):
             gN = gXs[i]
             # FIXME take the first occurence genome.getPosition([gN])'.pop()' ?
-            assert len(genome.getPositions([gN])) == 1
+            assert len(genome.getPositions([gN])) == 1, "%s %s" % (gN, genome.getPositions([gN]))
             genePos = genome.getPosition([gN]).pop()
             chromosome = genePos.chromosome
             assert chr == chromosome
@@ -1970,6 +2015,7 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
     c1_old = 'fooC1'
     c2_old = 'fooC2'
     for (idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s) in sbsReader:
+        # iteration over each line of the input file that corresponds to tandem blocks
         c1 = myGenomes.commonChrName(c1)
         c2 = myGenomes.commonChrName(c2)
         aGstrand = int(dist) if aGstrand != 'None' else None
@@ -1979,18 +2025,18 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
         if idSb != idSb_old:
             if idSb_old == 'foo':
                 # first idSb
-                tmpl1 = list(zip(g1s, s1s))
-                tmpl2 = list(zip(g2s, s2s))
-                la = list((aGname, aGstrand, dist))
+                l1 = [g1s]
+                l2 = [g2s]
+                la = [(aGname, aGstrand, dist)]
             else:
                 # record the former synteny block that has been parsed
                 # TODO find the diagType
 
-                assert tmpl1[0][0] <= tmpl1[-1][0], "%s <= %s" % (tmpl1[0][0], tmpl1[-1][0])
-                if tmpl1[0][0] < tmpl1[-1][0]:
-                    if tmpl2[0][0] < tmpl2[-1][0]:
+                assert l1[0] <= l1[-1], "%s <= %s" % (l1[0], l1[-1])
+                if l1[0] < l1[-1]:
+                    if l2[0] < l2[-1]:
                         diagType = '/'
-                    elif tmpl2[0][0] > tmpl2[-1][0]:
+                    elif l2[0] > l2[-1]:
                         diagType = '\\'
                     else:
                         # horizontal synteny block
@@ -2001,27 +2047,25 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
                 #if c1_old == '10' and c2_old == '14':
                 #    print >> sys.stderr, 'Hello !', idSb_old
                 #    raw_input()
-                l1 = [idx for (idx, s) in tmpl1]
-                l2 = [idx for (idx, s) in tmpl2]
                 sbsInPairComp[c1_old][c2_old].append(SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal))
                 # start a new sb
-                tmpl1 = list(zip(g1s, s1s))
-                tmpl2 = list(zip(g2s, s2s))
-                la = list((aGname, aGstrand, dist))
+                l1 = [g1s]
+                l2 = [g2s]
+                la = [(aGname, aGstrand, dist)]
             idSb_old = idSb
             c1_old = c1
             c2_old = c2
         else:
-            tmpl1.extend(zip(g1s, s1s))
-            tmpl2.extend(zip(g2s, s2s))
+            l1.append(g1s)
+            l2.append(g2s)
             la.append((aGname, aGstrand, dist))
     # last idSb
-    # TODO find the diagType
-    assert tmpl1[0][0] <= tmpl1[-1][0]
-    if tmpl1[0][0] < tmpl1[-1][0]:
-        if tmpl2[0][0] < tmpl2[-1][0]:
+    # find the diagType
+    assert l1[0] <= l1[-1]
+    if l1[0] < l1[-1]:
+        if l2[0] < l2[-1]:
             diagType = '/'
-        elif tmpl2[0][0] > tmpl2[-1][0]:
+        elif l2[0] > l2[-1]:
             diagType = '\\'
         else:
             # horizontal synteny block
@@ -2029,8 +2073,6 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
     else:
         # vertical synteny block
         diagType = None
-    l1 = g1s
-    l2 = g2s
     sbsInPairComp[c1][c2].append(SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal))
     return sbsInPairComp
 
