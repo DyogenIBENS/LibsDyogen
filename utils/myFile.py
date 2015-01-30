@@ -7,14 +7,16 @@
 
 # file management functions
 
+import itertools
+import collections
 import os
+import sys
 
 null = open(os.devnull, 'w')
 
 # tabular file management
 class myTSV:
 
-    import collections
     csvProxy = collections.namedtuple("csvProxy", ['file','csvobject'])
 
     # read with the csv module
@@ -41,7 +43,6 @@ class myTSV:
     @staticmethod
     def readTabular(filename, type_list, delim = '\t'):
 
-        import itertools
         f = openFile(filename, 'r')
         # list of each column type
         new_type_list = []
@@ -132,7 +133,6 @@ def openFile(nom, mode):
 
     # standard entry
     elif nom == "-":
-        import sys
         return sys.stdin
 
     # file on the disk

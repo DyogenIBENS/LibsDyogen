@@ -48,10 +48,11 @@ import myFile
 import myMaths
 import myMapping
 import myMultiprocess
+import myLightGenomes
 
 import enum
 
-FilterType = enum.Enum('InCommonAncestor', 'InBothSpecies', 'None')
+FilterType = enum.Enum('InFamilies', 'InBothGenomes', 'None')
 
 
 # TODO, write a diagonal class that is made for tbs containing genes
@@ -908,7 +909,6 @@ def homologyMatrix(gc1, gc2):
     M={}
     if not locG2: # if locG2 is empty
         return (M, locG2)
-
     for (i1,(f,s1)) in enumerate(gc1):
         if f !=None and f in locG2: #TODO : remove by advance the f == None from gc1
             M[i1]={}
@@ -935,6 +935,22 @@ def homologyMatrix(gc1, gc2):
     #if switchedGCs == True:
     #       (gc1,gc2) = (gc2,gc1)
     #       switchedGCs = False
+
+    #4 slower than 2
+    #familiesLocation1 = collections.defaultdict(list)
+    #for (i1, (f, s1)) in enumerate(gc1):
+    #    if f is not None:
+    #        familiesLocation1[f].append(i1)
+    #familiesLocation2 = collections.defaultdict(list)
+    #locG2 = collections.defaultdict(list)
+    #for (i2, (f, s2)) in enumerate(gc2):
+    #    if f is not None:
+    #        familiesLocation2[f].append(i2)
+    #        locG2[f].append((i2, s2))
+    #        M = collections.defaultdict(lambda: collections.defaultdict(list))
+    #for f in set(familiesLocation1.keys()) | set(familiesLocation2.keys()):
+    #    for (i1, i2) in itertools.product(familiesLocation1[f], familiesLocation2[f]):
+    #        M[i1][i2] = strandProduct(gc1[i1][1], gc2[i2][1])
 
     return (M, locG2)
 
@@ -1066,8 +1082,8 @@ def crossGeneContent(g1, g2):
 
 # Depending on the filterType parameter:
 #       - filterType = FilterType.None (genomes are not filtered)
-#       - filterType = FilterType.InCommonAncestor (only genes herited from the ancestor are kept)
-#       - filterType = FilterType.InBothSpecies (only 'anchor genes', ie genes present in both species, are kept)
+#       - filterType = FilterType.InFamilies (only genes herited from the ancestor are kept)
+#       - filterType = FilterType.InBothGenomes (only 'anchor genes', ie genes present in both species, are kept)
 # Returns (g1,g2,trans1,trans2)
 #      - g1 the genome 'g1' rewritten with ancGenes ID
 #       - trans1 = { ..., newi:oldi, ...} with newi, the index of a gene in 'g1' and oldi the index of the same gene in the original genome 'g1'
@@ -1075,9 +1091,10 @@ def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
     # Mark genes that are not in the intersection for future removal
     # Marking is done by switching (g,s) into (None,s)
     # warning : modifies g1 and g2
+    isinstance(g1_orig, myLightGenomes.LightGenome)
     if keepOriginal:
-        g1 = copy.deepcopy(g1_orig)
-        g2 = copy.deepcopy(g2_orig)
+        g1 = myLightGenomes.LightGenome(g1_orig)
+        g2 = myLightGenomes.LightGenome(g2_orig)
     else:
         g1 = g1_orig
         g2 = g2_orig
@@ -1091,11 +1108,11 @@ def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
         (g1, mG1f2G1o, (nCL1, nGL1)) = remapFilterSize(g1, minChromLength)
         (g2, mG2f2G2o, (nCL2, nGL2)) = remapFilterSize(g2, minChromLength)
     # Only genes herited from an ancestral genes are conserved
-    elif filterType == FilterType.InCommonAncestor:
+    elif filterType == FilterType.InFamilies:
         (g1, mG1f2G1o, (nCL1, nGL1)) = remapCoFilterContentAndSize(g1, set([None]), minChromLength)
         (g2, mG2f2G2o, (nCL2, nGL2)) = remapCoFilterContentAndSize(g2, set([None]), minChromLength)
     # Only conserve genes present in both extant genomes
-    elif filterType == FilterType.InBothSpecies:
+    elif filterType == FilterType.InBothGenomes:
         mG1f2G1o = None
         mG2f2G2o = None
         while True:
@@ -1159,7 +1176,7 @@ def recommendedGap(nbHps, targetProba, N12, N1, N2, p_hpSign=None, maxGapThresho
 
 
 # Number of non-empty value in the mh or the mhp
-#@myTools.tictac
+@myTools.tictac
 @myTools.verbose
 def numberOfHomologies(g1, g2, verbose=False):
     nbHomologies = myTools.Dict2d(int)
@@ -1600,7 +1617,7 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True):
     return new_sbsInPairComp
 
 
-def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
+def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      filterType=FilterType.None,
                                      tandemGapMax=0,
                                      gapMax=None,
@@ -1619,7 +1636,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
 
     # second level of verbosity
     #verbose2 = verbose if (len(g1) > 500 or len(g2) > 500) else False
-    verbose2 = False
+    verbose2 = True
     N12s, N12_g = numberOfHomologies(g1_tb, g2_tb, verbose=verbose2)
     print >> sys.stderr, "pairwise comparison of genome 1 and genome 2 yields %s hps" % N12_g
     # compute the recommended gapMax parameter
@@ -1749,7 +1766,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
 
         cptLoopIter += 1
 
-        if atLeastOneNonOverlappingMerge and cptLoopIter <= 30:
+        if atLeastOneNonOverlappingMerge and cptLoopIter <= 10:
             continue
         else:
             if cptLoopIter  > 1:
@@ -1801,7 +1818,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
 #       distanceMetric : the distance metric (either MD,DPD,ED or CD)
 #       pThreshold : the probability threshold under which the sb is considered significant
 #       FilterType
-#               InCommonAncestor : all genes herited from a gene of the LCA are kept during the filtering of extant genomes
+#               InFamilies : all genes herited from a gene of the LCA are kept during the filtering of extant genomes
 #               InBothGenomes : only 'anchor genes' (genes present in both genomes) are kept
 #               None : genomes are not filtered
 # Outputs:
@@ -1816,7 +1833,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
 #########################################################################################################################
 @myTools.tictac
 @myTools.verbose
-def extractSbsInPairCompGenomes(g1, g2, ancGenes,
+def extractSbsInPairCompGenomes(g1, g2, families,
                                 filterType=FilterType.None,
                                 tandemGapMax=0,
                                 gapMax=None,
@@ -1847,25 +1864,25 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
     #step 1 :filter genomes and rewrite in tandem blocks if needed
     ##############################################################
     # rewrite genomes by family names (ie ancGene names)
-    g1_aID = myMapping.labelWithAncGeneID(g1, ancGenes)
-    g2_aID = myMapping.labelWithAncGeneID(g2, ancGenes)
+    g1_fID = myMapping.labelWithFamID(g1, families)
+    g2_fID = myMapping.labelWithFamID(g2, families)
     # genes that are not in ancGene have a aID=None
     print >> sys.stderr, "genome 1 initially contains %s genes" % sum([len(g1[c1]) for c1 in g1])
     print >> sys.stderr, "genome 2 initially contains %s genes" % sum([len(g2[c2]) for c2 in g2])
-    # Must be applied on the two genomes, because of the mode inBothGenomes (InCommonAncestor => not only anchor genes are kept but all genes herited from a gene of the LCA)
+    # Must be applied on the two genomes, because of the mode inBothGenomes (InFamilies => not only anchor genes are kept but all genes herited from a gene of the LCA)
     #mfilt2origin1 -> mGf2Go1
-    ((g1_aID, mGf2Go1, (nCL1, nGL1)), (g2_aID, mGf2Go2, (nCL2, nGL2))) =\
-        filter2D(g1_aID, g2_aID, filterType, minChromLength)
+    ((g1_fID, mGf2Go1, (nCL1, nGL1)), (g2_fID, mGf2Go2, (nCL2, nGL2))) =\
+        filter2D(g1_fID, g2_fID, filterType, minChromLength)
     print >> sys.stderr, "genome 1 after filterType=%s and minChromLength=%s contains %s genes" %\
-        (filterType, minChromLength, sum([len(g1_aID[c1]) for c1 in g1_aID]))
+        (filterType, minChromLength, sum([len(g1_fID[c1]) for c1 in g1_fID]))
     print >> sys.stderr, "genome 2 after filterType=%s and minChromLength=%s contains %s genes" %\
-        (filterType, minChromLength, sum([len(g2_aID[c2]) for c2 in g2_aID]))
-    nGD1 = myMapping.nbDup(g1_aID)[0]
-    nGD2 = myMapping.nbDup(g2_aID)[0]
+        (filterType, minChromLength, sum([len(g2_fID[c2]) for c2 in g2_fID]))
+    nGD1 = myMapping.nbDup(g1_fID)[0]
+    nGD2 = myMapping.nbDup(g2_fID)[0]
     print >> sys.stderr, "genome 1 contains %s gene duplicates (initial gene excluded)" % nGD1
     print >> sys.stderr, "genome 2 contains %s gene duplicates (initial gene excluded)" % nGD2
-    (g1_tb, mtb2g1, nGTD1) = myMapping.remapRewriteInTb(g1_aID, tandemGapMax=tandemGapMax, mOld=mGf2Go1)
-    (g2_tb, mtb2g2, nGTD2) = myMapping.remapRewriteInTb(g2_aID, tandemGapMax=tandemGapMax, mOld=mGf2Go2)
+    (g1_tb, mtb2g1, nGTD1) = myMapping.remapRewriteInTb(g1_fID, tandemGapMax=tandemGapMax, mOld=mGf2Go1)
+    (g2_tb, mtb2g2, nGTD2) = myMapping.remapRewriteInTb(g2_fID, tandemGapMax=tandemGapMax, mOld=mGf2Go2)
     print >> sys.stderr, "genome 1 rewritten in tbs, contains %s tbs" % sum([len(g1_tb[c1]) for c1 in g1_tb])
     print >> sys.stderr, "genome 2 rewritten in tbs, contains %s tbs" % sum([len(g2_tb[c2]) for c2 in g2_tb])
     #TODO, optimise next step
@@ -1878,7 +1895,7 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
     assert nDD1 + nGTD1 == nGD1
     assert nDD2 + nGTD2 == nGD2
 
-    sbsInPairComp = extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
+    sbsInPairComp = extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                                      gapMax=gapMax,
                                                      distanceMetric=distanceMetric,
                                                      pThreshold=pThreshold,
@@ -1911,7 +1928,10 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
             l1.append([gIndxs for gIndxs in mtb2gc1.new[indx_tb_g1]])
             indx_tb_g2 = sb.l2[indx_HP]
             l2.append([gIdxs for gIdxs in mtb2gc2.new[indx_tb_g2]])
-            la.append((ancGenes.lstGenes[None][aGene[0]].names[0], aGene[1], aGene[2]))
+
+            # FIXME la.append((ancGenes.lstGenes[None][aGene[0]].names[0], aGene[1], aGene[2]))
+            la.append((aGene[0], aGene[1], aGene[2]))
+
         # modify the current object SyntenyBlock, within sbsInPairComp
         sb.l1 = l1
         sb.l2 = l2
@@ -1928,13 +1948,13 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
 # c1 and c2 the chromosomes of the pairwise comparison in which the synteny block has been found
 # la = [..., (aGName, strand, dist), ...]
 # l1 = [..., [g1, ...gN], ...] with [g1, ..., gN] the child tb of the corresponding aG
-def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True):
+def printSbsFile(sbsInPairComp, genome1, genome2, families, sortByDecrLengths=True):
     print >> sys.stderr, "Print synteny blocks"
 
     def foo(genomeX, cX, lX, idxHp):
-        gXs = [genomeX.lstGenes[cX][gIdx].names[0] for gIdx in lX[idxHp]]
+        gXs = [genomeX[cX][gIdx].n for gIdx in lX[idxHp]]
         gXs = ' '.join(gXs)
-        sXs = [genomeX.lstGenes[cX][gIdx].strand for gIdx in lX[idxHp]]
+        sXs = [genomeX[cX][gIdx].s for gIdx in lX[idxHp]]
         for (i, s) in enumerate(sXs):
             if s == +1:
                 sXs[i] = '+'
@@ -1955,7 +1975,8 @@ def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True):
         assert len(sb.la) == len(sb.l1) == len(sb.l2), "len(l1)=%s, len(l2)=%s, len(la)=%s\nl1=%s\nl2=%s\nla=%s" % (len(sb.l1), len(sb.l2), len(sb.la), sb.l1, sb.l2, sb.la)
         nbHps = len(sb.la)
         statsSbs.append(nbHps)
-        for (idxHp, (aGname, aGstrand, dist)) in enumerate(sb.la):
+        for (idxHp, (fID, aGstrand, dist)) in enumerate(sb.la):
+            aGname = families[fID].fn
             (g1s, s1s) = foo(genome1, c1, sb.l1, idxHp)
             (g2s, s2s) = foo(genome2, c2, sb.l2, idxHp)
             print myFile.myTSV.printLine([idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s])
@@ -1980,12 +2001,12 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
         new_gXs = []
         for i in range(nbTandemDup):
             gN = gXs[i]
-            # FIXME take the first occurence genome.getPosition([gN])'.pop()' ?
-            assert len(genome.getPositions([gN])) == 1, "%s %s" % (gN, genome.getPositions([gN]))
-            genePos = genome.getPosition([gN]).pop()
-            chromosome = genePos.chromosome
-            assert chr == chromosome
-            index = genePos.index
+            genePos = genome.getPosition(gN)
+            if gN == None:
+                raise ValueError("gene %s is not in %s genome" % (gN, genome.name))
+            chromosome = genePos.c
+            assert chr == chromosome, "chr = %s(%s) and chromosome = %s(%s)" % (chr, type(chr), chromosome, type(chromosome))
+            index = genePos.idx
             #gXs[i] = genome.lstGenes[chromosome][index].names[0]
             new_gXs.append(index)
             s = sXs[i]
@@ -2016,8 +2037,6 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
     c2_old = 'fooC2'
     for (idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s) in sbsReader:
         # iteration over each line of the input file that corresponds to tandem blocks
-        c1 = myGenomes.commonChrName(c1)
-        c2 = myGenomes.commonChrName(c2)
         aGstrand = int(dist) if aGstrand != 'None' else None
         dist = int(dist) if dist != 'None' else None
         (g1s, s1s) = foo(g1s, s1s, genome1, c1)
@@ -2046,7 +2065,6 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
                     diagType = None
                 #if c1_old == '10' and c2_old == '14':
                 #    print >> sys.stderr, 'Hello !', idSb_old
-                #    raw_input()
                 sbsInPairComp[c1_old][c2_old].append(SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal))
                 # start a new sb
                 l1 = [g1s]
