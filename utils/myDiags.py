@@ -49,12 +49,14 @@ import myFile
 import myMaths
 import myMapping
 import myMultiprocess
+import myLightGenomes
 
 import enum
 
-FilterType = enum.Enum('None', 'InCommonAncestor', 'InBothSpecies')
+FilterType = enum.Enum('InFamilies', 'InBothGenomes', 'None')
 
 
+# TODO, write a diagonal class that is made for tbs containing genes
 class Diagonal():
     def __init__(self, *args, **kargs):
         if len(args) == 4 and (isinstance(args[0], str) or args[0] is None)\
@@ -152,6 +154,39 @@ class Diagonal():
         else:
             max_g = None
         return (m, max_g, lw1, lw2, l1_min, l1_max, l2_min, l2_max)
+
+    def truncate(self, range1, range2):
+        # range1 = (begining, end) on chromosome 1
+        # range2 = (begining, end) on chromosome 2
+        assert len(range1) == 2 and len(range2) == 2
+        assert all([isinstance(item, int) for item in self.l1]) and\
+            all([isinstance(item, int) for item in self.l2])
+        new_l1 = []
+        new_l2 = []
+        new_la = []
+        assert len(self.l1) == len(self.l2) == len(self.la)
+        for (idxH, aG) in enumerate(self.la):
+            i1 = self.l1[idxH]
+            i2 = self.l2[idxH]
+            if (range1[0] <= i1 and i1 <= range1[1]) and (range2[0] <= i2 and i2 <= range2[1]):
+                new_l1.append(i1)
+                new_l2.append(i2)
+                new_la.append(aG)
+            # FIXME, self.lX being lists is not a normal case of the Diagonal
+            # object. this condition is for current convenience purpose. It
+            # should be replaced y a more general Diagonal object that allow to
+            # use self.lX being lists. minOnGX(), beg() and end() should be
+            # changed in consequence.
+            # if isinstance(tb1, list) and isinstance(tb2, list):
+            #    new_tb1 = [g1Idx for g1Idx in tb1 if (range1[0] <= g1Idx and g1Idx <= range1[1])]
+            #    new_tb2 = [g2Idx for g2Idx in tb2 if (range2[0] <= g2Idx and g2Idx <= range2[1])]
+            #    if len(new_tb1) > 0 and len(new_tb2) > 0:
+            #        new_l1.append(new_tb1)
+            #        new_l2.append(new_tb2)
+            #        new_la.append(aG)
+        self.l1 = new_l1
+        self.l2 = new_l2
+        self.la = new_la
 
     def __repr__(self):
         return "\ndiagType=%s\nl1=%s\nl2=%s\nla=%s\n" % (self.dt, self.l1, self.l2, self.la)
@@ -407,7 +442,7 @@ def mergeSbs(listOfDiags, gapMax, gc2, distanceMetric = 'DPD', verbose = False):
                 diagA.l1.extend(diagToFuse.l1)
                 diagA.l2.extend(diagToFuse.l2)
                 # Compute the new dist with currGap
-                diagToFuse.la = [(aGN, aGs, dist+diagToFuse.la[-1][2]+currGap) for (aGN, aGs, dist) in diagToFuse.la]
+                diagToFuse.la = [(aGN, aGs, dist+diagA.la[-1][2]+currGap) for (aGN, aGs, dist) in diagToFuse.la]
                 diagA.la.extend(diagToFuse.la)
                 # Previous diagonals without diagTypes have now a diagType and
                 # all ancestral genes can now be oriented.
@@ -618,12 +653,18 @@ def buildConflictGraph(sbsInPairComp, overlapMax=0):
         I = concatenateDictsOfSets(I1, I2)
         return (N, O, I)
 
-    sbsInPairCompWithIds = myTools.OrderedDict2dOfLists()
-    for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
-        new_sb = SyntenyBlock(sb)
-        #sbsInPairCompWithIds[c1][c2].append(new_sb)
-        sbsInPairCompWithIds.addToLocation((c1, c2), new_sb)
-    #sbsInPairCompWithIds.identifyItems()
+    if sbsInPairComp.__class__.__name__ == 'Dict2d':
+        sbsInPairCompWithIds = myTools.OrderedDict2dOfLists()
+        for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
+            new_sb = SyntenyBlock(sb)
+            #sbsInPairCompWithIds[c1][c2].append(new_sb)
+            sbsInPairCompWithIds.addToLocation((c1, c2), new_sb)
+        #sbsInPairCompWithIds.identifyItems()
+    elif sbsInPairComp.__class__.__name__ == 'OrderedDict2dOfLists':
+        # this condition allows to keep former ids
+        sbsInPairCompWithIds = sbsInPairComp
+    else:
+        raise TypeError('sbsInPairComp is either a Dict2D or an OrderedDict2dOfLists')
     (V, (sbsG1, sbsG2)) = buildSetOfVertices(sbsInPairCompWithIds)
     (N, O, I) = findOverlaps(sbsInPairCompWithIds, sbsG1, sbsG2, overlapMax=overlapMax)
     return (sbsInPairCompWithIds, V, N, O, I, (sbsG1, sbsG2))
@@ -660,38 +701,33 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
         # method "getItemById" of sbsInPairCompWithIds"
         id2sb = sbsInPairCompWithIds.getItemById
         id2location = sbsInPairCompWithIds.getItemLocationById
-        Vcopy = set(V)
         # sort V by increasing weights
-        sortedV = sorted([v for v in Vcopy], key=lambda iDsb: len(id2sb(iDsb).la))
-
+        sortedV = sorted([int(v) for v in V], key=lambda iDsb: len(id2sb(iDsb).la))
         noOrSmallOverlapIds = set([])
         removedSbsBecauseOfOverlap = set([])
-        while len(Vcopy) > 0:
+        while len(sortedV) > 0:
             iD_selectedSb = sortedV.pop()
             # SB Not Removed
             sbnr = id2sb(iD_selectedSb)
             (c1nr, c2nr, _) = id2location(iD_selectedSb)
-            Vcopy.remove(iD_selectedSb)
             noOrSmallOverlapIds.add(iD_selectedSb)
             # update the edges
-            for iD_removedSb in N[iD_selectedSb]:
+            while len(N[iD_selectedSb]) > 0:
+                iD_removedSb = N[iD_selectedSb].pop()
+                N[iD_removedSb].remove(iD_selectedSb)
                 # SB Removed
                 sbr = id2sb(iD_removedSb)
                 (c1r, c2r, _) = id2location(iD_removedSb)
                 print >> sys.stderr, "sb (%s, %s) with %s tbs is removed because of unallowed overlap with sb (%s, %s) with %s tbs" %\
                     (c1r, c2r, len(sbr.la), c1nr, c2nr, len(sbnr.la))
                 for iD_needUpdateSb in N[iD_removedSb]:
-                    N[iD_needUpdateSb] = N[iD_needUpdateSb] - N[iD_removedSb]
-                    # if N[iD_needUpdateSb] is empty, it will be output as a
-                    # non-overlapping sb latter
+                    N[iD_needUpdateSb].remove(iD_removedSb)
+                    if len(N[iD_needUpdateSb]) == 0:
+                        del N[iD_needUpdateSb]
                 del N[iD_removedSb]
                 removedSbsBecauseOfOverlap.add(iD_removedSb)
-                try:
-                   Vcopy.remove(iD_removedSb)
-                except:
-                    pass
+                sortedV.remove(iD_removedSb)
             del N[iD_selectedSb]
-            sortedV = [idSb for idSb in sortedV if idSb in Vcopy]
 
         assert len(V) == len(noOrSmallOverlapIds) + len(removedSbsBecauseOfOverlap), "%s = %s + %s" %\
             (len(V), len(noOrSmallOverlapIds), len(removedSbsBecauseOfOverlap))
@@ -796,12 +832,18 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
             removedIdBecauseEmptySb.add(idsb)
             print >> sys.stderr, "Removed sb (%s,%s) because of truncation (less than 1tb in the sb after truncation)" % (c1, c2)
             cptRemovedSbAfterTruncation += 1
+
     sbsInPairCompWithIds.removeIds(removedIdBecauseEmptySb)
+    # DEBUG
+    if __debug__:
+        (sbsInPairCompWithIds, V, N, O, I, (sbsG1, sbsG2)) =\
+            buildConflictGraph(sbsInPairCompWithIds, overlapMax=0)
+        assert len(N) == 0, N
+        assert len(O) == 0, O
 
         #assert set(O.keys()) >= noOrSmallOverlapIds
         # FIXME, is it right to do that ?
         #O = dict([(iDsba, iDsbb)  for (iDsba, iDsbb) in O.iteritems() if ((iDsba in noOrSmallOverlapIds) and (iDsbb in noOrSmallOverlapIds))])
-
         #assert len(noOrSmallOverlapIds) == len([a for a in new_sbsInPairComp])
 
     new_sbsInPairComp = myTools.Dict2d(list)
@@ -868,7 +910,6 @@ def homologyMatrix(gc1, gc2):
     M={}
     if not locG2: # if locG2 is empty
         return (M, locG2)
-
     for (i1,(f,s1)) in enumerate(gc1):
         if f !=None and f in locG2: #TODO : remove by advance the f == None from gc1
             M[i1]={}
@@ -895,6 +936,22 @@ def homologyMatrix(gc1, gc2):
     #if switchedGCs == True:
     #       (gc1,gc2) = (gc2,gc1)
     #       switchedGCs = False
+
+    #4 slower than 2
+    #familiesLocation1 = collections.defaultdict(list)
+    #for (i1, (f, s1)) in enumerate(gc1):
+    #    if f is not None:
+    #        familiesLocation1[f].append(i1)
+    #familiesLocation2 = collections.defaultdict(list)
+    #locG2 = collections.defaultdict(list)
+    #for (i2, (f, s2)) in enumerate(gc2):
+    #    if f is not None:
+    #        familiesLocation2[f].append(i2)
+    #        locG2[f].append((i2, s2))
+    #        M = collections.defaultdict(lambda: collections.defaultdict(list))
+    #for f in set(familiesLocation1.keys()) | set(familiesLocation2.keys()):
+    #    for (i1, i2) in itertools.product(familiesLocation1[f], familiesLocation2[f]):
+    #        M[i1][i2] = strandProduct(gc1[i1][1], gc2[i2][1])
 
     return (M, locG2)
 
@@ -1026,8 +1083,8 @@ def crossGeneContent(g1, g2):
 
 # Depending on the filterType parameter:
 #       - filterType = FilterType.None (genomes are not filtered)
-#       - filterType = FilterType.InCommonAncestor (only genes herited from the ancestor are kept)
-#       - filterType = FilterType.InBothSpecies (only 'anchor genes', ie genes present in both species, are kept)
+#       - filterType = FilterType.InFamilies (only genes herited from the ancestor are kept)
+#       - filterType = FilterType.InBothGenomes (only 'anchor genes', ie genes present in both species, are kept)
 # Returns (g1,g2,trans1,trans2)
 #      - g1 the genome 'g1' rewritten with ancGenes ID
 #       - trans1 = { ..., newi:oldi, ...} with newi, the index of a gene in 'g1' and oldi the index of the same gene in the original genome 'g1'
@@ -1035,9 +1092,10 @@ def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
     # Mark genes that are not in the intersection for future removal
     # Marking is done by switching (g,s) into (None,s)
     # warning : modifies g1 and g2
+    isinstance(g1_orig, myLightGenomes.LightGenome)
     if keepOriginal:
-        g1 = copy.deepcopy(g1_orig)
-        g2 = copy.deepcopy(g2_orig)
+        g1 = myLightGenomes.LightGenome(g1_orig)
+        g2 = myLightGenomes.LightGenome(g2_orig)
     else:
         g1 = g1_orig
         g2 = g2_orig
@@ -1051,11 +1109,11 @@ def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
         (g1, mG1f2G1o, (nCL1, nGL1)) = remapFilterSize(g1, minChromLength)
         (g2, mG2f2G2o, (nCL2, nGL2)) = remapFilterSize(g2, minChromLength)
     # Only genes herited from an ancestral genes are conserved
-    elif filterType == FilterType.InCommonAncestor:
+    elif filterType == FilterType.InFamilies:
         (g1, mG1f2G1o, (nCL1, nGL1)) = remapCoFilterContentAndSize(g1, set([None]), minChromLength)
         (g2, mG2f2G2o, (nCL2, nGL2)) = remapCoFilterContentAndSize(g2, set([None]), minChromLength)
     # Only conserve genes present in both extant genomes
-    elif filterType == FilterType.InBothSpecies:
+    elif filterType == FilterType.InBothGenomes:
         mG1f2G1o = None
         mG2f2G2o = None
         while True:
@@ -1119,7 +1177,7 @@ def recommendedGap(nbHps, targetProba, N12, N1, N2, p_hpSign=None, maxGapThresho
 
 
 # Number of non-empty value in the mh or the mhp
-#@myTools.tictac
+@myTools.tictac
 @myTools.verbose
 def numberOfHomologies(g1, g2, verbose=False):
     nbHomologies = myTools.Dict2d(int)
@@ -1382,6 +1440,9 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True):
             newl1 = sb.l1[xBeg:xEnd]
             newl2 = sb.l2[xBeg:xEnd]
             newla = sb.la[xBeg:xEnd]
+            if newla[0][2] > 1:
+                newla = [(aG, aGs, (dist - newla[0][2] + 1)) for (aG, aGs, dist) in newla]
+            assert newla[0][2] == 1
             # Here we assign the former pVal to all sub-sbs. The
             # hypothesis is to consider that since the sub-sbs were
             # neighbours within the former sb, their significances have
@@ -1557,7 +1618,7 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True):
     return new_sbsInPairComp
 
 
-def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
+def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      filterType=FilterType.None,
                                      tandemGapMax=0,
                                      gapMax=None,
@@ -1576,7 +1637,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
 
     # second level of verbosity
     #verbose2 = verbose if (len(g1) > 500 or len(g2) > 500) else False
-    verbose2 = False
+    verbose2 = True
     N12s, N12_g = numberOfHomologies(g1_tb, g2_tb, verbose=verbose2)
     print >> sys.stderr, "pairwise comparison of genome 1 and genome 2 yields %s hps" % N12_g
     # compute the recommended gapMax parameter
@@ -1683,9 +1744,10 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
             # TODO, compute the variation of the coverage before and after this step
             sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=False)
             # DEBUG, verify that the filtered sbs are not overlapping
-            (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0)
-            assert len(N) == 0
-            assert len(O) == 0
+            if __debug__:
+                (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0)
+                assert len(N) == 0, N
+                assert len(O) == 0, O
             nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
             if cptLoopIter == 0:
                 print >> sys.stderr, "Nb sbs after overlap-truncation-filtering = %s" % nbSbs
@@ -1705,7 +1767,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
 
         cptLoopIter += 1
 
-        if atLeastOneNonOverlappingMerge and cptLoopIter <= 30:
+        if atLeastOneNonOverlappingMerge and cptLoopIter <= 10:
             continue
         else:
             if cptLoopIter  > 1:
@@ -1757,7 +1819,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
 #       distanceMetric : the distance metric (either MD,DPD,ED or CD)
 #       pThreshold : the probability threshold under which the sb is considered significant
 #       FilterType
-#               InCommonAncestor : all genes herited from a gene of the LCA are kept during the filtering of extant genomes
+#               InFamilies : all genes herited from a gene of the LCA are kept during the filtering of extant genomes
 #               InBothGenomes : only 'anchor genes' (genes present in both genomes) are kept
 #               None : genomes are not filtered
 # Outputs:
@@ -1772,7 +1834,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
 #########################################################################################################################
 @myTools.tictac
 @myTools.verbose
-def extractSbsInPairCompGenomes(g1, g2, ancGenes,
+def extractSbsInPairCompGenomes(g1, g2, families,
                                 filterType=FilterType.None,
                                 tandemGapMax=0,
                                 gapMax=None,
@@ -1803,25 +1865,25 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
     #step 1 :filter genomes and rewrite in tandem blocks if needed
     ##############################################################
     # rewrite genomes by family names (ie ancGene names)
-    g1_aID = myMapping.labelWithAncGeneID(g1, ancGenes)
-    g2_aID = myMapping.labelWithAncGeneID(g2, ancGenes)
+    g1_fID = myMapping.labelWithFamID(g1, families)
+    g2_fID = myMapping.labelWithFamID(g2, families)
     # genes that are not in ancGene have a aID=None
     print >> sys.stderr, "genome 1 initially contains %s genes" % sum([len(g1[c1]) for c1 in g1])
     print >> sys.stderr, "genome 2 initially contains %s genes" % sum([len(g2[c2]) for c2 in g2])
-    # Must be applied on the two genomes, because of the mode inBothGenomes (InCommonAncestor => not only anchor genes are kept but all genes herited from a gene of the LCA)
+    # Must be applied on the two genomes, because of the mode inBothGenomes (InFamilies => not only anchor genes are kept but all genes herited from a gene of the LCA)
     #mfilt2origin1 -> mGf2Go1
-    ((g1_aID, mGf2Go1, (nCL1, nGL1)), (g2_aID, mGf2Go2, (nCL2, nGL2))) =\
-        filter2D(g1_aID, g2_aID, filterType, minChromLength)
+    ((g1_fID, mGf2Go1, (nCL1, nGL1)), (g2_fID, mGf2Go2, (nCL2, nGL2))) =\
+        filter2D(g1_fID, g2_fID, filterType, minChromLength)
     print >> sys.stderr, "genome 1 after filterType=%s and minChromLength=%s contains %s genes" %\
-        (filterType, minChromLength, sum([len(g1_aID[c1]) for c1 in g1_aID]))
+        (filterType, minChromLength, sum([len(g1_fID[c1]) for c1 in g1_fID]))
     print >> sys.stderr, "genome 2 after filterType=%s and minChromLength=%s contains %s genes" %\
-        (filterType, minChromLength, sum([len(g2_aID[c2]) for c2 in g2_aID]))
-    nGD1 = myMapping.nbDup(g1_aID)[0]
-    nGD2 = myMapping.nbDup(g2_aID)[0]
+        (filterType, minChromLength, sum([len(g2_fID[c2]) for c2 in g2_fID]))
+    nGD1 = myMapping.nbDup(g1_fID)[0]
+    nGD2 = myMapping.nbDup(g2_fID)[0]
     print >> sys.stderr, "genome 1 contains %s gene duplicates (initial gene excluded)" % nGD1
     print >> sys.stderr, "genome 2 contains %s gene duplicates (initial gene excluded)" % nGD2
-    (g1_tb, mtb2g1, nGTD1) = myMapping.remapRewriteInTb(g1_aID, tandemGapMax=tandemGapMax, mOld=mGf2Go1)
-    (g2_tb, mtb2g2, nGTD2) = myMapping.remapRewriteInTb(g2_aID, tandemGapMax=tandemGapMax, mOld=mGf2Go2)
+    (g1_tb, mtb2g1, nGTD1) = myMapping.remapRewriteInTb(g1_fID, tandemGapMax=tandemGapMax, mOld=mGf2Go1)
+    (g2_tb, mtb2g2, nGTD2) = myMapping.remapRewriteInTb(g2_fID, tandemGapMax=tandemGapMax, mOld=mGf2Go2)
     print >> sys.stderr, "genome 1 rewritten in tbs, contains %s tbs" % sum([len(g1_tb[c1]) for c1 in g1_tb])
     print >> sys.stderr, "genome 2 rewritten in tbs, contains %s tbs" % sum([len(g2_tb[c2]) for c2 in g2_tb])
     #TODO, optimise next step
@@ -1834,7 +1896,7 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
     assert nDD1 + nGTD1 == nGD1
     assert nDD2 + nGTD2 == nGD2
 
-    sbsInPairComp = extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb, ancGenes,
+    sbsInPairComp = extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                                      gapMax=gapMax,
                                                      distanceMetric=distanceMetric,
                                                      pThreshold=pThreshold,
@@ -1867,7 +1929,10 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
             l1.append([gIndxs for gIndxs in mtb2gc1.new[indx_tb_g1]])
             indx_tb_g2 = sb.l2[indx_HP]
             l2.append([gIdxs for gIdxs in mtb2gc2.new[indx_tb_g2]])
-            la.append((ancGenes.lstGenes[None][aGene[0]].names[0], aGene[1], aGene[2]))
+
+            # FIXME la.append((ancGenes.lstGenes[None][aGene[0]].names[0], aGene[1], aGene[2]))
+            la.append((aGene[0], aGene[1], aGene[2]))
+
         # modify the current object SyntenyBlock, within sbsInPairComp
         sb.l1 = l1
         sb.l2 = l2
@@ -1884,13 +1949,13 @@ def extractSbsInPairCompGenomes(g1, g2, ancGenes,
 # c1 and c2 the chromosomes of the pairwise comparison in which the synteny block has been found
 # la = [..., (aGName, strand, dist), ...]
 # l1 = [..., [g1, ...gN], ...] with [g1, ..., gN] the child tb of the corresponding aG
-def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True):
+def printSbsFile(sbsInPairComp, genome1, genome2, families, sortByDecrLengths=True):
     print >> sys.stderr, "Print synteny blocks"
 
     def foo(genomeX, cX, lX, idxHp):
-        gXs = [genomeX.lstGenes[cX][gIdx].names[0] for gIdx in lX[idxHp]]
+        gXs = [genomeX[cX][gIdx].n for gIdx in lX[idxHp]]
         gXs = ' '.join(gXs)
-        sXs = [genomeX.lstGenes[cX][gIdx].strand for gIdx in lX[idxHp]]
+        sXs = [genomeX[cX][gIdx].s for gIdx in lX[idxHp]]
         for (i, s) in enumerate(sXs):
             if s == +1:
                 sXs[i] = '+'
@@ -1911,7 +1976,8 @@ def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True):
         assert len(sb.la) == len(sb.l1) == len(sb.l2), "len(l1)=%s, len(l2)=%s, len(la)=%s\nl1=%s\nl2=%s\nla=%s" % (len(sb.l1), len(sb.l2), len(sb.la), sb.l1, sb.l2, sb.la)
         nbHps = len(sb.la)
         statsSbs.append(nbHps)
-        for (idxHp, (aGname, aGstrand, dist)) in enumerate(sb.la):
+        for (idxHp, (fID, aGstrand, dist)) in enumerate(sb.la):
+            aGname = families[fID].fn
             (g1s, s1s) = foo(genome1, c1, sb.l1, idxHp)
             (g2s, s2s) = foo(genome2, c2, sb.l2, idxHp)
             print myFile.myTSV.printLine([idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s])
@@ -1936,12 +2002,12 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
         new_gXs = []
         for i in range(nbTandemDup):
             gN = gXs[i]
-            # FIXME take the first occurence genome.getPosition([gN])'.pop()' ?
-            assert len(genome.getPositions([gN])) == 1
-            genePos = genome.getPosition([gN]).pop()
-            chromosome = genePos.chromosome
-            assert chr == chromosome
-            index = genePos.index
+            genePos = genome.getPosition(gN)
+            if gN == None:
+                raise ValueError("gene %s is not in %s genome" % (gN, genome.name))
+            chromosome = genePos.c
+            assert chr == chromosome, "chr = %s(%s) and chromosome = %s(%s)" % (chr, type(chr), chromosome, type(chromosome))
+            index = genePos.idx
             #gXs[i] = genome.lstGenes[chromosome][index].names[0]
             new_gXs.append(index)
             s = sXs[i]
@@ -1971,8 +2037,7 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
     c1_old = 'fooC1'
     c2_old = 'fooC2'
     for (idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s) in sbsReader:
-        c1 = myGenomes.commonChrName(c1)
-        c2 = myGenomes.commonChrName(c2)
+        # iteration over each line of the input file that corresponds to tandem blocks
         aGstrand = int(dist) if aGstrand != 'None' else None
         dist = int(dist) if dist != 'None' else None
         (g1s, s1s) = foo(g1s, s1s, genome1, c1)
@@ -1980,18 +2045,18 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
         if idSb != idSb_old:
             if idSb_old == 'foo':
                 # first idSb
-                tmpl1 = list(zip(g1s, s1s))
-                tmpl2 = list(zip(g2s, s2s))
-                la = list((aGname, aGstrand, dist))
+                l1 = [g1s]
+                l2 = [g2s]
+                la = [(aGname, aGstrand, dist)]
             else:
                 # record the former synteny block that has been parsed
                 # TODO find the diagType
 
-                assert tmpl1[0][0] <= tmpl1[-1][0], "%s <= %s" % (tmpl1[0][0], tmpl1[-1][0])
-                if tmpl1[0][0] < tmpl1[-1][0]:
-                    if tmpl2[0][0] < tmpl2[-1][0]:
+                assert l1[0] <= l1[-1], "%s <= %s" % (l1[0], l1[-1])
+                if l1[0] < l1[-1]:
+                    if l2[0] < l2[-1]:
                         diagType = '/'
-                    elif tmpl2[0][0] > tmpl2[-1][0]:
+                    elif l2[0] > l2[-1]:
                         diagType = '\\'
                     else:
                         # horizontal synteny block
@@ -2001,28 +2066,25 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
                     diagType = None
                 #if c1_old == '10' and c2_old == '14':
                 #    print >> sys.stderr, 'Hello !', idSb_old
-                #    raw_input()
-                l1 = [idx for (idx, s) in tmpl1]
-                l2 = [idx for (idx, s) in tmpl2]
                 sbsInPairComp[c1_old][c2_old].append(SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal))
                 # start a new sb
-                tmpl1 = list(zip(g1s, s1s))
-                tmpl2 = list(zip(g2s, s2s))
-                la = list((aGname, aGstrand, dist))
+                l1 = [g1s]
+                l2 = [g2s]
+                la = [(aGname, aGstrand, dist)]
             idSb_old = idSb
             c1_old = c1
             c2_old = c2
         else:
-            tmpl1.extend(zip(g1s, s1s))
-            tmpl2.extend(zip(g2s, s2s))
+            l1.append(g1s)
+            l2.append(g2s)
             la.append((aGname, aGstrand, dist))
     # last idSb
-    # TODO find the diagType
-    assert tmpl1[0][0] <= tmpl1[-1][0]
-    if tmpl1[0][0] < tmpl1[-1][0]:
-        if tmpl2[0][0] < tmpl2[-1][0]:
+    # find the diagType
+    assert l1[0] <= l1[-1]
+    if l1[0] < l1[-1]:
+        if l2[0] < l2[-1]:
             diagType = '/'
-        elif tmpl2[0][0] > tmpl2[-1][0]:
+        elif l2[0] > l2[-1]:
             diagType = '\\'
         else:
             # horizontal synteny block
@@ -2030,8 +2092,6 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
     else:
         # vertical synteny block
         diagType = None
-    l1 = g1s
-    l2 = g2s
     sbsInPairComp[c1][c2].append(SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal))
     return sbsInPairComp
 

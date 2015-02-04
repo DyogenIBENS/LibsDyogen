@@ -9,12 +9,13 @@
 
 import myTools
 import myGenomes
-import sys
+import myLightGenomes
+from myLightGenomes import Gene as Gene
 import collections
 
 
 def setOfGeneNames(genome):
-    assert type(genome) == dict or type(genome) == collections.defaultdict
+    assert isinstance(genome, myLightGenomes.LightGenome)
     geneNames = set()
     for chrom in genome.values():
         geneNames.update(geneName for (geneName, _) in chrom)
@@ -23,10 +24,11 @@ def setOfGeneNames(genome):
 
 # because of collections.Counter
 @myTools.minimalPythonVersion((2, 7))
-def nbDup(g_aID_filt):
+def nbDup(g_fID_filt):
+    assert isinstance(g_fID_filt, myLightGenomes.LightGenome)
     # create a long chromosome with all the chromosome gene names
     newF = []
-    for chr in g_aID_filt.values():
+    for chr in g_fID_filt.values():
         chr = [g for (g, _) in chr]
         newF = newF + chr
     dupCounter = collections.Counter(newF)
@@ -34,31 +36,19 @@ def nbDup(g_aID_filt):
     return (nbGeneDup, dupCounter)
 
 
-# Rewrite genomes as a list of ancGeneIds
-# ancGeneId can be considered as a family name
-def labelWithAncGeneID(genome, ancGenes):
-    assert ancGenes.__class__.__name__ == 'Genome'
-    assert type(genome) == dict or type(genome) == collections.defaultdict
+# Rewrite genomes as a list of family Ids
+def labelWithFamID(genome, families):
+    assert isinstance(families, myLightGenomes.Families)
+    assert isinstance(genome, myLightGenomes.LightGenome)
     assert type(genome.values()[0]) == list
-    assert type(genome.values()[0][0]) == tuple
+    assert isinstance(genome.values()[0][0], tuple)
     assert all(len(chrom) > 0 for chrom in genome.values())
-    newGenome = {}
+    newGenome = myLightGenomes.LightGenome()
     for c in genome:
-        newGenome[c] = []
         #assert len(genome[c]) >=1
         for (g, s) in genome[c]:
-            # Genome.getPosition(name) returns a set of GenePosition that corresponds
-            # to the positions of the gene g.names in the ancGene file.
-            # Gene position is a namedtuple : GenePosition(chromosome=value, index=value)
-            gPositions = ancGenes.getPosition([g])
-            #assert all([len(g) <= 1 for (g,_) in tmp]) # DEBUG assertion, verify that there is only one ancGene ID for each gene
-            #assert set(len(x[0]) for x in tmp).issubset(set([0,1]))
-            #assert set(list(x[0])[0].chromosome for x in tmp if len(x[0]) > 0).issubset([None])
-            # WARNING g.pop() removes and returns a random element from set g
-            if len(gPositions) > 0:
-                newGenome[c].append((gPositions.pop().index, s))
-            else:
-                newGenome[c].append((None, s))
+            fid = families.getFamID(g)
+            newGenome[c].append(Gene(fid, s))
     return newGenome
 
 
@@ -137,10 +127,10 @@ class Mapping(object):
 # while remapping and collapsing genes into blocks, find the best consensus
 # orientation for the block.
 def remap(genome, genomeMapping, assertCollapsedGenesHaveSameName=True):
-    if type(genome) == dict:
-        assert type(genome) == type(genomeMapping) == dict
+    if isinstance(genome, myLightGenomes.LightGenome):
+        assert type(genomeMapping) == dict
         # if genome is a dict or a defaultdict
-        newGenome = {}
+        newGenome = myLightGenomes.LightGenome()
         for c in genomeMapping:
             newGenome[c] = []
             chrMapping = genomeMapping[c]
@@ -149,26 +139,26 @@ def remap(genome, genomeMapping, assertCollapsedGenesHaveSameName=True):
                 if assertCollapsedGenesHaveSameName:
                     # Assert that all the names of the collapsed old genes are the
                     # same.
-                    assert len(set([genome[c][oldIdx][0] for oldIdx in oldIdxs])) == 1,\
+                    assert len(set([genome[c][oldIdx].n for oldIdx in oldIdxs])) == 1,\
                         "At least one collapsed gene is not in the same family as one of its co-collapsed gene."
-
-                name = genome[c][oldIdxs[0]][0]
+                name = genome[c][oldIdxs[0]].n
                 if len(oldIdxs) == 1:
-                    s = genome[c][oldIdxs[0]][1]
+                    s = genome[c][oldIdxs[0]].s
                 elif len(oldIdxs) >= 2:
-                    firstOldS = genome[c][oldIdxs[0]][1]
+                    firstOldS = genome[c][oldIdxs[0]].s
                     # Set a None orientation if no consensus
                     # idxsOfChainedTbs[0] = min(idxsOfChainedTbs)
                     if firstOldS == +1 or firstOldS == -1\
-                            and all([genome[c][oldIdx][1] == firstOldS
+                            and all([genome[c][oldIdx].s == firstOldS
                                      for oldIdx in oldIdxs]):
                         s = firstOldS
                     else:
                         s = None
-                newGenome[c].append((name, s))
+                newGenome[c].append(Gene(name, s))
     elif genome.__class__.__name__ == myGenomes.Genome:
         assert set(genome.lstGenes.keys()) == set(genomeMapping.keys())
-        newGenome = myGenomes.Genome(genome)
+        # FIXME no empty constructor
+        newGenome = myGenomes.Genome()
         newGenome.lstGenes = collections.defaultdict(list)
         for c in genomeMapping:
             chrom = genome.lstGenes[c]
@@ -209,7 +199,7 @@ def remap(genome, genomeMapping, assertCollapsedGenesHaveSameName=True):
 
 def remapCoFilterContentAndSize(genome, removedNames, minChromLength, mOld=None):
     assert type(removedNames) == set
-    assert type(genome) == dict or genome.__class__.__name__ == 'Genome'
+    assert isinstance(genome, myLightGenomes.LightGenome)
     (newGenome, mfGC2old, (nbChrLoss, nbGeneLoss)) = remapFilterGeneContent(genome, removedNames)
     assert len(newGenome.keys()) == len(mfGC2old.keys())
     (newGenome, mfS2fGC, (nbChrLossb, nbGeneLossb)) = remapFilterSize(newGenome, minChromLength)
@@ -234,7 +224,7 @@ def remapCoFilterContentAndSize(genome, removedNames, minChromLength, mOld=None)
 
 # TODO FIXME
 def remapFilterGeneLength(genome, minGeneLengthInBp, mOld=None):
-    assert type(genome) == dict or genome.__class__.__name__ == 'Genome'
+    assert type(genome, myLightGenomes.LightGenome)
     (mf2old, (nbChrLoss, nbGeneLoss)) = mapFilterGeneLength(genome, minGeneLengthInBp)
     newGenome = remap(genome, mf2old, assertCollapsedGenesHaveSameName=False)
     return (newGenome, mf2old, (nbChrLoss, nbGeneLoss))
@@ -261,7 +251,7 @@ def mapFilterGeneLength(genome, minGeneLengthInBp, mOld=None):
 
 
 def remapFilterSize(genome, minChromLength, mOld=None):
-    assert type(genome) == dict or genome.__class__.__name__ == 'Genome'
+    assert isinstance(genome, myLightGenomes.LightGenome)
     (mf2old, (nbChrLoss, nbGeneLoss)) = mapFilterSize(genome, minChromLength)
     newGenome = remap(genome, mf2old, assertCollapsedGenesHaveSameName=False)
     if mOld is not None:
@@ -276,7 +266,7 @@ def remapFilterSize(genome, minChromLength, mOld=None):
 
 def remapFilterGeneContent(genome, removedNames, mOld=None):
     assert type(removedNames) == set
-    assert type(genome) == dict or genome.__class__.__name__ == 'Genome'
+    assert isinstance(genome, myLightGenomes.LightGenome)
     (mf2old, (nbChrLoss, nbGeneLoss)) = mapFilterGeneContent(genome, removedNames, mOld=mOld)
     #DEBUG Loop assertion
     #for (c, chrom) in genome.iteritems():
@@ -294,17 +284,17 @@ def remapFilterGeneContent(genome, removedNames, mOld=None):
     return (newGenome, mf2old, (nbChrLoss, nbGeneLoss))
 
 
-def remapRewriteInTb(genome_aID, tandemGapMax=0, mOld=None):
-    assert type(genome_aID) == dict or genome_aID.__class__.__name__ == 'Genome'
+def remapRewriteInTb(genome_fID, tandemGapMax=0, mOld=None):
+    assert isinstance(genome_fID, myLightGenomes.LightGenome)
     # Take care to not give mOld=mOld, since mOld is not a mapping
-    # from genome_aID.
-    (mf2old, (nbTandemDup)) = mapRewriteInTb(genome_aID, tandemGapMax=tandemGapMax)
-    newGenome = remap(genome_aID, mf2old, assertCollapsedGenesHaveSameName=True)
+    # from genome_fID.
+    (mf2old, (nbTandemDup)) = mapRewriteInTb(genome_fID, tandemGapMax=tandemGapMax)
+    newGenome = remap(genome_fID, mf2old, assertCollapsedGenesHaveSameName=True)
     if mOld is not None:
         for c in mf2old:
             mf2old[c] = mf2old[c] + mOld[c]
     # Conservation law of genes
-    #nbGenesInOldG = sum(len(chrom) for chrom in genome_aID.values())
+    #nbGenesInOldG = sum(len(chrom) for chrom in genome_fID.values())
     #nbGenesInNewG = sum(len(chrom) for chrom in newGenome.values())
     #assert nbGenesInOldG == nbGenesInNewG + nbTandemDup
     return (newGenome, mf2old, (nbTandemDup))
@@ -317,6 +307,7 @@ def remapRewriteInTb(genome_aID, tandemGapMax=0, mOld=None):
 # old mapping can be used to tranfer the information of the old mapping to the
 # new mapping.
 def mapFilterSize(genome, minChromLength, mOld=None):
+    assert isinstance(genome, myLightGenomes.LightGenome)
     nbChrLoss = 0
     nbGeneLoss = 0
     mfilt2old = {}
@@ -338,22 +329,22 @@ def mapFilterSize(genome, minChromLength, mOld=None):
 # old mapping can be used to tranfer the information of the old mapping to the
 # new mapping.
 def mapFilterGeneContent(genome, removedNames, mOld=None):
+    assert isinstance(genome, myLightGenomes.LightGenome)
     nbGeneLoss = 0
     nbChrLoss = 0
     mfilt2old = {}
-    if type(genome) == dict or type(genome) == collections.defaultdict:
-        for c in genome:
-            for (oldIdx, (g, s)) in enumerate(genome[c]):
-                if g in removedNames:
-                    nbGeneLoss += 1
-                else:
-                    if c not in mfilt2old:
-                        mfilt2old[c] = []
-                    mfilt2old[c].append([oldIdx])
-            if c in mfilt2old:
-                mfilt2old[c] = Mapping(mfilt2old[c])
+    for c in genome:
+        for (oldIdx, (g, s)) in enumerate(genome[c]):
+            if g in removedNames:
+                nbGeneLoss += 1
             else:
-                nbChrLoss += 1
+                if c not in mfilt2old:
+                    mfilt2old[c] = []
+                mfilt2old[c].append([oldIdx])
+        if c in mfilt2old:
+            mfilt2old[c] = Mapping(mfilt2old[c])
+        else:
+            nbChrLoss += 1
     #TODO
     #elif myGenomes
     #elif list
@@ -361,38 +352,38 @@ def mapFilterGeneContent(genome, removedNames, mOld=None):
 
 
 # Inputs :
-#       genome_aID = [..., (aID,s), ...] with 'aID' the line number of the gene in the ancGene ans 's' the strand of the gene in the genome
+#       genome_fID = [..., (fID,s), ...] with 'fID' the line number of the gene in the ancGene ans 's' the strand of the gene in the genome
 # Outputs :
 #       mtb2g : a mapping corresponding to the rewritting process
 #####################################################################################################################################
 # 'mOld' is an Old mapping. At the end of the construction of the new mapping this
 # old mapping can be used to tranfer the information of the old mapping to the
 # new mapping.
-def mapRewriteInTb(genome_aID, tandemGapMax=0):
+def mapRewriteInTb(genome_fID, tandemGapMax=0):
     nbTandemDup = 0
     # the rewritten genome
     # Need to keep dictionnaries because there is often a gap in chromosome notations
     tmp_genome_tb = {}
     tb2g = {}
     # Number of Genic Tandem Duplication global
-    for c in genome_aID:
+    for c in genome_fID:
         tb2g[c] = []
         # temp values
         tmp_genome_tb[c] = []
-        old_aID = 'foo'  # Not None, since None is used to mark genes to be removed
-        for i, (aID, s) in enumerate(genome_aID[c]):
+        old_fID = 'foo'  # Not None, since None is used to mark genes to be removed
+        for i, (fID, s) in enumerate(genome_fID[c]):
             # if the current gene is not a paralog of the previous gene
-            if aID != old_aID:
+            if fID != old_fID:
                 # start a new TB
-                tmp_genome_tb[c].append(aID)
+                tmp_genome_tb[c].append(fID)
                 # add the current gene index to the new tb component of tb2g
                 tb2g[c].append([i])
             else:
-                # aID == old_aID:
+                # fID == old_fID:
                 # The index of the current gene is added to the last tb
                 tb2g[c][-1].append(i)
                 nbTandemDup += 1
-            old_aID = aID
+            old_fID = fID
 
     # TODO be sure that this step is consistent with the 2D distance metric chosen.
     # For instance, if the DPD is chosen, on vertical and horizontal lines, the
@@ -405,7 +396,7 @@ def mapRewriteInTb(genome_aID, tandemGapMax=0):
         combinator = myTools.myCombinator()
         for c, chrom_tb in tmp_genome_tb.iteritems():
             # print >> sys.stderr, "Length in tbs before tandem gap = %s" % len(chrom_tb)
-            for (i, aID) in enumerate(chrom_tb):
+            for (i, fID) in enumerate(chrom_tb):
                 # Range starts at 2 because since genomes are already rewritten
                 # in tbs there is no adjacent tbs.
                 isAlone = True
@@ -469,8 +460,8 @@ def mapRewriteInTb(genome_aID, tandemGapMax=0):
         mtb2g[c] = Mapping(newMapC)
 
     # DEBUG assertion
-    # nbOfaIDGenes = sum([len(chrom) for chrom in genome_aID.values()])
+    # nbOffIDGenes = sum([len(chrom) for chrom in genome_fID.values()])
     # nbOfTbs = sum([len(chrom) for chrom in genome_tb.values()])
-    # assert N_GTD_g == nbOfaIDGenes - nbOfTbs, "%s == %s - %s" % (N_GTD_g, nbOfaIDGenes, nbOfTbs)
+    # assert N_GTD_g == nbOffIDGenes - nbOfTbs, "%s == %s - %s" % (N_GTD_g, nbOffIDGenes, nbOfTbs)
 
     return (mtb2g, (nbTandemDup))

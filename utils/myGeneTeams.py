@@ -129,7 +129,7 @@ def extractGtsInPairCompChr(c1, c2, gc1, gc2, gapMax=0, verbose=False):
     return geneTeams
 
 @myTools.verbose
-def extractGtsInPairCompGenomes(g1, g2, ancGenes,
+def extractGtsInPairCompGenomes(g1, g2, families,
                                 tandemGapMax=0,
                                 gapMax=None,
                                 filterType=FilterType.None,
@@ -145,8 +145,8 @@ def extractGtsInPairCompGenomes(g1, g2, ancGenes,
     #step 1 :filter genomes and rewrite in tandem blocks if needed
     ##############################################################
     # rewrite genomes by family names (ie ancGene names)
-    g1_aID = myMapping.labelWithAncGeneID(g1, ancGenes)
-    g2_aID = myMapping.labelWithAncGeneID(g2, ancGenes)
+    g1_aID = myMapping.labelWithFamID(g1, families)
+    g2_aID = myMapping.labelWithFamID(g2, families)
     # genes that are not in ancGene have a aID=None
     print >> sys.stderr, "genome 1 initially contains %s genes" % sum([len(g1[c1]) for c1 in g1])
     print >> sys.stderr, "genome 2 initially contains %s genes" % sum([len(g2[c2]) for c2 in g2])
@@ -231,7 +231,7 @@ def extractGtsInPairCompGenomes(g1, g2, ancGenes,
         mtb2gc2 = mtb2g2[c2]
         assert mtb2gc1.__class__.__name__ == mtb2gc2.__class__.__name__ == 'Mapping'
         # gene team format: ([f1, f2, ...], (c1, [f1i1s, f2i1s, ...]), (c2, [f1i2s, f2i2s, ...])
-        la = [ancGenes.lstGenes[None][f].names[0] for f in la]
+        la = [f for f in la]
         l1 = [[mtb2gc1[i1] for i1 in i1s] for i1s in l1]
         l2 = [[mtb2gc2[i2] for i2 in i2s] for i2s in l2]
         gt = (la, (c1, l1), (c2, l2))
@@ -244,7 +244,7 @@ def extractGtsInPairCompGenomes(g1, g2, ancGenes,
     return listOfGts
 
 
-def printGtsFile(listOfGts, genome1, genome2):
+def printGtsFile(listOfGts, genome1, genome2, families):
     print >> sys.stderr, "Print gene teams"
 
     def foo(genomeX, cX, lX, idxAG):
@@ -263,9 +263,9 @@ def printGtsFile(listOfGts, genome1, genome2):
         assert len(la) == len(l1) == len(l2), "len(l1)=%s, len(l2)=%s, len(la)=%s\nl1=%s\nl2=%s\nla=%s" % (len(l1), len(l2), len(la), l1, l2, la)
         nbAG = len(la)
         statsGts.append(nbAG)
-        for (idxAG, aGname) in enumerate(la):
+        for (idxAG, fId) in enumerate(la):
             (g1s, g1Idxs) = foo(genome1, c1, l1, idxAG)
             (g2s, g2Idxs) = foo(genome2, c2, l2, idxAG)
-            print myFile.myTSV.printLine([idGt, aGname, c1, c2, g1Idxs, g2Idxs, g1s, g2s])
+            print myFile.myTSV.printLine([idGt, families[fId].fn, c1, c2, g1Idxs, g2Idxs, g1s, g2s])
 
     print >> sys.stderr, "Distribution of the lengths of gene teams\t", myMaths.myStats.syntheticTxtSummary(statsGts)
