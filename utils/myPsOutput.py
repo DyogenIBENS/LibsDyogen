@@ -55,7 +55,14 @@ def printPsFooter():
 def initColor(silent = False):
 
     # La liste des couleurs et leurs valeurs RGB
-    f = open("/etc/X11/rgb.txt", 'r')
+    import platform
+    if platform.system() == 'Linux':
+        f = open("/etc/X11/rgb.txt", 'r')
+    elif platform.system() == 'Darwin':
+        f = open('/usr/X11R6/share/X11/rgb.txt', 'r')
+    else:
+        raise ValueError('Your operating system is neither Linux or MacOS (Darwin)')
+
     for l in f:
         if l.startswith("!"):
             continue
