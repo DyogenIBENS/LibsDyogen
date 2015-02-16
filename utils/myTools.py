@@ -57,6 +57,19 @@ def printTable(table, output):
     return res
 
 
+class ProgressBar:
+    def __init__(self, totalLength, step=5):
+        self.totalLength = totalLength
+        self.listOfPercentage = range(0, 101, step)[1:]
+
+    def printProgressIn(self, stream, currentLength):
+        progress = int(float(currentLength*100)/self.totalLength)
+        if progress in self.listOfPercentage:
+            stream.write("Progress: %d%%   \r" % progress)
+            stream.flush()
+            self.listOfPercentage.remove(progress)
+
+
 # decorator that adds a switchable verbose mode to a function
 # FIXME, if the decorated function is called with more arguments that in the
 # function definition, there is no error raised.
@@ -407,8 +420,8 @@ def checkArgs(args, options, info, showArgs=True):
                 error_usage("'%s' is not among %s" % (res,myFile.myTSV.printLine(authorisedVals, '/')))
         return res
 
-    valOpt = {}
-    valArg = {}
+    valOpt = collections.OrderedDict()
+    valArg = collections.OrderedDict()
     opt = {}
     for (name,typ,val) in options:
         opt[name] = (typ,val)
@@ -502,45 +515,6 @@ def checkArgs(args, options, info, showArgs=True):
         print >> sys.stderr, "Arguments:", valArg
     return valArg
 
-class DefaultOrderedDict(collections.OrderedDict):
-    # Source: http://stackoverflow.com/a/6190500/562769
-    def __init__(self, type, *a, **kw):
-        self.type = type
-        if hasattr(type, '__call__'): # isinstance(type, collections.Callable): Not working
-            raise TypeError('first argument must be callable')
-        collections.OrderedDict.__init__(self, type)
-
-    def __getitem__(self, key):
-        #try:
-        return collections.OrderedDict.__getitem__(self, key)
-        #except KeyError:
-        #    return self.__missing__(key)
-
-    def __missing__(self, key):
-        self[key] = self.type()
-        return self[key]
-
-    def __reduce__(self): # optional, for pickle support
-        if self.default_factory is None:
-            args = tuple()
-        else:
-            args = self.default_factory,
-        return type(self), args, None, None, iter(self.items())
-
-    def copy(self):
-        return self.__copy__()
-
-    def __copy__(self):
-       return type(self)(self.type, self)
-
-    def __deepcopy__(self, memo):
-        import copy
-        return type(self)(self.default_factory,
-                          copy.deepcopy(self.items()))
-
-    def __repr__(self):
-        return 'OrderedDefaultDict(%s, %s)' % (self.default_factory,
-                                               collections.OrderedDict.__repr__(self))
 
 # This class is usefull for recording many informations (either a list of items
 # or a value) for each cell of a matrix of whole genome comparisons. See
@@ -659,3 +633,90 @@ class OrderedDict2dOfLists(Dict2d):
         self.location2id[k1][k2].append(self.maxId)
         assert len(self.location2id[k1][k2]) == len(self[k1][k2])
         self.orderedIds.append(self.maxId)
+from collections import OrderedDict, Callable
+
+
+# This class is a fusion of collections.defaultdict and collections.OrderedDict
+class DefaultOrderedDict(OrderedDict):
+    # Source: http://stackoverflow.com/a/6190500/562769
+    def __init__(self, default_factory=None, *a, **kw):
+        if (default_factory is not None and
+           not isinstance(default_factory, Callable)):
+            raise TypeError('first argument must be callable')
+        OrderedDict.__init__(self, *a, **kw)
+        self.default_factory = default_factory
+
+    def __getitem__(self, key):
+        try:
+            return OrderedDict.__getitem__(self, key)
+        except KeyError:
+            return self.__missing__(key)
+
+    def __missing__(self, key):
+        if self.default_factory is None:
+            raise KeyError(key)
+        self[key] = value = self.default_factory()
+        return value
+
+    def __reduce__(self):
+        if self.default_factory is None:
+            args = tuple()
+        else:
+            args = self.default_factory,
+        return type(self), args, None, None, self.items()
+
+    def copy(self):
+        return self.__copy__()
+
+    def __copy__(self):
+        return type(self)(self.default_factory, self)
+
+    def __deepcopy__(self, memo):
+        import copy
+        return type(self)(self.default_factory,
+                          copy.deepcopy(self.items()))
+
+    def __repr__(self):
+        return 'OrderedDefaultDict(%s, %s)' % (self.default_factory,
+                                               OrderedDict.__repr__(self))
+
+
+#class DefaultOrderedDictOldVersion(collections.OrderedDict):
+#    # Source: http://stackoverflow.com/a/6190500/562769
+#    def __init__(self, type, *a, **kw):
+#        self.type = type
+#        if hasattr(type, '__call__'): # isinstance(type, collections.Callable): Not working
+#            raise TypeError('first argument must be callable')
+#        collections.OrderedDict.__init__(self, type)
+#
+#    def __getitem__(self, key):
+#        #try:
+#        return collections.OrderedDict.__getitem__(self, key)
+#        #except KeyError:
+#        #    return self.__missing__(key)
+#
+#    def __missing__(self, key):
+#        self[key] = self.type()
+#        return self[key]
+#
+#    def __reduce__(self): # optional, for pickle support
+#        if self.default_factory is None:
+#            args = tuple()
+#        else:
+#            args = self.default_factory,
+#        return type(self), args, None, None, iter(self.items())
+#
+#    def copy(self):
+#        return self.__copy__()
+#
+#    def __copy__(self):
+#       return type(self)(self.type, self)
+#
+#    def __deepcopy__(self, memo):
+#        import copy
+#        return type(self)(self.default_factory,
+#                          copy.deepcopy(self.items()))
+#
+#    def __repr__(self):
+#        return 'OrderedDefaultDict(%s, %s)' % (self.default_factory,
+#                                               collections.OrderedDict.__repr__(self))
