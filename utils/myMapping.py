@@ -52,6 +52,23 @@ def labelWithFamID(genome, families):
     return newGenome
 
 
+# Rewrite genomes as a list of family names
+def labelWithFamNames(genome, families):
+    assert isinstance(families, myLightGenomes.Families)
+    assert isinstance(genome, myLightGenomes.LightGenome)
+    assert type(genome.values()[0]) == list
+    assert isinstance(genome.values()[0][0], tuple)
+    assert all(len(chrom) > 0 for chrom in genome.values())
+    newGenome = myLightGenomes.LightGenome()
+    for c in genome:
+        #assert len(genome[c]) >=1
+        for g in genome[c]:
+            # if g.n is not in families, families.getFamID(g.n) is None
+            fid = families.getFamID(g.n)
+            # if fid is None, families.getFamName(fid) is None
+            newGenome[c].append(Gene(families.getFamNameByID(fid), g.s))
+    return newGenome
+
 # Allow to change the 1D mapping
 class Mapping(object):
     # from new to old:

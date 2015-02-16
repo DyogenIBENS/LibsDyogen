@@ -1868,9 +1868,15 @@ def extractSbsInPairCompGenomes(g1, g2, families,
     g1_fID = myMapping.labelWithFamID(g1, families)
     g2_fID = myMapping.labelWithFamID(g2, families)
     # genes that are not in ancGene have a aID=None
+
+    # TODO :
+    #print >> sys.stderr, "genome 1 initially contains %s genes (%s genes are in a family)" % sum([len(g1[c1]) for c1 in g1])
+    #print >> sys.stderr, "genome 2 initially contains %s genes (%s genes are in a family)" % sum([len(g2[c2]) for c2 in g2])
     print >> sys.stderr, "genome 1 initially contains %s genes" % sum([len(g1[c1]) for c1 in g1])
     print >> sys.stderr, "genome 2 initially contains %s genes" % sum([len(g2[c2]) for c2 in g2])
-    # Must be applied on the two genomes, because of the mode inBothGenomes (InFamilies => not only anchor genes are kept but all genes herited from a gene of the LCA)
+
+
+# Must be applied on the two genomes, because of the mode inBothGenomes (InFamilies => not only anchor genes are kept but all genes herited from a gene of the LCA)
     #mfilt2origin1 -> mGf2Go1
     ((g1_fID, mGf2Go1, (nCL1, nGL1)), (g2_fID, mGf2Go2, (nCL2, nGL2))) =\
         filter2D(g1_fID, g2_fID, filterType, minChromLength)

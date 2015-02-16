@@ -352,7 +352,7 @@ class Genome:
         return set([gene for s in names if s in self.dicGenes for gene in self.dicGenes[s]])
 
     # search a gene location given by its names
-    # FIXME : only consider one position ?
+    # FIXME : only consider one position ? yes.
     def getPosition(self, names):
         return set([self.dicGenes[s][0] for s in names if s in self.dicGenes])
 
