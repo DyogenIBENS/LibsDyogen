@@ -51,25 +51,29 @@ class LightGenome(myTools.DefaultOrderedDict):
         if isinstance(arg, str):
             fileName = arg
             self.name = fileName
-            print >> sys.stderr, "Loading LightGenome from", fileName, "...",
+            print >> sys.stderr, "Loading LightGenome from", fileName,
             # FIXME use myFile.firstLineBuffer to choose which format is in
             # input.
             # choice of the loading function
             flb = myFile.firstLineBuffer(myFile.openFile(fileName, 'r'))
             c = flb.firstLine.split("\t")
             if len(c) == 6:
+                print >> sys.stderr, "(c, beg, end, s,  gName, transcriptName) -> (c, s, gName)",
                 # c, beg, end, s,  gName, transcriptName
                 reader = myFile.myTSV.readTabular(fileName, [str, int, int, int, str, str])
                 reader = ((c, strand, gName) for (c, beg, end, strand, gName, tName) in reader)
             elif len(c) == 3:
+                print >> sys.stderr, "(c, s, gName)",
                 # c, s, gName
                 reader = myFile.myTSV.readTabular(fileName, [str, int, str])
             elif len(c) == 5:
+                print >> sys.stderr, "(c, beg, end, s,  gName) -> (c, s, gName)",
                 # c, beg, end, s,  gName
                 reader = myFile.myTSV.readTabular(fileName, [str, int, int, int, str])
                 reader = ((c, strand, gName) for (c, beg, end, strand, gName) in reader)
             else:
                 raise ValueError("%s file is badly formatted" % fileName)
+            print >> sys.stderr, "...",
             # FIXME do not need beg, end and tName
             # c = chromosome name
             # beg = coordinate in nucleotides of the beginning of
@@ -217,6 +221,7 @@ class Families(list):
                 # family name
                 fn = names[0]
                 # modern names
+                # FIXME: mns might be only a set
                 mns = names[1:]
                 self.append(Family(fn, mns))
                 for n in [fn] + mns:
@@ -231,7 +236,6 @@ class Families(list):
             assert self.fidMax == len(self)
         else:
             raise ValueError('Constructor needs a file')
-
         print >> sys.stderr, 'OK'
 
     def addFamily(self, family):
@@ -255,6 +259,13 @@ class Families(list):
         famID = self.getFamID(name)
         return self.getFamilyByID(famID, default=default)
 
+    def getFamNameByName(self, name, default=None):
+        famID = self.getFamID(name)
+        if famID is not None:
+            return self.getFamilyByID(famID, default=default).fn
+        else:
+            return default
+
     def getFamNameByID(self, famID, default=None):
         try:
             return self[famID].fn
@@ -266,3 +277,10 @@ class Families(list):
             line = [str(family.fn)]
             line.extend([str(name) for name in family.mns])
             print >> stream, myFile.myTSV.printLine([" ".join(line)])
+
+    def __repr__(self):
+        res = []
+        res.append('Family:')
+        for family in self:
+            res.append(' '.join([family.fn] + family.mns))
+        return '\n'.join(res)

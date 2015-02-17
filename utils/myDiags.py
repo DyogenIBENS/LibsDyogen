@@ -282,9 +282,9 @@ class queueWithBackup:
 # inputs:
 # listOfDiags : a list containing elements as (l1, l2, la)
 #       l1 = [ ..., [i11, i12...], ....] with i1x < i1y for all x<y
-#               i1 : gene index of the corresponding tb in the genome 1
+#               i1 : gene index of the corresponding tb in the genome1
 #       l2 : [..., [...,ix2...], ...]
-#               ix2 : gene index in the genome 2
+#               ix2 : gene index in the genome2
 #       la : [..., (ancGeneIdx,aGs),...]
 #               ancGeneIdx is the ancGene number (corresponds to the line index of the gene)
 #               aGs is the orientation of the ancetsral gene (usually the same
@@ -1638,14 +1638,14 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
     #verbose2 = verbose if (len(g1) > 500 or len(g2) > 500) else False
     verbose2 = True
     N12s, N12_g = numberOfHomologies(g1_tb, g2_tb, verbose=verbose2)
-    print >> sys.stderr, "pairwise comparison of genome 1 and genome 2 yields %s hps" % N12_g
+    print >> sys.stderr, "pairwise comparison of genome1 and genome2 yields %s hps" % N12_g
     # compute the recommended gapMax parameter
     #########################################
     verbose2 = False
     (p_hpSign, p_hpSign_g, (sTBG1, sTBG1_g), (sTBG2, sTBG2_g)) =\
         myProbas.statsHpSign(g1_tb, g2_tb, verbose=verbose2)
-    print >> sys.stderr, "genome 1 tb orientation proba = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG1_g[+1]*100, sTBG1_g[-1]*100, sTBG1_g[None]*100)
-    print >> sys.stderr, "genome 2 tb orientation proba = {+1=%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG2_g[+1]*100, sTBG2_g[-1]*100, sTBG2_g[None]*100)
+    print >> sys.stderr, "genome1 tb orientation proba = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG1_g[+1]*100, sTBG1_g[-1]*100, sTBG1_g[None]*100)
+    print >> sys.stderr, "genome2 tb orientation proba = {+1=%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG2_g[+1]*100, sTBG2_g[-1]*100, sTBG2_g[None]*100)
     print >> sys.stderr, "hp sign proba in the 'global' mhp = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%) (probabilities are also calculated for pairwise mhp)" % (p_hpSign_g[+1]*100, p_hpSign_g[-1]*100, p_hpSign_g[None]*100)
     N1_g = sum([len(g1_tb[c1]) for c1 in g1_tb])
     N2_g = sum([len(g2_tb[c2]) for c2 in g2_tb])
@@ -1825,7 +1825,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
 #       synteny blocks are yielded as (strand,(c1,l1),(c2,l2),la)
 #       c1 : chromosomes of genome 'g1' where there is a synteny block corresponding to the diagonal
 #       l1 : the synteny block on genome 'g1'
-#       l1 = [..., (i,s), ...] with 'i' the index of the gene and 's' its strand in the genome 1 without species specific genes
+#       l1 = [..., (i,s), ...] with 'i' the index of the gene and 's' its strand in the genome1 without species specific genes
 #       la = [..., (ancGeneName, ancGeneOrientation, tb width, tb height), ...]]
 #           tb -> tandem block associated with the ancGene in this synteny block
 #           width : length in tandem duplicates on the 1st genome
@@ -1861,43 +1861,43 @@ def extractSbsInPairCompGenomes(g1, g2, families,
         pass
     else:
         raise TypeError('g1 and/or g2 must be either myGenomes.Genome or dict')
+    nGini1 = sum([len(chrom1) for chrom1 in g1.values()])
+    nGini2 = sum([len(chrom2) for chrom2 in g2.values()])
+
     #step 1 :filter genomes and rewrite in tandem blocks if needed
     ##############################################################
     # rewrite genomes by family names (ie ancGene names)
     g1_fID = myMapping.labelWithFamID(g1, families)
     g2_fID = myMapping.labelWithFamID(g2, families)
     # genes that are not in ancGene have a aID=None
+    nGiniInFam1 = len([fID for chrom1 in g1_fID.values() for (fID, _) in chrom1 if fID is not None])
+    nGiniInFam2 = len([fID for chrom2 in g2_fID.values() for (fID, _) in chrom2 if fID is not None])
+    print >> sys.stderr, "genome1 initially contains %s genes (%s genes are in families, %.2f%%)" % (nGini1, nGiniInFam1, (100 * float(nGiniInFam1) / float(nGini1)))
+    print >> sys.stderr, "genome2 initially contains %s genes (%s genes are in families, %.2f%%)" % (nGini2, nGiniInFam2, (100 * float(nGiniInFam2) / float(nGini2)))
 
-    # TODO :
-    #print >> sys.stderr, "genome 1 initially contains %s genes (%s genes are in a family)" % sum([len(g1[c1]) for c1 in g1])
-    #print >> sys.stderr, "genome 2 initially contains %s genes (%s genes are in a family)" % sum([len(g2[c2]) for c2 in g2])
-    print >> sys.stderr, "genome 1 initially contains %s genes" % sum([len(g1[c1]) for c1 in g1])
-    print >> sys.stderr, "genome 2 initially contains %s genes" % sum([len(g2[c2]) for c2 in g2])
-
-
-# Must be applied on the two genomes, because of the mode inBothGenomes (InFamilies => not only anchor genes are kept but all genes herited from a gene of the LCA)
+    # Must be applied on the two genomes, because of the mode inBothGenomes (InFamilies => not only anchor genes are kept but all genes herited from a gene of the LCA)
     #mfilt2origin1 -> mGf2Go1
     ((g1_fID, mGf2Go1, (nCL1, nGL1)), (g2_fID, mGf2Go2, (nCL2, nGL2))) =\
         filter2D(g1_fID, g2_fID, filterType, minChromLength)
-    print >> sys.stderr, "genome 1 after filterType=%s and minChromLength=%s contains %s genes" %\
+    print >> sys.stderr, "genome1 after filterType=%s and minChromLength=%s contains %s genes" %\
         (filterType, minChromLength, sum([len(g1_fID[c1]) for c1 in g1_fID]))
-    print >> sys.stderr, "genome 2 after filterType=%s and minChromLength=%s contains %s genes" %\
+    print >> sys.stderr, "genome2 after filterType=%s and minChromLength=%s contains %s genes" %\
         (filterType, minChromLength, sum([len(g2_fID[c2]) for c2 in g2_fID]))
     nGD1 = myMapping.nbDup(g1_fID)[0]
     nGD2 = myMapping.nbDup(g2_fID)[0]
-    print >> sys.stderr, "genome 1 contains %s gene duplicates (initial gene excluded)" % nGD1
-    print >> sys.stderr, "genome 2 contains %s gene duplicates (initial gene excluded)" % nGD2
     (g1_tb, mtb2g1, nGTD1) = myMapping.remapRewriteInTb(g1_fID, tandemGapMax=tandemGapMax, mOld=mGf2Go1)
     (g2_tb, mtb2g2, nGTD2) = myMapping.remapRewriteInTb(g2_fID, tandemGapMax=tandemGapMax, mOld=mGf2Go2)
-    print >> sys.stderr, "genome 1 rewritten in tbs, contains %s tbs" % sum([len(g1_tb[c1]) for c1 in g1_tb])
-    print >> sys.stderr, "genome 2 rewritten in tbs, contains %s tbs" % sum([len(g2_tb[c2]) for c2 in g2_tb])
+    print >> sys.stderr, "genome1 rewritten in tbs, contains %s tbs" % sum([len(g1_tb[c1]) for c1 in g1_tb])
+    print >> sys.stderr, "genome2 rewritten in tbs, contains %s tbs" % sum([len(g2_tb[c2]) for c2 in g2_tb])
     #TODO, optimise next step
-    print >> sys.stderr, "genome 1 contains %s tandem duplicated genes (initial gene excluded)" % nGTD1
-    print >> sys.stderr, "genome 2 contains %s tandem duplicated genes (initial gene excluded)" % nGTD2
     nDD1 = myMapping.nbDup(g1_tb)[0]
     nDD2 = myMapping.nbDup(g2_tb)[0]
-    print >> sys.stderr, "genome 1 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD1
-    print >> sys.stderr, "genome 2 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD2
+    print >> sys.stderr, "genome1 contains %s gene duplicates (initial gene excluded)" % nGD1
+    print >> sys.stderr, "genome1 contains %s tandem duplicated genes (initial gene excluded)" % nGTD1
+    print >> sys.stderr, "genome1 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD1
+    print >> sys.stderr, "genome2 contains %s gene duplicates (initial gene excluded)" % nGD2
+    print >> sys.stderr, "genome2 contains %s tandem duplicated genes (initial gene excluded)" % nGTD2
+    print >> sys.stderr, "genome2 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD2
     assert nDD1 + nGTD1 == nGD1
     assert nDD2 + nGTD2 == nGD2
 
