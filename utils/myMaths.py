@@ -5,9 +5,12 @@
 # mail : hrc@ens.fr or jlucas@ens.fr
 # This is free software, you may copy, modify and/or distribute this work under the terms of the GNU General Public License, version 3 (GPL v3) or later and the CeCiLL v2 license in France
 
+import random
+import sys
 import math
 import operator
 import myTools
+import bisect
 
 
 #############################
@@ -202,9 +205,6 @@ class myInterpolator:
     ########################################
     @staticmethod
     def oneDimLinear(points, val):
-
-        import myTools
-
         intervals = []
 
         for ((u,FU), (v,FV)) in myTools.myIterator.slidingTuple(zip(points, val)):
@@ -213,7 +213,6 @@ class myInterpolator:
             intervals.append((A, B))
         intervals.append(intervals[-1])
 
-        import bisect
         def tmp(x):
             i = bisect.bisect_right(points, x)
             (A, B) = intervals[i-1]
@@ -226,9 +225,6 @@ class myInterpolator:
     #######################################
     @staticmethod
     def oneDimCubic(points, val):
-
-        import myTools
-
         intervals = []
 
         deriv = [0] + [(FV-FU) / (2*(v-u)) for ((u,FU), (v,FV)) in myTools.myIterator.slidingTuple(zip(points, val))] + [0]
@@ -247,7 +243,6 @@ class myInterpolator:
             intervals.append((A, B, C, D))
         intervals.append(intervals[-1])
 
-        import bisect
         def tmp(x):
             i = bisect.bisect_right(points, x)
             (A, B, C, D) = intervals[i-1]
@@ -277,24 +272,16 @@ class myInterpolator:
 # Generateur de valeurs aleatoires #
 ####################################
 class randomValue:
-    import bisect
-    import random
-    import sys
 
     # Renvoie un indice au hasard dans l, compte tenu des valeurs de l, qui indiquent une frequence d'apparition
     #############################################################################################################
     @staticmethod
     def bisectChooser(l):
-        newl = [0] * (len(l)+1)
-        x = 0
-        for i in xrange(len(l)):
-            x += l[i]
-            newl[i+1] = newl[i] + l[i]
-            assert newl[i+1] == x
-        m = newl[-1]
-        assert m == x
-        return lambda : randomValue.bisect.bisect_left(newl, randomValue.random.random() * m) - 1
-
+        cumulatedLs = [0] * (len(l)+1)
+        for i in range(len(l)):
+            cumulatedLs[i+1] = l[i] + cumulatedLs[i]
+        m = cumulatedLs[-1]
+        return lambda: bisect.bisect_left(cumulatedLs, random.random() * m) - 1
 
     # Adapted von Mises distribution in [0,1]
     ######################################################################
@@ -304,10 +291,10 @@ class randomValue:
         # WARNING!! in Python version 2.7.3, vonmisesvariate(0,K) variates from
         # -pi to +pi. This bug (as in the official documentation it goes well from
         #  0 to 2*pi) was fixed in Pyhton 2.7.4
-        if randomValue.sys.version_info <= (2, 7, 3):
-            vmrv = randomValue.random.vonmisesvariate(0, kappa) / math.pi
+        if sys.version_info <= (2, 7, 3):
+            vmrv = random.vonmisesvariate(0, kappa) / math.pi
         else :
-            vmrv = randomValue.random.vonmisesvariate(math.pi, kappa) / \
+            vmrv = random.vonmisesvariate(math.pi, kappa) / \
                    math.pi - 1
         # vmrv - a von-Mises random variable between -1 and 1, mean = 0
         r = vmrv/2 + mean
@@ -322,10 +309,9 @@ class randomValue:
     ##################################################################
     @staticmethod
     def geometric(p):
-        return int(math.ceil(math.log(1.0 - randomValue.random.random(), 1.0 - p)))
+        return int(math.ceil(math.log(1.0 - random.random(), 1.0 - p)))
 
 
-    import myTools
     @staticmethod
     @myTools.memoize
     def intParetoMean(alpha, precision, niter):
@@ -334,7 +320,7 @@ class randomValue:
         lastm = 0
         while True:
             for _ in xrange(niter):
-                s += int(randomValue.random.paretovariate(alpha))
+                s += int(random.paretovariate(alpha))
                 n += 1
             newm = s/n
             if abs(lastm-newm) < precision:
