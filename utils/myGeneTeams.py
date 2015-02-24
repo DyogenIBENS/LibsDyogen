@@ -84,7 +84,7 @@ def extractGtsInPairCompChr(c1, c2, gc1, gc2, gapMax=0, verbose=False):
     if myTools.which('homologyteams') is not None:
         os.system("homologyteams -d %s -O witness %s -W %s" % (gapMax, cogFileName, tmpGeneTeamsFileName))
     else:
-        print >> sys.stderr, "Error, 'homologyteams' 'is not installed properly. Verify that you compiled it and that the folder containing the binary 'homologyteams' is in your PATH env variable."
+        raise ValueError("Error, 'homologyteams' is not installed properly. Verify that you compiled it and that the folder containing the binary 'homologyteams' is in your PATH env variable.")
         # This will raise an error
         os.system("homologyteams -d %s -O witness %s -W %s" % (gapMax, cogFileName, tmpGeneTeamsFileName))
 

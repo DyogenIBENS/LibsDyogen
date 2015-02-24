@@ -25,6 +25,17 @@ debug = null
 
 class Namespace: pass
 
+# http://stackoverflow.com/questions/1969005/enumerations-in-python
+# Usage
+#>>> x = Enum('foo', 'bar', 'baz', 'bat')
+#>>> x.baz
+#2
+#>>> x.bat
+#3
+class Enum(object):
+    def __init__(self, *keys):
+        self.____dict__.update(zip(keys, range(len(keys))))
+
 def applyFunctions(fun, data):
     for (f, x) in itertools.izip(fun, data):
         yield f(x)
