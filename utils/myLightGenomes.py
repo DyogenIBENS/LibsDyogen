@@ -19,7 +19,7 @@ Gene = collections.namedtuple("Gene", ['n', 's'])
 # fn = family name (it may be the ancestral gene name ENSGT0001.a.b.a for
 # instance)
 # ns = names of homologs, a tuple
-Family = collections.namedtuple("Family", ['fn', 'mns'])
+Family = collections.namedtuple("Family", ['fn', 'dns'])
 
 # Gene Position
 # c = chromosome
@@ -39,7 +39,7 @@ class LightGenome(myTools.DefaultOrderedDict):
     def __init__(self, *args, **kwargs):
         self.name = None
         myTools.DefaultOrderedDict.__init__(self, default_factory=list)
-        self.withDict = kwargs.get("withDict", True)
+        self.withDict = kwargs.get("withDict", False)
         if self.withDict:
             self.g2p = {}
         if len(args) == 0:
@@ -162,6 +162,7 @@ class LightGenome(myTools.DefaultOrderedDict):
             newLightGenome[c] = self[c]
         if self.withDict:
             newLightGenome.g2p = self.g2p
+        return newLightGenome
 
     def __deepcopy__(self, memo):
         # inspired from http://pymotw.com/2/copy/
@@ -188,7 +189,7 @@ class LightGenome(myTools.DefaultOrderedDict):
     # Returns the gene names around the intergene
     def getIntervStr(self, c, x):
         # DEBUG assertion
-        assert x <= len(self[c]) and x >= 0, \
+        assert 0<= x and x <= len(self[c]), \
             "x=%s and len(self[c])=%s" % (x, len(self[c]))
         if x == 0:
             return "End-" + str(self[c][x][0])
@@ -221,10 +222,10 @@ class Families(list):
                 # family name
                 fn = names[0]
                 # modern names
-                # FIXME: mns might be only a set
-                mns = names[1:]
-                self.append(Family(fn, mns))
-                for n in [fn] + mns:
+                # FIXME: dns might be only a set
+                dns = names[1:]
+                self.append(Family(fn, dns))
+                for n in [fn] + dns:
                     fID = self.fidMax
                     # Each (fID + 1) corresponds to the line number in the output file
                     # of families obtained with self.printIn(file)
@@ -241,7 +242,7 @@ class Families(list):
     def addFamily(self, family):
         assert isinstance(family, Family)
         self.append(family)
-        for n in [family.fn] + family.mns:
+        for n in [family.fn] + family.dns:
             self.g2fid[n] = self.fidMax
         self.fidMax += 1
 
@@ -275,12 +276,12 @@ class Families(list):
     def printIn(self, stream):
         for (famID, family) in enumerate(self):
             line = [str(family.fn)]
-            line.extend([str(name) for name in family.mns])
+            line.extend([str(name) for name in family.dns])
             print >> stream, myFile.myTSV.printLine([" ".join(line)])
 
     def __repr__(self):
         res = []
         res.append('Family:')
         for family in self:
-            res.append(' '.join([family.fn] + family.mns))
+            res.append(' '.join([family.fn] + family.dns))
         return '\n'.join(res)
