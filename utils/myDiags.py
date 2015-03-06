@@ -1180,20 +1180,16 @@ def recommendedGap(nbHps, targetProba, N12, N1, N2, p_hpSign=None, maxGapThresho
 @myTools.verbose
 def numberOfHomologies(g1, g2, verbose=False):
     nbHomologies = myTools.Dict2d(int)
-    listOfPercentage = range(0, 101, 5)[1:]
-    nbPairwiseComparisons = len(g1) * len(g2)
-    print >> sys.stderr, "pairwise comparison of chromosomes analysis for counting hps",
-    for (i, (c1, c2)) in enumerate(itertools.product(g1, g2)):
+    totalNbComps = len(g1) * len(g2)
+    print >> sys.stderr, "pairwise comparison of chromosomes analysis for counting hps"
+    progressBar = myTools.ProgressBar(totalNbComps)
+    for (cptComp, (c1, c2)) in enumerate(itertools.product(g1, g2)):
         gc1 = g1[c1]
         gc2 = g2[c2]
         (Ms, _) = homologyMatrix(gc1, gc2)
-        progress = int(float(i*100)/nbPairwiseComparisons)
-        if progress in listOfPercentage:
-            print >> sys.stderr, "%s" % progress + "%",
-            listOfPercentage.remove(progress)
+        progressBar.printProgressIn(sys.stderr, cptComp)
         nbHomologies[c1][c2] = sum([len(Ms[i1]) for i1 in Ms])
     # new line in the print
-    print >> sys.stderr, ""
     nbHomologies_g = sum([nbH for nbH in nbHomologies.values2d()])
     #assert nbHomologies_g >= min(sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2])),"%s,%s" %  (sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2]))
     #Not needed since the two lineages may have undergone some differential gene losses
@@ -1205,8 +1201,11 @@ def numberOfHomologies(g1, g2, verbose=False):
 @myTools.minimalPythonVersion((2, 7))
 @myTools.verbose
 def statisticalValidation(sbsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
-                          pThreshold=0.001, NbOfHomologiesThreshold=50,
-                          validateImpossToCalc_mThreshold=3, verbose=False):
+                          pThreshold=0.001,
+                          NbOfHomologiesThreshold=50,
+                          validateImpossToCalc_mThreshold=3,
+                          considerMonogenicSb=False,
+                          verbose=False):
 
     def fNbDiags(sbsInPairCompX):
         return len(list(sbsInPairCompX.iteritems2d()))
@@ -1216,10 +1215,11 @@ def statisticalValidation(sbsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
     sbsInPairCompStatVal = myTools.Dict2d(list)
     for ((c1, c2), diag) in sbsInPairComp.iteritems2d():
         (m, max_g, lw1, lw2, l1_min, l1_max, l2_min, l2_max) = diag.calculateCharacteristics()
+        assert m > 0
         na = len(g1_tb[c1])  # Nb of Tbs on C1
         nb = len(g2_tb[c2])  # Nb of Tbs on C2
         nab = N12s[c1][c2]  # Nb of homologies in the mhp
-        if m <= 1:
+        if m == 1 and not considerMonogenicSb:
             # all diagonals of length 1 are rejected
             sbsInPairCompRejected[c1][c2].append((diag, None))
             continue
@@ -1233,14 +1233,16 @@ def statisticalValidation(sbsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
             continue
 
         # This is to avoid excessive time consuming computations
-        if m > NbOfHomologiesThreshold:
+        if m == 1 and considerMonogenicSb:
+            p = 1
+        elif m > NbOfHomologiesThreshold:
             p = 0
         else:
             p = myProbas.pValue(m, max_g, lw1, lw2, nab, na, nb, p_hpSign[c1][c2], verbose=verbose)
 
         if p is None:
             sbsInPairCompImpossibleToCalcProba[c1][c2].append((diag, None))
-        elif p < pThreshold:
+        elif p <= pThreshold:
             sbsInPairCompStatVal[c1][c2].append((diag, p))
         else:
             sbsInPairCompRejected[c1][c2].append((diag, p))
@@ -1627,7 +1629,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      nonOverlappingSbs=False,
                                      overlapMax=0,
                                      consistentSwDType=True,
-                                     minChromLength=0,
+                                     considerMonogenicSb=False,
                                      nbHpsRecommendedGap=2,
                                      targetProbaRecommendedGap=0.01,
                                      validateImpossToCalc_mThreshold=3,
@@ -1685,10 +1687,10 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
             if len(listOfSbs) > 0:
                 sbsInPairComp[c1][c2] = listOfSbs
     else:
-        nbPairwiseComparisons = len(g1_tb.keys())*len(g2_tb.keys())
-        listOfPercentage = range(0, 101, 5)[1:]
-        print >> sys.stderr, "synteny block extraction",
-        for (i, (c1, c2)) in enumerate(itertools.product(g1_tb.keys(), g2_tb.keys())):
+        totalNbComps = len(g1_tb.keys())*len(g2_tb.keys())
+        progressBar = myTools.ProgressBar(totalNbComps)
+        print >> sys.stderr, "synteny block extraction"
+        for (cptComps, (c1, c2)) in enumerate(itertools.product(g1_tb.keys(), g2_tb.keys())):
             listOfSbs = extractSbsInPairCompChr(g1_tb[c1], g2_tb[c2],
                                                 gapMax=gapMax,
                                                 distanceMetric=distanceMetric,
@@ -1696,12 +1698,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                                 verbose=verbose)
             if len(listOfSbs) > 0:
                 sbsInPairComp[c1][c2] = listOfSbs
-            progress = int(float(i*100)/nbPairwiseComparisons)
-            if progress in listOfPercentage:
-                print >> sys.stderr, "%s" % progress + "%",
-                listOfPercentage.remove(progress)
-        # new line in the print
-        print >> sys.stderr, ""
+            progressBar.printProgressIn(sys.stderr, cptComps)
 
     # setp 4 : statistical validation of putative sbs
     ##################################################
@@ -1714,6 +1711,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                           pThreshold=pThreshold,
                                           NbOfHomologiesThreshold=50,
                                           validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
+                                          considerMonogenicSb=considerMonogenicSb,
                                           verbose=verbose)
 
     cptLoopIter = 0
@@ -1843,6 +1841,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
                                 nonOverlappingSbs=False,
                                 overlapMax=0,
                                 consistentSwDType=True,
+                                considerMonogenicSb=False,
                                 minChromLength=0,
                                 nbHpsRecommendedGap=2,
                                 targetProbaRecommendedGap=0.01,
@@ -1909,6 +1908,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
                                                      nonOverlappingSbs=nonOverlappingSbs,
                                                      overlapMax=overlapMax,
                                                      consistentSwDType=consistentSwDType,
+                                                     considerMonogenicSb=considerMonogenicSb,
                                                      nbHpsRecommendedGap=nbHpsRecommendedGap,
                                                      targetProbaRecommendedGap=targetProbaRecommendedGap,
                                                      validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
@@ -1996,8 +1996,12 @@ def printSbsFile(sbsInPairComp, genome1, genome2, families, sortByDecrLengths=Tr
 # adding genome1 and genome2 allow to recover l1 and l2, the lists of homologous
 # tbs on genome1 and genome2.
 def parseSbsFile(fileName, genome1=None, genome2=None):
+    assert isinstance(genome1, myLightGenomes.LightGenome)
+    assert isinstance(genome2, myLightGenomes.LightGenome)
 
     def foo(gXs, sXs, genome, chr):
+        if not genome.withDict:
+            genome.computeDictG2P()
         if genome is None:
             return ([None], [None])
         gXs = gXs.split(' ')

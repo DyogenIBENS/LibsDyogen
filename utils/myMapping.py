@@ -10,7 +10,7 @@
 import myTools
 import myGenomes
 import myLightGenomes
-from myLightGenomes import Gene as Gene
+from myLightGenomes import OGene as OGene
 import collections
 
 
@@ -48,7 +48,7 @@ def labelWithFamID(genome, families):
         #assert len(genome[c]) >=1
         for (g, s) in genome[c]:
             fid = families.getFamID(g, default=None)
-            newGenome[c].append(Gene(fid, s))
+            newGenome[c].append(OGene(fid, s))
     return newGenome
 
 
@@ -64,7 +64,7 @@ def labelWithFamNames(genome, families):
         #assert len(genome[c]) >=1
         for g in genome[c]:
             fn = families.getFamNameByName(g.n, default=None)
-            newGenome[c].append(Gene(fn, g.s))
+            newGenome[c].append(OGene(fn, g.s))
     return newGenome
 
 
@@ -170,7 +170,7 @@ def remap(genome, genomeMapping, assertCollapsedGenesHaveSameName=True):
                         s = firstOldS
                     else:
                         s = None
-                newGenome[c].append(Gene(name, s))
+                newGenome[c].append(OGene(name, s))
     elif genome.__class__.__name__ == myGenomes.Genome:
         assert set(genome.lstGenes.keys()) == set(genomeMapping.keys())
         # FIXME no empty constructor

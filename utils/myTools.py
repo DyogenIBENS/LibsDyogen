@@ -67,9 +67,10 @@ def printTable(table, output):
     print >> output, res
     return res
 
-
+# FIXME: to print well in stream, the user needs to ensure that between two calls to printProgressIn, nothing had been
+# written is stream
 class ProgressBar:
-    def __init__(self, totalLength, step=5):
+    def __init__(self, totalLength, step=1):
         self.totalLength = totalLength
         self.listOfPercentage = range(0, 101, step)[1:]
 
