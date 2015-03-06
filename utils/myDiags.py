@@ -10,10 +10,11 @@
 # PhylDiag core algorithm and tools to manage synteny blocks #
 ###################################################################
 
-# This code is based on the publication ``PhylDiag : identifying complex cases of conserved synteny that include tandem duplications''
+# This code is based in major parts on the publication ``PhylDiag : identifying complex cases of conserved synteny that include tandem duplications''
 # authors :
 # Joseph LUCAS (IBENS, Paris, France, jlucas@ens.fr)
 # Matthieu MUFFATO (EBI, Cambridge, United Kingdom, muffato@ebi.ac.uk)
+# Lucas TITTMANN (IBENS, Paris, France)
 # Hugues ROEST CROLLIUS (IBENS, Paris, France, hrc@ens.fr)
 
 # This code uses personal libraries : myTools and myGenomes
