@@ -1988,7 +1988,7 @@ def printSbsFile(sbsInPairComp, genome1, genome2, families, sortByDecrLengths=Tr
             (g2s, s2s) = foo(genome2, c2, sb.l2, idxHp)
             print myFile.myTSV.printLine([idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s])
 
-    print >> sys.stderr, "Distribution of the lengths of synteny blocks\t", myMaths.myStats.syntheticTxtSummary(statsSbs)
+    print >> sys.stderr, "Distribution of the lengths of synteny blocks:", myMaths.myStats.syntheticTxtSummary(statsSbs)
 
 
 #################################
