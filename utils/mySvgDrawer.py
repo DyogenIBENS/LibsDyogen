@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-# PhylDiag v1.02
+# LibsDyogen
 # python 2.7
-# Copyright © 2013 IBENS/Dyogen : Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
+# Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
 # mail : hrc@ens.fr or jlucas@ens.fr
 # This is free software, you may copy, modify and/or distribute this work under the terms of the GNU General Public License, version 3 (GPL v3) or later and the CeCiLL v2 license in France
 
@@ -14,8 +14,74 @@ The following code is a lightweight wrapper around SVG files. The metaphor
 is to construct a scene, add objects to it, and then write it to a file
 to display it.
 
-Warning, some svgclass may request the drawHomologyMatrix.css file, copied at the end of this file
+Warning, some svgclass may request the styleForHomologyMatrixWithSBs.css file, copied at the end of this file
 Rq : this css file is consistent with genomicus notations
+"""
+
+genomicusColors = """
+.HomologGroup0 {fill:#000}
+.HomologGroup1 {fill:#300}
+.HomologGroup2 {fill:#500}
+.HomologGroup3 {fill:#700}
+.HomologGroup4 {fill:#900}
+.HomologGroup5 {fill:#B00}
+.HomologGroup6 {fill:#D00}
+.HomologGroup7 {fill:#F00}
+.HomologGroup8 {fill:#F30}
+.HomologGroup9 {fill:#F50}
+.HomologGroup10 {fill:#F70}
+.HomologGroup11 {fill:#F90}
+.HomologGroup12 {fill:#FB0}
+.HomologGroup13 {fill:#FD0}
+.HomologGroup14 {fill:#FF0}
+.HomologGroup15 {fill:#DD0}
+.HomologGroup16 {fill:#BB0}
+.HomologGroup17 {fill:#990}
+.HomologGroup18 {fill:#770}
+.HomologGroup19 {fill:#690}
+.HomologGroup20 {fill:#6B0}
+.HomologGroup21 {fill:#6D0}
+.HomologGroup22 {fill:#0F0}
+.HomologGroup23 {fill:#0B0}
+.HomologGroup24 {fill:#080}
+.HomologGroup25 {fill:#030}
+.HomologGroup26 {fill:#043}
+.HomologGroup27 {fill:#065}
+.HomologGroup28 {fill:#087}
+.HomologGroup29 {fill:#0A9}
+.HomologGroup30 {fill:#0BB}
+.HomologGroup31 {fill:#0DD}
+.HomologGroup32 {fill:#0FF}
+.HomologGroup33 {fill:#2DE}
+.HomologGroup34 {fill:#4BD}
+.HomologGroup35 {fill:#69C}
+.HomologGroup36 {fill:#87B}
+.HomologGroup37 {fill:#A5A}
+.HomologGroup38 {fill:#B38}
+.HomologGroup39 {fill:#C07}
+.HomologGroup40 {fill:#A07}
+.HomologGroup41 {fill:#807}
+.HomologGroup42 {fill:#607}
+.HomologGroup43 {fill:#407}
+.HomologGroup44 {fill:#117}
+
+.NoHomologyInWindow0  {stroke:black; fill-opacity:1.0; fill:#000}
+.NoHomologyInWindow1  {stroke:black; fill-opacity:1.0; fill:#111}
+.NoHomologyInWindow2  {stroke:black; fill-opacity:1.0; fill:#222}
+.NoHomologyInWindow3  {stroke:black; fill-opacity:1.0; fill:#333}
+.NoHomologyInWindow4  {stroke:black; fill-opacity:1.0; fill:#444}
+.NoHomologyInWindow5  {stroke:black; fill-opacity:1.0; fill:#555}
+.NoHomologyInWindow6  {stroke:black; fill-opacity:1.0; fill:#666}
+.NoHomologyInWindow7  {stroke:black; fill-opacity:1.0; fill:#777}
+.NoHomologyInWindow8  {stroke:black; fill-opacity:1.0; fill:#888}
+.NoHomologyInWindow9  {stroke:black; fill-opacity:1.0; fill:#999}
+.NoHomologyInWindow10  {stroke:black; fill-opacity:1.0; fill:#AAA}
+.NoHomologyInWindow11  {stroke:black; fill-opacity:1.0; fill:#BBB}
+.NoHomologyInWindow12  {stroke:black; fill-opacity:1.0; fill:#CCC}
+.NoHomologyInWindow13  {stroke:black; fill-opacity:1.0; fill:#DDD}
+.NoHomologyInWindow14  {stroke:black; fill-opacity:1.0; fill:#EEE}
+
+.SpeciesSpecificGenes {stroke:black; fill:white; fill-opacity:1.0 }
 """
 
 def colorstr(rgb): return "#%x%x%x" % (rgb[0]/16,rgb[1]/16,rgb[2]/16) if rgb != 'none' else 'none'
@@ -36,13 +102,14 @@ class Scene:
         #       " <g style=\"fill-opacity:1.0; stroke:black;\n",
         #       "  stroke-width:1;\">\n"]
         var= ['<?xml version="1.0" encoding="utf-8" standalone="no"?>\n',
-                '<?xml-stylesheet type="text/css" href="drawHomologyMatrix.css" ?>\n', #Attention, necessite le fichier css avec la charte graphique de genomicus
+                #'<?xml-stylesheet type="text/css" href="styleForHomologyMatrixWithSBs.css" ?>\n', #Attention, necessite le fichier css avec la charte graphique de genomicus
                 '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n',
                 #"<svg height=\"%spt\" version=\"1.1\" viewBox=\"0 0 %s %s\" width=\"%spt\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n" % (self.height, self.width, self.height, self.width),
                 "<svg height=\"100%%\" version=\"1.1\" viewBox=\"0 0 %s %s\" width=\"100%%\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n" % (self.width, self.height),
                  '<defs>\n',
-                  '<style type="text/css">\n',
-                        '*{stroke-linecap:square;stroke-linejoin:round;}\n',
+                  '<style type="text/css">\n'] +\
+                         [genomicusColors] +\
+                        ['*{stroke-linecap:square;stroke-linejoin:round;}\n',
                   '</style>\n',
                  '</defs>\n'
                  '<g style="fill-opacity:1.0; stroke:black;\n',
@@ -92,7 +159,8 @@ class Circle:
                 "    style=\"fill:%s;\"  />\n" % colorstr(self.color)]
 
 class Rectangle:
-    def __init__(self,origin, height, width, fill_opacity=0.65, fill='none', stroke=None, svgClass=None, strokeWidth=0.3):
+    def __init__(self,origin, height, width, fill_opacity=0.65, fill='none',
+                 stroke=None, svgClass=None, strokeWidth=0.3, bigger=1):
         self.origin = origin
         self.height = height
         self.width = width
@@ -105,7 +173,17 @@ class Rectangle:
         else:
             self.fill = None
             self.svgClass = svgClass
+        if bigger > 1:
+            self.bigger(bigger)
         return
+
+    def bigger(self, factor):
+        assert factor > 1
+        newWidth = self.width * factor
+        newHeight = self.width * factor
+        self.origin = (self.origin[0] - (newWidth - self.width) / 2.0, self.origin[1] - (newHeight - self.height) / 2.0)
+        self.width = newWidth
+        self.height = newHeight
 
     def strarray(self):
         if self.svgClass == None:
@@ -119,6 +197,8 @@ class Rectangle:
                     "    width=\"%f\" style=\"fill-opacity:%f;stroke:%s\"\n" %\
                     (self.width, self.fill_opacity, self.stroke),\
                     "    class=\"%s\"/>\n" % self.svgClass ]
+
+
 
 class Text:
     def __init__(self,origin, text,size=24, text_anchor="start", fill=(0,0,0), stroke=None, fontWeight="800", fontFamily="Arial", transform=""): # font-family does not work

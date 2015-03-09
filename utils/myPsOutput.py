@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+# LibsDyogen
+# python 2.7
+# Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
+# mail : hrc@ens.fr or jlucas@ens.fr
+# This is free software, you may copy, modify and/or distribute this work under the terms of the GNU General Public License, version 3 (GPL v3) or later and the CeCiLL v2 license in France
+
 import myMaths
 
 # Module d'ecriture dans un fichier PostScript
@@ -48,7 +55,14 @@ def printPsFooter():
 def initColor(silent = False):
 
     # La liste des couleurs et leurs valeurs RGB
-    f = open("/etc/X11/rgb.txt", 'r')
+    import platform
+    if platform.system() == 'Linux':
+        f = open("/etc/X11/rgb.txt", 'r')
+    elif platform.system() == 'Darwin':
+        f = open('/usr/X11R6/share/X11/rgb.txt', 'r')
+    else:
+        raise ValueError('Your operating system is neither Linux or MacOS (Darwin)')
+
     for l in f:
         if l.startswith("!"):
             continue

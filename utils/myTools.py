@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# PhylDiag v1.02
+# LibsDyogen
 # python 2.7
 # Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
 # mail : hrc@ens.fr or jlucas@ens.fr
@@ -11,6 +11,7 @@ import itertools
 import time
 import string
 import warnings
+import collections
 
 import enum
 
@@ -23,6 +24,17 @@ null = open('/dev/null', 'w')
 debug = null
 
 class Namespace: pass
+
+# http://stackoverflow.com/questions/1969005/enumerations-in-python
+# Usage
+#>>> x = Enum('foo', 'bar', 'baz', 'bat')
+#>>> x.baz
+#2
+#>>> x.bat
+#3
+class Enum(object):
+    def __init__(self, *keys):
+        self.____dict__.update(zip(keys, range(len(keys))))
 
 def applyFunctions(fun, data):
     for (f, x) in itertools.izip(fun, data):
@@ -55,6 +67,20 @@ def printTable(table, output):
     print >> output, res
     return res
 
+# FIXME: to print well in stream, the user needs to ensure that between two calls to printProgressIn, nothing had been
+# written is stream
+class ProgressBar:
+    def __init__(self, totalLength, step=1):
+        self.totalLength = totalLength
+        self.listOfPercentage = range(0, 101, step)[1:]
+
+    def printProgressIn(self, stream, currentLength):
+        progress = int(float(currentLength*100)/self.totalLength)
+        if progress in self.listOfPercentage:
+            stream.write("Progress: %d%%   \r" % progress)
+            stream.flush()
+            self.listOfPercentage.remove(progress)
+
 
 # decorator that adds a switchable verbose mode to a function
 # FIXME, if the decorated function is called with more arguments that in the
@@ -62,6 +88,7 @@ def printTable(table, output):
 def verbose(functionToExcecute):
     @wraps(functionToExcecute) # to avoid changing the name of the function
     def modifiedFunction(*args, **kargs):
+        old_sys_stderr = sys.stderr
         if 'verbose' in kargs:
             if kargs['verbose'] == True:
                 res = functionToExcecute(*args, **kargs)
@@ -70,10 +97,11 @@ def verbose(functionToExcecute):
                 sys.stderr = open(os.devnull, 'w')
                 res = functionToExcecute(*args, **kargs)
                 # **kargs still contains verbose
-                sys.stderr = sys.__stderr__
         else:
             warnings.warn("function %s has no option verbose although it uses a verbose decorator" % functionToExcecute.__name__, category=SyntaxWarning, stacklevel=2)
             res = functionToExcecute(*args, **kargs)
+        sys.stderr = old_sys_stderr
+        # sys.stderr = sys.__stderr__   if you wanna come back to a verbose mode
         return res
     return  modifiedFunction
 
@@ -199,58 +227,26 @@ class memoizeMethod(object):
 #    Obj.add_to(1, 2) # returns 3, result is not cached
 #    """
 
+# Check is an excecutable is accessible
+# This may be usefull to check if a plugged external programm has been added to
+# the PATH environment variable.
+def which(program):
+    import os
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
-# Matthieu's queue manager for parallel computations
-def myPool(nbThreads, func, largs):
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+    return None
 
-    # Librairies
-    import multiprocessing
-    import cStringIO
-
-    # Sauvegarde des descripteurs
-    backstdout = sys.stdout
-    backstderr = sys.stderr
-
-    # Semaphores
-    sys.stdout = sys.stderr
-    manager = multiprocessing.Manager()
-    sys.stdout = backstdout
-    queue = manager.Queue()
-
-    def newfunc(i, args):
-        queue.put( (i, func(*args), sys.stdout.getvalue(), sys.stderr.getvalue()) )
-
-    def joinnext():
-        (p,r,out,err) = queue.get()
-        proc.pop(p).join()
-        backstdout.write(out)
-        backstderr.write(err)
-        return (p,r)
-
-    try:
-        nrun = 0
-        proc = {}
-        for (i,x) in enumerate(largs):
-
-            if nrun == nbThreads:
-                yield joinnext()
-                nrun -= 1
-
-            # Lancement d'un nouveau processus
-            proc[i] = multiprocessing.Process(target=newfunc, args=(i,x))
-            sys.stdout = cStringIO.StringIO()
-            sys.stderr = cStringIO.StringIO()
-            proc[i].start()
-            sys.stdout = backstdout
-            sys.stderr = backstderr
-            nrun += 1
-
-        while len(proc) > 0:
-            yield joinnext()
-
-    finally:
-        sys.stdout = backstdout
-        sys.stderr = backstderr
 
 # iterator of adjacent components of a list
 class myIterator:
@@ -335,7 +331,7 @@ class myCombinator:
         if len(d) == 0:
             # None, the obj is added just like it is
             i = len(grp)
-            grp.append(list(obj))
+            grp.append(list(set(obj)))
             for x in obj:
                 dic[x] = i
             return grp
@@ -343,10 +339,11 @@ class myCombinator:
             i = d.pop()
             grpiextend = grp[i].extend
             for x in d:
-                grpx = grp[x]
-                grpiextend(grpx)
-                for y in grpx:
+                grpiextend(grp[x])
+                for y in grp[x]:
                     dic[y] = i
+                #FIXME not del grp[x] ?
+                # see reduce and "empty sets"
                 grp[x] = []
             dd = [x for x in obj if x not in dic]
             for x in dd:
@@ -366,6 +363,9 @@ class myCombinator:
     def reduce(self):
         self.__init__(self)
 
+    # reset combinator
+    def reset(self):
+        self.__init__()
 
 # add more options to a specific module
 __moduleoptions = []
@@ -407,7 +407,7 @@ def checkArgs(args, options, info, showArgs=True):
             print >> sys.stderr, "\n", info
         sys.exit(1)
 
-    def putValue(typ, val, v):
+    def putValue(typ, authorisedVals, v):
         # instantiate the value depending on the type
         if typ == bool:
             # Type booleen
@@ -427,13 +427,13 @@ def checkArgs(args, options, info, showArgs=True):
         else:
             # otherwise the builder is used
             res = typ(v)
-            if isinstance(val, list) and (res not in val):
+            if isinstance(authorisedVals, list) and (res not in authorisedVals):
                 # non authorised parameter value
-                error_usage("'%s' is not among %s" % (res,myFile.myTSV.printLine(val, '/')))
+                error_usage("'%s' is not among %s" % (res,myFile.myTSV.printLine(authorisedVals, '/')))
         return res
 
-    valOpt = {}
-    valArg = {}
+    valOpt = collections.OrderedDict()
+    valArg = collections.OrderedDict()
     opt = {}
     for (name,typ,val) in options:
         opt[name] = (typ,val)
@@ -509,17 +509,226 @@ def checkArgs(args, options, info, showArgs=True):
             else:
                 error_usage("Too many arguments on '%s'" % t)
 
-    if isinstance(args[-1][1], FileList):
+    if len(args[-1])>0 and isinstance(args[-1][1], FileList):
         if args[-1][0] not in valArg:
             valArg[args[-1][0]] = []
         if len(valArg[args[-1][0]]) < args[-1][1].minNbFiles:
             error_usage("Not enough files for '%s'" % args[-1][0])
 
     # there is less than the minimal number of arguments
-    if len(valArg) < len(args):
+    #FIXME, the second part of the condition should be avoided by upstream corrections
+    if len(valArg) < len(args) and not (len(args) == 1 and args[0] == ()):
+        print >> sys.stderr, "valArg=", valArg
+        print >> sys.stderr, "args=", args
         error_usage("Not enough arguments")
 
     valArg.update(valOpt)
     if showArgs:
         print >> sys.stderr, "Arguments:", valArg
     return valArg
+
+
+# This class is usefull for recording many informations (either a list of items
+# or a value) for each cell of a matrix of whole genome comparisons. See
+# myDiags.py for instance.
+class Dict2d(collections.defaultdict):
+    # Idea to make something more general
+    #def multi_dimensions(n, type):
+    #    """ Creates an n-dimension dictionary where the n-th dimension is of type 'type' """
+    #    if n <= 1:
+    #        return type()
+    #    return collections.defaultdict(lambda: multi_dimensions(n-1, type))
+
+    def __init__(self, type):
+        self.type = type
+        collections.defaultdict.__init__(self, lambda: collections.defaultdict(type))
+
+    def iteritems2d(self):
+        assert self.type == list
+        for (k1, k2) in self.keys2d():
+            for item in self[k1][k2]:
+                yield ((k1, k2), item)
+
+    def __add__(self, other):
+        assert isinstance(other, Dict2d)
+        res = Dict2d(self.type)
+        for (k1, k2) in self.keys2d():
+            res[k1][k2] = self.type(self[k1][k2])
+        for (k1, k2) in other.keys2d():
+            # if 'typ' was 'list', concatenate the lists
+            # if 'typ' was int, add ints in 2D cells
+            res[k1][k2] += self.type(other[k1][k2])
+        return res
+
+    def keys2d(self):
+        return [(k1, k2) for k1 in collections.defaultdict.__iter__(self) for k2 in collections.defaultdict.__iter__(self[k1])]
+
+    def values2d(self):
+        return [self[k1][k2] for (k1, k2) in self.keys2d()]
+
+    def intoList(self):
+        res = []
+        for ((k1, k2), item) in self.iteritems2d():
+            res.append(((k1, k2), item))
+        return res
+
+class OrderedDict2dOfLists(Dict2d):
+    def __init__(self):
+        Dict2d.__init__(self, list)
+        self.id2location = {}
+        self.location2id = collections.defaultdict(lambda: collections.defaultdict(list))
+        self.orderedIds = []
+        self.maxId = 0
+
+    def identifyItems(self):
+        # FIXME
+        # reinitialise data
+        self.id2location = {}
+        self.location2id = collections.defaultdict(lambda: collections.defaultdict(list))
+        self.orderedIds = []
+        self.maxId = 0
+        # fill data
+        for (k1, k2) in self.keys2d():
+            for (idx, item) in enumerate(self[k1][k2]):
+                self.maxId += 1
+                self.id2location[self.maxId] = (k1, k2, idx)
+                self.location2id[k1][k2].append(self.maxId)
+                self.orderedIds.append(self.maxId)
+        assert len(self.location2id[k1][k2]) == len(self[k1][k2])
+        return self.id2location
+
+    def getItemById(self, id):
+        (k1, k2, idx) = self.id2location[id]
+        return self[k1][k2][idx]
+
+    def getItemLocationById(self, id):
+        # (k1, k2, idx) = self.id2location[id]
+        return self.id2location[id]
+
+    def iterByOrderedIds(self):
+        for id in self.orderedIds:
+            (k1, k2, idx) = self.id2location[id]
+            yield (id, (k1, k2), self.getItemById(id))
+
+    def removeIds(self, setOfRemovedIds):
+        copyOrderedIds = list(self.orderedIds) # need a deep copy
+        for id in copyOrderedIds:
+            if id in setOfRemovedIds:
+                (k1, k2, idx) = self.getItemLocationById(id)
+                # remove the item of self[k1][k2] at the index 'idx'
+                del self[k1][k2][idx]
+                del self.id2location[id]
+                del self.location2id[k1][k2][idx]
+                self.orderedIds.remove(id)
+                for (higherSbIdx, higherSbId) in enumerate(self.location2id[k1][k2][idx:]):
+                    higherSbIdx = higherSbIdx + idx
+                    self.id2location[higherSbId] = (k1, k2, higherSbIdx)
+                assert len(self.location2id[k1][k2]) == len(self[k1][k2])
+                if len(self[k1][k2]) == 0:
+                    del self[k1][k2]
+                    if len(self[k1]) == 0:
+                        del self[k1]
+        # DEBUG assertion
+        #for k1 in self:
+        #    for k2 in self[k1]:
+        #        assert len(self[k1][k2])>0, "k1=%s, k2=%s" % (k1, k2)
+
+    def keepIds(self, setOfKeptIds):
+        allIds = set([id for (id, _, _) in self.iterByOrderedIds()])
+        setOfRemovedIds = allIds - setOfKeptIds
+        self.removeIds(setOfRemovedIds)
+
+    def addToLocation(self, (k1, k2), item):
+        self.maxId += 1
+        self[k1][k2].append(item)
+        self.id2location[self.maxId] = (k1, k2, len(self[k1][k2]) - 1)
+        self.location2id[k1][k2].append(self.maxId)
+        assert len(self.location2id[k1][k2]) == len(self[k1][k2])
+        self.orderedIds.append(self.maxId)
+from collections import OrderedDict, Callable
+
+
+# This class is a fusion of collections.defaultdict and collections.OrderedDict
+class DefaultOrderedDict(OrderedDict):
+    # Source: http://stackoverflow.com/a/6190500/562769
+    def __init__(self, default_factory=None, *a, **kw):
+        if (default_factory is not None and
+           not isinstance(default_factory, Callable)):
+            raise TypeError('first argument must be callable')
+        OrderedDict.__init__(self, *a, **kw)
+        self.default_factory = default_factory
+
+    def __getitem__(self, key):
+        try:
+            return OrderedDict.__getitem__(self, key)
+        except KeyError:
+            return self.__missing__(key)
+
+    def __missing__(self, key):
+        if self.default_factory is None:
+            raise KeyError(key)
+        self[key] = value = self.default_factory()
+        return value
+
+    def __reduce__(self):
+        if self.default_factory is None:
+            args = tuple()
+        else:
+            args = self.default_factory,
+        return type(self), args, None, None, self.items()
+
+    def copy(self):
+        return self.__copy__()
+
+    def __copy__(self):
+        return type(self)(self.default_factory, self)
+
+    def __deepcopy__(self, memo):
+        import copy
+        return type(self)(self.default_factory,
+                          copy.deepcopy(self.items()))
+
+    def __repr__(self):
+        return 'OrderedDefaultDict(%s, %s)' % (self.default_factory,
+                                               OrderedDict.__repr__(self))
+
+
+#class DefaultOrderedDictOldVersion(collections.OrderedDict):
+#    # Source: http://stackoverflow.com/a/6190500/562769
+#    def __init__(self, type, *a, **kw):
+#        self.type = type
+#        if hasattr(type, '__call__'): # isinstance(type, collections.Callable): Not working
+#            raise TypeError('first argument must be callable')
+#        collections.OrderedDict.__init__(self, type)
+#
+#    def __getitem__(self, key):
+#        #try:
+#        return collections.OrderedDict.__getitem__(self, key)
+#        #except KeyError:
+#        #    return self.__missing__(key)
+#
+#    def __missing__(self, key):
+#        self[key] = self.type()
+#        return self[key]
+#
+#    def __reduce__(self): # optional, for pickle support
+#        if self.default_factory is None:
+#            args = tuple()
+#        else:
+#            args = self.default_factory,
+#        return type(self), args, None, None, iter(self.items())
+#
+#    def copy(self):
+#        return self.__copy__()
+#
+#    def __copy__(self):
+#       return type(self)(self.type, self)
+#
+#    def __deepcopy__(self, memo):
+#        import copy
+#        return type(self)(self.default_factory,
+#                          copy.deepcopy(self.items()))
+#
+#    def __repr__(self):
+#        return 'OrderedDefaultDict(%s, %s)' % (self.default_factory,
+#                                               collections.OrderedDict.__repr__(self))

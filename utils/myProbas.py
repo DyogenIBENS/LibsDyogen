@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# PhylDiag v1.02
-# needs python 2.7 at least
+# LibsDyogen
+# python 2.7
 # Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
 # mail : hrc@ens.fr or jlucas@ens.fr
 # This is free software, you may copy, modify and/or distribute this work under the terms of the GNU General Public License, version 3 (GPL v3) or later and the CeCiLL v2 license in France
@@ -34,7 +34,6 @@
 # consistent diagonal : either a slash diagonal with hps signs = (+1 or None) or a backslash diagonal with hps signs = (-1 or None)
 
 from myMaths import combinations
-import collections
 import itertools
 import math
 import sys
@@ -77,23 +76,22 @@ def statsTbOrientation(genome_tb):
 
 # returns p_hpSign_g {+1:%+1, -1:%-1, None:%None}, percentages of each hp sign in the 'global' mhp of the pairwise comparison of the two genomes
 # p_hpSign is a dict containing the stats for each pairwise comparisons of chromosomes
-@myTools.tictac
+#@myTools.tictac
 @myTools.verbose
 def statsHpSign(g1_tb, g2_tb, verbose=False):
     # compute statistics on tandem blocks orientations
     sTbG1, sTbG1_g = statsTbOrientation(g1_tb)
     sTbG2, sTbG2_g = statsTbOrientation(g2_tb)
     # Probability of hps signs for each chromosome comparison
-    p_hpSign = collections.defaultdict(dict)
+    p_hpSign = myTools.Dict2d(dict)
     listOfPercentage = range(0,101,5)[1:]
     nbPairwiseComparisons = len(g1_tb) * len(g2_tb)
     print >> sys.stderr, "pairwise comparisons of chromosomes analysis for the calculation of the probabilities of hps signs",
     for (i,(c1,c2)) in enumerate(itertools.product(g1_tb,g2_tb)):
-        comp = (c1,c2)
         # Here we can use sets since a hp sign +1 in a comparison between ca on X vs cb on Y is still a hp sign +1 in a comparison between cb on X vs ca on Y
-        p_hpSign[comp][+1] = sTbG1[c1][+1]*sTbG2[c2][+1] + sTbG1[c1][-1]*sTbG2[c2][-1]
-        p_hpSign[comp][-1] = sTbG1[c1][+1]*sTbG2[c2][-1] + sTbG1[c1][-1]*sTbG2[c2][+1]
-        p_hpSign[comp][None] =  sTbG1[c1][+1]*sTbG2[c2][None] +  sTbG1[c1][None]*sTbG2[c2][+1] + \
+        p_hpSign[c1][c2][+1] = sTbG1[c1][+1]*sTbG2[c2][+1] + sTbG1[c1][-1]*sTbG2[c2][-1]
+        p_hpSign[c1][c2][-1] = sTbG1[c1][+1]*sTbG2[c2][-1] + sTbG1[c1][-1]*sTbG2[c2][+1]
+        p_hpSign[c1][c2][None] =  sTbG1[c1][+1]*sTbG2[c2][None] +  sTbG1[c1][None]*sTbG2[c2][+1] + \
                         sTbG1[c1][-1]*sTbG2[c2][None] +  sTbG1[c1][None]*sTbG2[c2][-1] + \
                         sTbG1[c1][None]*sTbG2[c2][None]
         progress = int(float(i*100)/nbPairwiseComparisons)
@@ -109,7 +107,7 @@ def statsHpSign(g1_tb, g2_tb, verbose=False):
     p_hpSign_g[None] =      sTbG1_g[+1]*sTbG2_g[None] +  sTbG1_g[None]*sTbG2_g[+1] + \
                     sTbG1_g[-1]*sTbG2_g[None] +  sTbG1_g[None]*sTbG2_g[-1] + \
                     sTbG1_g[None]*sTbG2_g[None]
-    assert all(abs(sum(p_hpSign[comp].values()) - 1) < 0.001 for comp in p_hpSign)
+    assert all(abs(sum(p_hpSign[c1][c2].values()) - 1) < 0.001 for (c1, c2) in p_hpSign.keys2d())
     assert abs(sum(p_hpSign_g.values()) - 1) < 0.001
     return (p_hpSign,p_hpSign_g,(sTbG1, sTbG1_g),(sTbG2, sTbG2_g))
 
@@ -187,6 +185,7 @@ def p_g_2D(k,g,la,lb):
 # probability that k hps that are close enough form a slash diagonal
 def p_slash(k,p_hpSign):
     return 1.0/math.factorial(k)*math.pow(p_hpSign[+1]+p_hpSign[None],k)
+
 # probability that k hps that are close enough form a backslash diagonal
 def p_backslash(k,p_hpSign):
     return 1.0/math.factorial(k)*math.pow(p_hpSign[-1]+p_hpSign[None],k)
@@ -240,10 +239,12 @@ def pValue(m,g,la,lb,nab,na,nb,p_hpSign,verbose=True):
     except:
         print >> sys.stderr, "Warning: not able to compute pValue(%s,%s,%s,%s,%s,%s,%s) for unknown reasons" % (m,g,la,lb,nab,na,nb)
         return None
-    if p_w >= 0.01:
+    if pw is None:
+        return None
+    elif pw >= 0.01:
         pVal = 1 - math.pow(1 - pw, nw)
     else:
-        #here we consider that p_w is << 1, thus we can perform a linearistaion (see Taylor-Young formula "(1-u)^a ~= 1-a*u" when p_w -> 0)
+        #here we consider that pw is << 1, thus we can perform a linearistaion (see Taylor-Young formula "(1-u)^a ~= 1-a*u" when p_w -> 0)
         pVal = nw*pw
     return pVal
 

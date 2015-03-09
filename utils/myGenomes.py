@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# PhylDiag v1.02
+# LibsDyogen
 # python 2.7
 # Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
 # mail : hrc@ens.fr or jlucas@ens.fr
@@ -349,12 +349,12 @@ class Genome:
 
     # search gene locations given by its names
     def getPositions(self, names):
-        return set( (gene for s in names if s in self.dicGenes for gene in self.dicGenes[s]) )
+        return set([gene for s in names if s in self.dicGenes for gene in self.dicGenes[s]])
 
     # search a gene location given by its names
-    # FIXME : only consider one position ?
+    # FIXME : only consider one position ? yes.
     def getPosition(self, names):
-        return set( (self.dicGenes[s][0] for s in names if s in self.dicGenes) )
+        return set([self.dicGenes[s][0] for s in names if s in self.dicGenes])
 
 
     # return other names of a gene (assuming that this gene is only present at one location)
@@ -390,3 +390,12 @@ class Genome:
         for chrom in self.lstGenes:
             for gene in self.lstGenes[chrom]:
                 print >> f, myFile.myTSV.printLine([chrom, gene.beginning, gene.end, gene.strand, " ".join(gene.names)])
+
+    def intoDict(self):
+        # Warning : it is important to use a dict since there are sometimes a
+        # jump in the numerotation of chromosomes in a genome.
+        newGenome = {}
+        for c in self.lstGenes.keys():
+            assert len(self.lstGenes[c]) >=1
+            newGenome[c] = [(g.names[0],g.strand) for g in self.lstGenes[c]]
+        return newGenome
