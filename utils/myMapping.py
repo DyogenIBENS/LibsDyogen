@@ -377,6 +377,89 @@ def mapFilterGeneContent(genome, removedNames, mOld=None):
 # old mapping can be used to tranfer the information of the old mapping to the
 # new mapping.
 def mapRewriteInTb(genome_fID, tandemGapMax=0):
+    assert isinstance(genome_fID, myLightGenomes.LightGenome)
+    # the rewritten genome
+    # Need to keep dictionaries because there is often a gap in chromosome notations
+    tb2g = {}
+    # TODO be sure that this step is consistent with the 2D distance metric chosen.
+    # For instance, if the DPD is chosen, on vertical and horizontal lines, the
+    # distances are not consistent with the 1D distance metric.
+    nbTandemDup = 0
+    tandemDistMax = tandemGapMax + 1
+    #TODO next loops could be optimised
+    combinator = myTools.myCombinator()
+    for c, chrom_tb in genome_fID.iteritems():
+        tb2g[c] = []
+
+        # print >> sys.stderr, "Length in tbs before tandem gap = %s" % len(chrom_tb)
+        for (i, fID) in enumerate(chrom_tb):
+            isAlone = True
+            for dist in range(1, min(tandemDistMax + 1, len(chrom_tb) - i)):
+                if chrom_tb[i + dist] == chrom_tb[i]:
+                    pair = (i + dist, i)
+                    # Add a link between the elements of a pair
+                    combinator.addLink(pair)
+                    isAlone = False
+            if isAlone:
+                combinator.addLink((i, i))
+        combinator.reduce()
+
+        tbChains = list(combinator)
+        # print >> sys.stderr, "Nb of chains of at least 1 tb = %s" % len(tbChains)
+        # print >> sys.stderr, "Nb of chains of at least 2 tbs = %s" % len([a for a in tbChains if len(a) >=2])
+        # print >> sys.stderr, "Chains of at least 2 tbs = %s" % [a for a in tbChains if len(a) >= 2]
+        # Sort neighbourhood by the increasing smallest index of the neighbourhood.
+        # TODO List could be yielded sorted (improve the myCombinator class)
+        for tbChain in tbChains:
+            tbChain.sort()
+        #print >> sys.stderr, "len(tbChains)=%s" % len(tbChains)
+        # Since what precedes the next script line is equivalent to:
+        # chainsOfTbs.sort(lambda x: min(x))
+        tbChains.sort(key=lambda x: x[0])
+
+        firstChainTbIdxs = []
+        otherChainTbIdxs = []
+        for tbChain in tbChains:
+            if len(tbChain) == 1:
+                firstChainTbIdx = tbChain[0]
+                otherChainTbIdxs.append([])
+            elif len(tbChain) >= 2:
+                firstChainTbIdx = tbChain[0]
+                otherChainTbIdxs.append([])
+                for tbIdx in tbChain[1:]:
+                    otherChainTbIdxs[-1].append(tbIdx)
+            else:
+                raise
+            firstChainTbIdxs.append(firstChainTbIdx)
+        assert len(firstChainTbIdxs) == len(otherChainTbIdxs)
+
+        for (firstTb, otherTbs) in zip(firstChainTbIdxs, otherChainTbIdxs):
+            tb2g[c].append([])
+            for oldTbIdx in [firstTb] + otherTbs:
+                # lis1 + list2 returns the concatenation of the two lists
+                tb2g[c][-1].append(oldTbIdx)
+        assert len(tb2g[c]) == len(firstChainTbIdxs), len(tb2g[c])
+
+        nbTandemDup +=\
+            sum([len(gTandemDuplicates)-1 for gTandemDuplicates in tb2g[c]])
+        # DEBUG assertion
+        listIsSorted = lambda l: all([i] <= l[i+1] for i in range(len(l)-1))
+        assert listIsSorted(tb2g[c])
+        combinator.reset()
+
+    mtb2g = {}
+    for (c, newMapC) in tb2g.iteritems():
+        mtb2g[c] = Mapping(newMapC)
+
+    # #DEBUG assertion
+    # nbOffIDGenes = sum([len(chrom) for chrom in genome_fID.values()])
+    # nbOfTbs = sum([len(chrom) for chrom in tb2g.values()])
+    # assert nbTandemDup == nbOffIDGenes - nbOfTbs, "%s == %s - %s" % (nbTandemDup, nbOffIDGenes, nbOfTbs)
+
+    return (mtb2g, (nbTandemDup))
+
+@myTools.deprecated
+def mapRewriteInTbOld(genome_fID, tandemGapMax=0):
     nbTandemDup = 0
     # the rewritten genome
     # Need to keep dictionnaries because there is often a gap in chromosome notations
