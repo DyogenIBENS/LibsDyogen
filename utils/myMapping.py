@@ -571,7 +571,7 @@ def calcTandemDup(genome, family, allowedGap=0, calcCDF=True):
     allowedDist = allowedGap
     genome_fID = labelWithFamID(genome, family)
 
-    (genomeFilt, gf2gfID, _) = remapFilterGeneContent(genome_fID, set())
+    (genomeFilt, gf2gfID, _) = remapFilterGeneContent(genome_fID, {None})
 
     familySizes = collections.defaultdict(int)
     for chrom in genomeFilt:
