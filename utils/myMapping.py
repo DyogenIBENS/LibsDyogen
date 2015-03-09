@@ -576,7 +576,6 @@ def calcTandemDupWithStrictGap(genomeFilt, allowedGap):
             correctedDist = [genes[iGene].n != genes[iGene + gap].n for gap in xrange(1, allowedGap+1)]
             if all(correctedDist) and genes[iGene].n == genes[iGene + allowedGap + 1].n:
                 dupsInDist += 1
-    print(allowedGap, dupsInDist)
     return(dupsInDist)
 
 
