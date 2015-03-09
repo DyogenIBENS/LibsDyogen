@@ -12,10 +12,32 @@ import myFile
 import myGenomes
 import myTools
 
+# TODO : unoriented genes
+# TODO : unoriented adjacencies
+
 # n = name (ENSG00001 for a human gene)
 # s = strand (+1 ou -1)
-Gene = collections.namedtuple("Gene", ['n', 's'])
-
+class OGene(collections.namedtuple("Gene", ['n', 's'])):
+    # need to use the __new__ magick since the namedtuple is an immutable class
+    # (cf http://stackoverflow.com/questions/1565374/subclassing-python-tuple-with-multiple-init-arguments)
+    def __new__(cls, *args):
+        if len(args) == 2:
+            n = args[0]
+            s = args[1]
+            return super(OGene, cls).__new__(cls, n, s)
+        else:
+            # args contain only one tuple
+            assert len(args) == 1
+            return super(OGene, cls).__new__(cls, args[0][0], args[0][1])
+    def reversed(cls):
+        try:
+            return super(OGene, cls).__new__(type(cls), cls.n, - cls.s)
+        except TypeError:
+            assert cls.s == None
+            return super(OGene, cls).__new__(type(cls), cls.n, None)
+    def __repr__(self):
+        #return self.__class__.__name__ + tuple.__repr__(self)
+        return 'G' + tuple.__repr__(self)
 # fn = family name (it may be the ancestral gene name ENSGT0001.a.b.a for
 # instance)
 # ns = names of homologs, a tuple
@@ -25,7 +47,6 @@ Family = collections.namedtuple("Family", ['fn', 'dns'])
 # c = chromosome
 # idx = index of the gene in that chromosome
 GeneP = collections.namedtuple("GeneP", ['c', 'idx'])
-
 
 # It might be more interesting for certain applications to only use a classical
 # collections.defaultdict instead of the less specialised class
@@ -86,7 +107,7 @@ class LightGenome(myTools.DefaultOrderedDict):
             c_old = None
             for (c, strand, gName) in reader:
                 idx = (idx + 1) if c == c_old else 0
-                self[c].append(Gene(gName, strand))
+                self[c].append(OGene(gName, strand))
                 if self.withDict:
                     # dict 'G'ene to (pronounced '2') 'P'osition
                     self.g2p[gName] = GeneP(c, idx)
@@ -97,21 +118,21 @@ class LightGenome(myTools.DefaultOrderedDict):
             self.name = genome.name
             for c in genome.lstGenes.keys():
                 for (idx, g) in enumerate(genome.lstGenes[c]):
-                    self[str(c)].append(Gene(g.names[0], g.strand))
+                    self[str(c)].append(OGene(g.names[0], g.strand))
                     if self.withDict:
                         self.g2p[g.names[0]] = GeneP(str(c), idx)
         elif isinstance(arg, LightGenome):
             self.name = arg.name
             self.withDict = arg.withDict
             for c in arg:
-                self[c] = [Gene(gene.n, gene.s) for gene in arg[c]]
+                self[c] = [OGene(gene.n, gene.s) for gene in arg[c]]
             if self.withDict:
                 self.g2p = dict((gn, GeneP(gp.c, gp.idx)) for (gn, gp) in arg.g2p.iteritems())
         elif isinstance(arg, dict):
             genome = arg
             for c in genome:
                 for (idx, (gName, strand)) in enumerate(genome[c]):
-                    self[c].append(Gene(gName, strand))
+                    self[c].append(OGene(gName, strand))
                     if self.withDict:
                         # dict 'G'ene to (pronounced '2') 'P'osition
                         self.g2p[gName] = GeneP(c, idx)
@@ -174,7 +195,7 @@ class LightGenome(myTools.DefaultOrderedDict):
         newLightGenome.name = copy.deepcopy(self.name, {})
         for c in self.keys():
             for gene in self[c]:
-                newLightGenome[c].append(Gene(gene.n, gene.s))
+                newLightGenome[c].append(OGene(gene.n, gene.s))
         if self.withDict:
             newLightGenome.g2p = copy.deepcopy(self.g2p, {})
         memo[id(self)] = newLightGenome

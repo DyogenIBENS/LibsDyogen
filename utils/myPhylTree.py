@@ -4,6 +4,7 @@
 # Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
 # mail : hrc@ens.fr or jlucas@ens.fr
 # This is free software, you may copy, modify and/or distribute this work under the terms of the GNU General Public License, version 3 (GPL v3) or later and the CeCiLL v2 license in France
+import os
 
 import sys
 import itertools
@@ -19,7 +20,7 @@ class PhylogeneticTree:
 
     ParentItem = collections.namedtuple("ParentItem", ['name', 'distance'])
 
-    def reinitTree(self):
+    def reinitTree(self, stream=open(os.devnull, 'w')):
         # object initialisations
         # self.parent = {..., son: parentItem, ...}
         self.parent = self.newCommonNamesMapperInstance()
@@ -44,8 +45,8 @@ class PhylogeneticTree:
         self.tmpA = []
 
         # analysing process of the tree
-        def recInitialize(node):
-            sys.stderr.write(".")
+        def recInitialize(node, stream=open(os.devnull, 'w')):
+            print >> stream, "."
             self.dicLinks.setdefault(node, self.newCommonNamesMapperInstance())
             # each link between a node and itself is a list containing node
             self.dicLinks.get(node).setdefault(node, [node])
@@ -61,7 +62,7 @@ class PhylogeneticTree:
                 self.tmpA.append(node)
                 for (son, bLength) in self.items.get(node):
                     self.parent.setdefault(son, PhylogeneticTree.ParentItem(node, bLength))
-                    subFamily = recInitialize(son)
+                    subFamily = recInitialize(son, stream)
                     s.extend(self.species.get(son))
                     # we go back up
                     family.extend(subFamily)
@@ -88,9 +89,9 @@ class PhylogeneticTree:
             self.allDescendants.setdefault(node, frozenset(family))
             return family
 
-        print >> sys.stderr, "Data analysis ",
+        print >> stream, "Data analysis ",
         # filling
-        recInitialize(self.root)
+        recInitialize(self.root, stream=stream)
         # list of extant species
         self.listSpecies = frozenset(self.species).difference(self.items)
         assert frozenset(self.tmpS) == self.listSpecies
@@ -140,14 +141,14 @@ class PhylogeneticTree:
         self.dicGenes = {}
         self.dicGenomes = self.newCommonNamesMapperInstance()
 
-        print >> sys.stderr, " OK"
+        print >> stream, " OK"
 
-    def __init__(self, file, skipInit=False):
+    def __init__(self, file, skipInit=False, stream=open(os.devnull, 'w')):
         if type(file) == tuple:
-            print >> sys.stderr, "Creation of the phylogenetic tree ...",
+            print >> stream, "Creation of the phylogenetic tree ...",
             (self.items, self.root, self.officialName) = file
         else:
-            print >> sys.stderr, "Loading phylogenetic tree %s ..." % file,
+            print >> stream, "Loading phylogenetic tree %s ..." % file,
             self.officialName = {}
             self.items = self.newCommonNamesMapperInstance()
             # name and instance of file
@@ -165,7 +166,7 @@ class PhylogeneticTree:
             if not skipInit:
                 self.reinitTree()
             else:
-                print >> sys.stderr, "OK"
+                print >> stream, "OK"
 
     # load a phylogenetic tree into the phylTree format (with tabulations)
     def __loadFromMyFormat__(self, f):
@@ -639,7 +640,7 @@ class PhylogeneticTree:
 
     def printBranchName(self, child, stream=sys.stderr):
         (parent, bLength) = self.parent[child]
-        foo = "# Branch %s -> %s branch (%s Mya) #" % (parent, child, bLength)
+        foo = "# Branch %s -> %s branch (%s My) #" % (parent, child, bLength)
         bar = "#" * len(foo)
         print >> stream, bar
         print >> stream, foo
