@@ -19,7 +19,7 @@ from functools import wraps
 
 import myFile
 
-null = open('/dev/null', 'w')
+null = open(os.devnull, 'w')
 
 debug = null
 

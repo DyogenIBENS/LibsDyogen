@@ -565,3 +565,34 @@ def mapRewriteInTbOld(genome_fID, tandemGapMax=0):
     # assert N_GTD_g == nbOffIDGenes - nbOfTbs, "%s == %s - %s" % (N_GTD_g, nbOffIDGenes, nbOfTbs)
 
     return (mtb2g, (nbTandemDup))
+
+
+def calcTandemDup(genome, family, allowedGap=0, calcCDF=True):
+    genome_fID = labelWithFamID(genome, family)
+
+    (genomeFilt, gf2gfID, _) = remapFilterGeneContent(genome_fID, set([None]))
+
+    familySizes = collections.defaultdict(int)
+    for chrom in genomeFilt:
+        for gene in genomeFilt[chrom]:
+            familySizes[gene.n] += 1
+
+    nGeneDupl = 0
+    for familySize in familySizes.values():
+        nGeneDupl += familySize - 1
+
+    dupsInDist = 0
+    for genes in genomeFilt.itervalues():
+        for iGene in xrange(len(genes) - 1 - allowedGap):
+            correctedDist = [genes[iGene].n != genes[iGene + gap].n for gap in xrange(1, allowedGap)]
+            if all(correctedDist) and genes[iGene].n == genes[iGene + allowedGap + 1].n:
+                dupsInDist += 1
+
+    if calcCDF:
+        for recGap in xrange(allowedGap):
+            for iGene in xrange(len(genes) - 1 - recGap):
+                correctedDist = [genes[iGene].n != genes[iGene + gap].n for gap in xrange(1, recGap + 1)]
+                if all(correctedDist) and genes[iGene].n == genes[iGene + recGap + 1].n:
+                    dupsInDist += 1
+
+    return (float(dupsInDist), float(nGeneDupl))
