@@ -501,7 +501,7 @@ def mapRewriteInTbOld(genome_fID, tandemGapMax=0):
                 # in tbs there is no adjacent tbs.
                 isAlone = True
                 for dist in range(2, min(tandemDistMax + 1, len(chrom_tb) - i)):
-                    if chrom_tb[i + dist] == chrom_tb[i]:
+                    if chrom_tb[i + dist].n == chrom_tb[i].n:
                         pair = (i + dist, i)
                         # Add a link between the elements of a pair
                         combinator.addLink(pair)
