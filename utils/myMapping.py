@@ -679,6 +679,3 @@ def calcTandemBlocksFromDist(distDict, genomeFilt, gapMax):
             tandemDupDict[chr].append(recTandemBlock)
             pos += 1
     return(tandemDupDict)
-
-tandemDupDict = calcTandemBlocksFromDist(distDict, genomeFilt, 1)
-print(tandemDupDict['X'][:3])
