@@ -566,7 +566,7 @@ def mapRewriteInTbOld(genome_fID, tandemGapMax=0):
 
     return (mtb2g, (nbTandemDup))
 
-def calcGeneGap(pos1, pos2, ifNotOnSameChr = -1):
+def calcGeneDist(pos1, pos2, ifNotOnSameChr = -1):
     # Returns the distance between two Genes
     # pos1 = (chromosome, positionOnChromosome)
     # Returns ifNotOnSameChr if Genes are on different chromosome
@@ -576,7 +576,7 @@ def calcGeneGap(pos1, pos2, ifNotOnSameChr = -1):
     if pos1[0] != pos2[0]:
         return(ifNotOnSameChr)
     else:
-        return(abs(pos1[1] - pos2[1])-1)
+        return(abs(pos1[1] - pos2[1]))
 
 def calcDupDist(genome, family):
     # Returns tuple: (dict of distances of duplications, genome remapped with family names)
@@ -593,8 +593,8 @@ def calcDupDist(genome, family):
         for (pos, gene) in enumerate(genes):
             if gene.n in posDict:
                 posDict[gene.n].append((chr, pos))
-                newGap = calcGeneGap(posDict[gene.n][-2], posDict[gene.n][-1])
-                distDict[gene.n].append(newGap)
+                newDist = calcGeneDist(posDict[gene.n][-2], posDict[gene.n][-1])
+                distDict[gene.n].append(newDist)
             else:
                 posDict[gene.n] = [(chr, pos)]
                 distDict[gene.n] = []
@@ -605,9 +605,13 @@ def calcTotalDupFromDist(distDict):
     # Given the dict of distances from calcDupDist, return number of duplication in genome
     return(sum([len(distances) for distances in distDict.itervalues()]))
 
-def calcTandemDupFromDist(distDict, gapMax):
+def calcTandemDupFromDist(distDict, gapMax, cumulated = True):
     # Given the dict of distances from calcDupDist and a gapMax, return number of tandemDuplications
-    return(len([distance for distances in distDict.itervalues() for distance in distances if distance != -1 and distance <= gapMax]))
+    distMax = gapMax+1
+    if cumulated:
+        return(len([distance for distances in distDict.itervalues() for distance in distances if distance != -1 and distance <= distMax]))
+    else:
+        return (len([distance for distances in distDict.itervalues() for distance in distances if distance != -1 and distance == distMax]))
 
 def calcTandemDupWithStrictGap(genomeFilt, allowedGap):
     # Helper function to calcTandemDup
@@ -660,7 +664,9 @@ def calcTandemBlocksFromDist(distDict, genomeFilt, gapMax):
     tandemDupDict = {}
     for (chr, genes) in genomeFilt.iteritems():
         tandemDupDict[chr] = []
-        for (pos, gene) in enumerate(genes):
+        pos = 0
+        while(pos < len(genes)):
+            gene = genes[pos]
             recTandemBlock = [pos]
             if gene.n in distDictCopy:
                 while len(distDictCopy[gene.n]) > 0:
@@ -669,5 +675,7 @@ def calcTandemBlocksFromDist(distDict, genomeFilt, gapMax):
                         break
                     else:
                         recTandemBlock.append(recTandemBlock[-1] + distDictCopy[gene.n].pop(0))
+                        pos += 1
             tandemDupDict[chr].append(recTandemBlock)
-    return(tandemDupDict)
+            pos += 1
+    return (tandemDupDict)
