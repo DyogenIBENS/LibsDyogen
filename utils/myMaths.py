@@ -90,7 +90,12 @@ class myStats:
     def syntheticTxtSummary(lst):
         l = list(lst)
         l.sort()
-        return "min=%s\tN50=%s\tWA=%.2f\tmax=%s" % (l[0], myStats.getValueNX(l, 50), myStats.getWeightedAverage(l), l[-1])
+        if len(l) > 0:
+            res = "min=%s\tN50=%s\tWA=%.2f\tmax=%s" % (l[0], myStats.getValueNX(l, 50), myStats.getWeightedAverage(l), l[-1])
+        else:
+            res = "empty list, no synthetic info on the distribution is available"
+        return res
+
 
     @staticmethod
     def txtSummary(lst, withN50=True):

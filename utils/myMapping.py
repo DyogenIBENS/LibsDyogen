@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # LibsDyogen
 # python 2.7
-# Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
+# Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO, Lucas TITTMANN and Hugues ROEST CROLLIUS
 # mail : hrc@ens.fr or jlucas@ens.fr
 # This is free software, you may copy, modify and/or distribute this work under the terms of the GNU General Public License, version 3 (GPL v3) or later and the CeCiLL v2 license in France
 
@@ -377,6 +377,89 @@ def mapFilterGeneContent(genome, removedNames, mOld=None):
 # old mapping can be used to tranfer the information of the old mapping to the
 # new mapping.
 def mapRewriteInTb(genome_fID, tandemGapMax=0):
+    assert isinstance(genome_fID, myLightGenomes.LightGenome)
+    # the rewritten genome
+    # Need to keep dictionaries because there is often a gap in chromosome notations
+    tb2g = {}
+    # TODO be sure that this step is consistent with the 2D distance metric chosen.
+    # For instance, if the DPD is chosen, on vertical and horizontal lines, the
+    # distances are not consistent with the 1D distance metric.
+    nbTandemDup = 0
+    tandemDistMax = tandemGapMax + 1
+    #TODO next loops could be optimised
+    combinator = myTools.myCombinator()
+    for c, chrom_tb in genome_fID.iteritems():
+        tb2g[c] = []
+
+        # print >> sys.stderr, "Length in tbs before tandem gap = %s" % len(chrom_tb)
+        for (i, fID) in enumerate(chrom_tb):
+            isAlone = True
+            for dist in range(1, min(tandemDistMax + 1, len(chrom_tb) - i)):
+                if chrom_tb[i + dist].n == chrom_tb[i].n:
+                    pair = (i + dist, i)
+                    # Add a link between the elements of a pair
+                    combinator.addLink(pair)
+                    isAlone = False
+            if isAlone:
+                combinator.addLink((i, i))
+        combinator.reduce()
+
+        tbChains = list(combinator)
+        # print >> sys.stderr, "Nb of chains of at least 1 tb = %s" % len(tbChains)
+        # print >> sys.stderr, "Nb of chains of at least 2 tbs = %s" % len([a for a in tbChains if len(a) >=2])
+        # print >> sys.stderr, "Chains of at least 2 tbs = %s" % [a for a in tbChains if len(a) >= 2]
+        # Sort neighbourhood by the increasing smallest index of the neighbourhood.
+        # TODO List could be yielded sorted (improve the myCombinator class)
+        for tbChain in tbChains:
+            tbChain.sort()
+        #print >> sys.stderr, "len(tbChains)=%s" % len(tbChains)
+        # Since what precedes the next script line is equivalent to:
+        # chainsOfTbs.sort(lambda x: min(x))
+        tbChains.sort(key=lambda x: x[0])
+
+        firstChainTbIdxs = []
+        otherChainTbIdxs = []
+        for tbChain in tbChains:
+            if len(tbChain) == 1:
+                firstChainTbIdx = tbChain[0]
+                otherChainTbIdxs.append([])
+            elif len(tbChain) >= 2:
+                firstChainTbIdx = tbChain[0]
+                otherChainTbIdxs.append([])
+                for tbIdx in tbChain[1:]:
+                    otherChainTbIdxs[-1].append(tbIdx)
+            else:
+                raise
+            firstChainTbIdxs.append(firstChainTbIdx)
+        assert len(firstChainTbIdxs) == len(otherChainTbIdxs)
+
+        for (firstTb, otherTbs) in zip(firstChainTbIdxs, otherChainTbIdxs):
+            tb2g[c].append([])
+            for oldTbIdx in [firstTb] + otherTbs:
+                # lis1 + list2 returns the concatenation of the two lists
+                tb2g[c][-1].append(oldTbIdx)
+        assert len(tb2g[c]) == len(firstChainTbIdxs), len(tb2g[c])
+
+        nbTandemDup +=\
+            sum([len(gTandemDuplicates)-1 for gTandemDuplicates in tb2g[c]])
+        # DEBUG assertion
+        listIsSorted = lambda l: all([i] <= l[i+1] for i in range(len(l)-1))
+        assert listIsSorted(tb2g[c])
+        combinator.reset()
+
+    mtb2g = {}
+    for (c, newMapC) in tb2g.iteritems():
+        mtb2g[c] = Mapping(newMapC)
+
+    # #DEBUG assertion
+    # nbOffIDGenes = sum([len(chrom) for chrom in genome_fID.values()])
+    # nbOfTbs = sum([len(chrom) for chrom in tb2g.values()])
+    # assert nbTandemDup == nbOffIDGenes - nbOfTbs, "%s == %s - %s" % (nbTandemDup, nbOffIDGenes, nbOfTbs)
+
+    return (mtb2g, (nbTandemDup))
+
+@myTools.deprecated
+def mapRewriteInTbOld(genome_fID, tandemGapMax=0):
     nbTandemDup = 0
     # the rewritten genome
     # Need to keep dictionnaries because there is often a gap in chromosome notations
@@ -418,7 +501,7 @@ def mapRewriteInTb(genome_fID, tandemGapMax=0):
                 # in tbs there is no adjacent tbs.
                 isAlone = True
                 for dist in range(2, min(tandemDistMax + 1, len(chrom_tb) - i)):
-                    if chrom_tb[i + dist] == chrom_tb[i]:
+                    if chrom_tb[i + dist].n == chrom_tb[i].n:
                         pair = (i + dist, i)
                         # Add a link between the elements of a pair
                         combinator.addLink(pair)
@@ -482,3 +565,117 @@ def mapRewriteInTb(genome_fID, tandemGapMax=0):
     # assert N_GTD_g == nbOffIDGenes - nbOfTbs, "%s == %s - %s" % (N_GTD_g, nbOffIDGenes, nbOfTbs)
 
     return (mtb2g, (nbTandemDup))
+
+def calcGeneDist(pos1, pos2, ifNotOnSameChr = -1):
+    # Returns the distance between two Genes
+    # pos1 = (chromosome, positionOnChromosome)
+    # Returns ifNotOnSameChr if Genes are on different chromosome
+    # Returns None if either of the positions is None
+    if pos1 is None or pos2 is None:
+        return(None)
+    if pos1[0] != pos2[0]:
+        return(ifNotOnSameChr)
+    else:
+        return(abs(pos1[1] - pos2[1]))
+
+def calcDupDist(genome, family):
+    # Returns tuple: (dict of distances of duplications, genome remapped with family names)
+    # the former has a list of distances of a gene to its next duplication, with
+    # chromosomes in order of the remapped chromosome (latter output)
+    # if there are no duplications, the list in dict of distances is empty
+    # if the next duplication is on another chromosome, it is coded as -1
+    genome_fID = labelWithFamID(genome, family)
+    (genomeFilt, gf2gfID, _) = remapFilterGeneContent(genome_fID, {None})
+
+    posDict = {}
+    distDict = {}
+    for (chr, genes) in genomeFilt.iteritems():
+        for (pos, gene) in enumerate(genes):
+            if gene.n in posDict:
+                posDict[gene.n].append((chr, pos))
+                newDist = calcGeneDist(posDict[gene.n][-2], posDict[gene.n][-1])
+                distDict[gene.n].append(newDist)
+            else:
+                posDict[gene.n] = [(chr, pos)]
+                distDict[gene.n] = []
+
+    return (distDict, genomeFilt)
+
+def calcTotalDupFromDist(distDict):
+    # Given the dict of distances from calcDupDist, return number of duplication in genome
+    return(sum([len(distances) for distances in distDict.itervalues()]))
+
+def calcTandemDupFromDist(distDict, gapMax, cumulated = True):
+    # Given the dict of distances from calcDupDist and a gapMax, return number of tandemDuplications
+    distMax = gapMax+1
+    if cumulated:
+        return(len([distance for distances in distDict.itervalues() for distance in distances if distance != -1 and distance <= distMax]))
+    else:
+        return (len([distance for distances in distDict.itervalues() for distance in distances if distance != -1 and distance == distMax]))
+
+def calcTandemDupWithStrictGap(genomeFilt, allowedGap):
+    # Helper function to calcTandemDup
+    # Returns on filtered genome the exact number of tandemDups with given gap
+    dupsInDist = 0
+    for genes in genomeFilt.itervalues():
+        for iGene in xrange(len(genes) - 1 - allowedGap):
+            correctedDist = [genes[iGene].n != genes[iGene + gap].n for gap in xrange(1, allowedGap+1)]
+            if all(correctedDist) and genes[iGene].n == genes[iGene + allowedGap + 1].n:
+                dupsInDist += 1
+    return(dupsInDist)
+
+def calcTandemDup(genome, family, allowedGap=0, cumulated=True):
+    # DEPRECATED: Used as a test function as result is verified by hand
+    # Use calcTandemDupFromDist in combination with calcDupDist for faster results
+    #
+    # Function to calculate the number of tandemDups at given allowedGap
+    # returns ( nTandemDup, nAllDup)
+    # If cumulated is True, returns number of tandemDuplications with
+    # gap <= allowedGap
+
+    genome_fID = labelWithFamID(genome, family)
+    (genomeFilt, gf2gfID, _) = remapFilterGeneContent(genome_fID, {None})
+
+    familySizes = collections.defaultdict(int)
+    for chrom in genomeFilt:
+        for gene in genomeFilt[chrom]:
+            familySizes[gene.n] += 1
+
+    nGeneDupl = 0
+    for familySize in familySizes.values():
+        nGeneDupl += familySize - 1
+
+    dupsInDist = calcTandemDupWithStrictGap(genomeFilt, allowedGap)
+
+    if cumulated:
+        for recentGap in xrange(allowedGap):
+            dupsInDist += calcTandemDupWithStrictGap(genomeFilt, recentGap)
+
+    return (dupsInDist, nGeneDupl)
+
+def calcTandemBlocksFromDist(distDict, genomeFilt, gapMax):
+    # With the output of calcDupDist and a given gapMax as input,
+    # returns a dict with: {chromosomeName: list of tandemBlocks}
+    # Where tandemBlocks are lists of genePositions on chromosome
+
+    import copy
+    distDictCopy = copy.deepcopy(distDict)
+
+    tandemDupDict = {}
+    for (chr, genes) in genomeFilt.iteritems():
+        tandemDupDict[chr] = []
+        pos = 0
+        while(pos < len(genes)):
+            gene = genes[pos]
+            recTandemBlock = [pos]
+            if gene.n in distDictCopy:
+                while len(distDictCopy[gene.n]) > 0:
+                    if distDictCopy[gene.n][0] == -1 or distDictCopy[gene.n][0] > gapMax:
+                        distDictCopy[gene.n].pop(0)
+                        break
+                    else:
+                        recTandemBlock.append(recTandemBlock[-1] + distDictCopy[gene.n].pop(0))
+                        pos += 1
+            tandemDupDict[chr].append(recTandemBlock)
+            pos += 1
+    return (tandemDupDict)
