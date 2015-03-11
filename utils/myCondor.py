@@ -167,6 +167,9 @@ class WaitThread(threading.Thread):
                 time.sleep(self.interval)
 
 if __name__ == '__main__':
+    ###################
+    # Initial example #
+    ###################
     # jid = job id (cluster ID of the new job)
     # jfn = job file name
     #jid, jfn = submit_script("#!/bin/sh\necho hey there")
@@ -178,11 +181,28 @@ if __name__ == '__main__':
     #finally:
     #    os.unlink(jfn)
 
-    jid = submit('src/magSimus1.py',
-                  arguments='res/speciesTree.phylTree -out:genomeFiles=res/simu1/genes.%s.list.bz2 -out:ancGenesFiles=res/simu1/ancGenes.%s.list.bz2 -parameterFile=data/parameters.v77 -userRatesFile=data/specRates.v78 +lazyBreakpointAnalyzer -chr:sizeLowerCap=9 -chr:sizeUpperCap=2020', universe="vanilla", log=LOG_FILE,
-                  outfile = OUTFILE_FMT % "$(Cluster)",
-                  errfile = ERRFILE_FMT % "$(Cluster)")
-    print "running job %i" % jid
-    stdout, stderr = getoutput(jid)
-    print stderr
-    print "job done"
+    ##################
+    # Second example #
+    ##################
+    # myCondor.py should be launched in MagSimus root folder for having good
+    # links
+    listOfJids = []
+    for idxSimu in range(10):
+        try:
+            os.mkdir("res/simu1/%s/" % idxSimu)
+        except:
+            pass
+        genesName = 'res/simu1/' + str(idxSimu) + '/genes.%s.list.bz2'
+        ancGenesName = 'res/simu1/' + str(idxSimu) + '/ancGenes.%s.list.bz2'
+        jid = submit('src/magSimus1.py',
+                     arguments='res/speciesTree.phylTree -out:genomeFiles=' + genesName + ' -out:ancGenesFiles=' + ancGenesName + ' -parameterFile=data/parameters.v77 -userRatesFile=data/specRates.v78 +lazyBreakpointAnalyzer',
+                     universe="vanilla", log=LOG_FILE,
+                     outfile = OUTFILE_FMT % "$(Cluster)",
+                     errfile = ERRFILE_FMT % "$(Cluster)")
+        print "running simu %s (job id %i)" % (idxSimu, jid)
+        listOfJids.append((idxSimu, jid))
+
+    for (idxSimu, jid) in listOfJids:
+        stdout, stderr = getoutput(jid)
+        # print stderr
+        print "simu %s done (job id %s)" % (idxSimu, jid)
