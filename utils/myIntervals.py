@@ -27,6 +27,25 @@ def regionFromGene(og, leftOrRight):
         assert og.s == None
         raise ValueError('Since og has no orientation it is impossible to find the region')
 
+class Adjacency(tuple):
+    def __new__(cls, g1n, g2n):
+        assert isinstance(g1n, str) and isinstance(g2n, str)
+        assert g1n != g2n
+        # this relationship of order works for if both g1n and g2n are strings as well as if they are both integers
+        if g1n < g2n:
+            return tuple.__new__(cls, (g1n, g2n))
+        else:
+            return tuple.__new__(cls, (g2n, g1n))
+    def reversed(self):
+        (g1n, g2n) = self
+        # we do not want this function to return an OAdjacency Object or to change the current object since all
+        # adjacencies are recorded in only one fashion using the relation og1.n < og2.n.
+        # It could be miscunfusing to return Adjacencies that do not ensure that og1.n < og2.n.
+        return (g2n, g1n)
+    def __repr__(self):
+        #return self.__class__.__name__ + tuple.__repr__(self)
+        return 'Adj' + tuple.__repr__(self)
+
 # class used to have only one repentant of one adjacency given the two gene names
 # example:
 # g1n = 'G1'
@@ -34,11 +53,11 @@ def regionFromGene(og, leftOrRight):
 # #(works also if g1n and g2n are both integers)
 # g1s = +1
 # g2s = -1
-# adj1 = Adjacency((g1n, g1s), (g2n, g2s))
-# adj2 = Adjacency((g2n, -g2s), (g1n, -g1s))
+# adj1 = OAdjacency((g1n, g1s), (g2n, g2s))
+# adj2 = OAdjacency((g2n, -g2s), (g1n, -g1s))
 # adj1 == adj2
 # > return True
-class Adjacency(tuple):
+class OAdjacency(tuple):
     # cannot use __init__ since tuple is an immutable class
     # (cf http://stackoverflow.com/questions/1565374/subclassing-python-tuple-with-multiple-init-arguments)
     def __new__(cls, og1, og2):
@@ -54,7 +73,7 @@ class Adjacency(tuple):
             return tuple.__new__(cls, (og2.reversed(), og1.reversed()))
     def reversed(self):
         (og1, og2) = self
-        # we do not want this function to return an Adjacency Object or to change the current object since all
+        # we do not want this function to return an OAdjacency Object or to change the current object since all
         # adjacencies are recorded in only one fashion using the relation og1.n < og2.n.
         # It could be miscunfusing to return Adjacencies that do not ensure that og1.n < og2.n.
         return ((og2.reversed(), og1.reversed()))
@@ -82,7 +101,7 @@ def findConsideredFlankingGenesIdxs(chrom, x, ignoredGeneNames=set()):
 
 
 def regionsFromAdjacency(adj):
-    assert isinstance(adj, Adjacency)
+    assert isinstance(adj, OAdjacency)
     (og1, og2) = adj
     assert og1.s in {+1, -1} and og2.s in {+1, -1}
     # 'Head or Tail of the 1st gene', if it is equal to 'h' it means that the breakpoint occurred near
@@ -118,7 +137,7 @@ def intergeneFromRegion(region, genomeWithDict):
     return (c, x)
 
 def intergeneFromAdjacency(adjacency, genomeWithDict, default=None):
-    assert isinstance(adjacency, Adjacency)
+    assert isinstance(adjacency, OAdjacency)
     assert isinstance(genomeWithDict, LightGenome)
     assert genomeWithDict.withDict
     (og1, og2) = adjacency

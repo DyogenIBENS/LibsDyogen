@@ -53,6 +53,8 @@ import myLightGenomes
 
 import enum
 
+from utils.myLightGenomes import OGene
+
 FilterType = enum.Enum('InFamilies', 'InBothGenomes', 'None')
 
 
@@ -1621,10 +1623,8 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True):
 
 
 def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
-                                     filterType=FilterType.None,
-                                     tandemGapMax=0,
                                      gapMax=None,
-                                     distanceMetric='DPD',
+                                     distanceMetric='CD',
                                      pThreshold=0.001,
                                      identifyBreakpointsWithinGaps=False,
                                      nonOverlappingSbs=False,
@@ -1849,6 +1849,9 @@ def extractSbsInPairCompGenomes(g1, g2, families,
                                 validateImpossToCalc_mThreshold=3,
                                 multiProcess=False,
                                 verbose=False):
+    isinstance(g1, myLightGenomes.LightGenome)
+    isinstance(g2, myLightGenomes.LightGenome)
+    isinstance(families, myLightGenomes.Families)
     # TODO, raise a true warning message
     if nonOverlappingSbs is False:
         if overlapMax > 0:
@@ -1861,6 +1864,9 @@ def extractSbsInPairCompGenomes(g1, g2, families,
         pass
     else:
         raise TypeError('g1 and/or g2 must be either myGenomes.Genome or dict')
+
+    nCini1 = len(g1.keys())
+    nCini2 = len(g2.keys())
     nGini1 = sum([len(chrom1) for chrom1 in g1.values()])
     nGini2 = sum([len(chrom2) for chrom2 in g2.values()])
 
@@ -1872,6 +1878,8 @@ def extractSbsInPairCompGenomes(g1, g2, families,
     # genes that are not in ancGene have a aID=None
     nGiniInFam1 = len([fID for chrom1 in g1_fID.values() for (fID, _) in chrom1 if fID is not None])
     nGiniInFam2 = len([fID for chrom2 in g2_fID.values() for (fID, _) in chrom2 if fID is not None])
+    print >> sys.stderr, "genome1 initially contains %s chromosomes" % nCini1
+    print >> sys.stderr, "genome2 initially contains %s chromosomes" % nCini2
     print >> sys.stderr, "genome1 initially contains %s genes (%s genes are in families, %.2f%%)" % (nGini1, nGiniInFam1, (100 * float(nGiniInFam1) / float(nGini1)))
     print >> sys.stderr, "genome2 initially contains %s genes (%s genes are in families, %.2f%%)" % (nGini2, nGiniInFam2, (100 * float(nGiniInFam2) / float(nGini2)))
 
@@ -1937,7 +1945,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
             l2.append([gIdxs for gIdxs in mtb2gc2.new[indx_tb_g2]])
 
             # FIXME la.append((ancGenes.lstGenes[None][aGene[0]].names[0], aGene[1], aGene[2]))
-            la.append((aGene[0], aGene[1], aGene[2]))
+            la.append((families.getFamNameByID(aGene[0]), aGene[1], aGene[2]))
 
         # modify the current object SyntenyBlock, within sbsInPairComp
         sb.l1 = l1
@@ -2111,25 +2119,30 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
 ###########################################
 
 # Build a genome with sbs as contigs and only conserve one ancestral gene by hp
-def buildGenomeFromSbs(sbsInPairComp, sbLengthThreshold):
-    cptSb=0
-    ancSbGenome={}
-    for ((c1, c2), (sb, pVal)) in sbsInPairComp.iteritems2d():
-        old_ancGene=None
-        for ihp,(ancGene, ancStrand, dist) in enumerate(sb.la):
-            #assert ancGene != old_ancGene, "%s,%s" % (ancGene, old_ancGene) # Happens when there are paralogous hps in the same diagonal
-            if ancGene == old_ancGene:
-                continue # This may create diags of size 1 that will need to be removed
-            ancSbGenome[cptSb].append((ancGene, ancStrand, dist)) # ancGene synonymous of hp-name
-            old_ancGene = ancGene
-
-        if len(ancSbGenome[cptSb]) <= 1: # In every cases sbs of length 1 are removed
+def buildGenomeFromSbs(sbsInPairComp, sbLengthThreshold=None):
+    cptSb = 0
+    ancSbGenome = myLightGenomes.LightGenome()
+    for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
+        old_ancGene = None
+        for (ihp, (ancGeneName, ancStrand, dist)) in enumerate(sb.la):
+            # Happens when there are paralogous hps in the same diagonal
+            # assert ancGene != old_ancGene, "%s,%s" % (ancGene, old_ancGene)
+            if ancGeneName == old_ancGene:
+                # Be waware that this may create diags of size 1
+                continue
+            # ancGene synonymous of hp-name
+            # ancSbGenome[cptSb].append((ancGeneName, ancStrand, dist))
+            ancSbGenome[cptSb].append(OGene(ancGeneName, ancStrand))
+            old_ancGene = ancGeneName
+        # # In every cases sbs of length 1 are removed
+        # if len(ancSbGenome[cptSb]) <= 1:
+        #     del ancSbGenome[cptSb]
+        #     continue
+        if sbLengthThreshold != None and len(ancSbGenome[cptSb]) <= sbLengthThreshold:
             del ancSbGenome[cptSb]
             continue
-        elif sbLengthThreshold != None and len(ancSbGenome[cptSb]) <= sbLengthThreshold:
-            del ancSbGenome[cptSb]
-            continue
-        cptSb = cptSb+1
+        else:
+            cptSb = cptSb+1
     return ancSbGenome
 
 @myTools.verbose
