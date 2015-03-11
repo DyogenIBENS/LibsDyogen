@@ -1,8 +1,13 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-"""Abstracts access to a Condor cluster via its command-line tools.
+# author:  Adrian Sampson (sampsyo) http://homes.cs.washington.edu/~asampson/
+# Found on https://github.com/sampsyo/clusterfutures
+
 """
+Abstracts access to a Condor cluster via its command-line tools.
+"""
+
 import subprocess
 import re
 import os
@@ -68,6 +73,8 @@ def submit(executable, arguments=None, universe="vanilla", log=LOG_FILE,
         "Log = %s" % log,
         "output = %s" % outfile,
         "error = %s" % errfile,
+        "GetEnv = %s" % True,
+        "Initialdir = %s" % os.getcwd()
     ]
     if arguments:
         descparts.append("Arguments = %s" % arguments)
@@ -160,11 +167,22 @@ class WaitThread(threading.Thread):
                 time.sleep(self.interval)
 
 if __name__ == '__main__':
-    jid, jfn = submit_script("#!/bin/sh\necho hey there")
-    try:
-        print "running job %i" % jid
-        stdout, stderr = getoutput(jid)
-        print "job done"
-        print stdout
-    finally:
-        os.unlink(jfn)
+    # jid = job id (cluster ID of the new job)
+    # jfn = job file name
+    #jid, jfn = submit_script("#!/bin/sh\necho hey there")
+    #try:
+    #    print "running job %i" % jid
+    #    stdout, stderr = getoutput(jid)
+    #    print "job done"
+    #    print stdout
+    #finally:
+    #    os.unlink(jfn)
+
+    jid = submit('src/magSimus1.py',
+                  arguments='res/speciesTree.phylTree -out:genomeFiles=res/simu1/genes.%s.list.bz2 -out:ancGenesFiles=res/simu1/ancGenes.%s.list.bz2 -parameterFile=data/parameters.v77 -userRatesFile=data/specRates.v78 +lazyBreakpointAnalyzer -chr:sizeLowerCap=9 -chr:sizeUpperCap=2020', universe="vanilla", log=LOG_FILE,
+                  outfile = OUTFILE_FMT % "$(Cluster)",
+                  errfile = ERRFILE_FMT % "$(Cluster)")
+    print "running job %i" % jid
+    stdout, stderr = getoutput(jid)
+    print stderr
+    print "job done"
