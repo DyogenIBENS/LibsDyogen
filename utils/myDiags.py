@@ -1963,7 +1963,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
 # c1 and c2 the chromosomes of the pairwise comparison in which the synteny block has been found
 # la = [..., (aGName, strand, dist), ...]
 # l1 = [..., [g1, ...gN], ...] with [g1, ..., gN] the child tb of the corresponding aG
-def printSbsFile(sbsInPairComp, genome1, genome2, families, sortByDecrLengths=True):
+def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True):
     print >> sys.stderr, "Print synteny blocks"
 
     def foo(genomeX, cX, lX, idxHp):
@@ -1990,8 +1990,7 @@ def printSbsFile(sbsInPairComp, genome1, genome2, families, sortByDecrLengths=Tr
         assert len(sb.la) == len(sb.l1) == len(sb.l2), "len(l1)=%s, len(l2)=%s, len(la)=%s\nl1=%s\nl2=%s\nla=%s" % (len(sb.l1), len(sb.l2), len(sb.la), sb.l1, sb.l2, sb.la)
         nbHps = len(sb.la)
         statsSbs.append(nbHps)
-        for (idxHp, (fID, aGstrand, dist)) in enumerate(sb.la):
-            aGname = families[fID].fn
+        for (idxHp, (aGname, aGstrand, dist)) in enumerate(sb.la):
             (g1s, s1s) = foo(genome1, c1, sb.l1, idxHp)
             (g2s, s2s) = foo(genome2, c2, sb.l2, idxHp)
             print myFile.myTSV.printLine([idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s])
