@@ -348,7 +348,7 @@ class Genome:
                 yield g
 
     # search gene locations given by its names
-    def getPositions(self, names):
+    def getPosition(self, names):
 		return set((self.dicGenes[s] for s in names if s in self.dicGenes))
 
     # return other names of a gene (assuming that this gene is only present at one location)
