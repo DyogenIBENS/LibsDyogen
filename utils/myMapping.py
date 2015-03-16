@@ -613,18 +613,20 @@ def calcTandemDupFromDist(distDict, gapMax, cumulated = True):
     else:
         return (len([distance for distances in distDict.itervalues() for distance in distances if distance != -1 and distance == distMax]))
 
-def calcTandemDupWithStrictGap(genomeFilt, allowedGap):
-    # Helper function to calcTandemDup
-    # Returns on filtered genome the exact number of tandemDups with given gap
-    dupsInDist = 0
-    for genes in genomeFilt.itervalues():
-        for iGene in xrange(len(genes) - 1 - allowedGap):
-            correctedDist = [genes[iGene].n != genes[iGene + gap].n for gap in xrange(1, allowedGap+1)]
-            if all(correctedDist) and genes[iGene].n == genes[iGene + allowedGap + 1].n:
-                dupsInDist += 1
-    return(dupsInDist)
 
+@myTools.deprecated
 def calcTandemDup(genome, family, allowedGap=0, cumulated=True):
+
+    def calcTandemDupWithStrictGap(genomeFilt, allowedGap):
+        # Helper function to calcTandemDup
+        # Returns on filtered genome the exact number of tandemDups with given gap
+        dupsInDist = 0
+        for genes in genomeFilt.itervalues():
+            for iGene in xrange(len(genes) - 1 - allowedGap):
+                correctedDist = [genes[iGene].n != genes[iGene + gap].n for gap in xrange(1, allowedGap+1)]
+                if all(correctedDist) and genes[iGene].n == genes[iGene + allowedGap + 1].n:
+                    dupsInDist += 1
+        return(dupsInDist)
     # DEPRECATED: Used as a test function as result is verified by hand
     # Use calcTandemDupFromDist in combination with calcDupDist for faster results
     #
@@ -652,30 +654,3 @@ def calcTandemDup(genome, family, allowedGap=0, cumulated=True):
             dupsInDist += calcTandemDupWithStrictGap(genomeFilt, recentGap)
 
     return (dupsInDist, nGeneDupl)
-
-def calcTandemBlocksFromDist(distDict, genomeFilt, gapMax):
-    # With the output of calcDupDist and a given gapMax as input,
-    # returns a dict with: {chromosomeName: list of tandemBlocks}
-    # Where tandemBlocks are lists of genePositions on chromosome
-
-    import copy
-    distDictCopy = copy.deepcopy(distDict)
-
-    tandemDupDict = {}
-    for (chr, genes) in genomeFilt.iteritems():
-        tandemDupDict[chr] = []
-        pos = 0
-        while(pos < len(genes)):
-            gene = genes[pos]
-            recTandemBlock = [pos]
-            if gene.n in distDictCopy:
-                while len(distDictCopy[gene.n]) > 0:
-                    if distDictCopy[gene.n][0] == -1 or distDictCopy[gene.n][0] > gapMax:
-                        distDictCopy[gene.n].pop(0)
-                        break
-                    else:
-                        recTandemBlock.append(recTandemBlock[-1] + distDictCopy[gene.n].pop(0))
-                        pos += 1
-            tandemDupDict[chr].append(recTandemBlock)
-            pos += 1
-    return (tandemDupDict)
