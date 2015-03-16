@@ -263,8 +263,8 @@ class Genome:
     # initialise the dictionary and the list of chromosomes
     def init(self, **kwargs):
 
-        self.dicGenes = collections.defaultdict(list)
-        self.chrList = collections.defaultdict(list)
+        self.dicGenes = {}
+		self.chrList = collections.defaultdict(list)
         self.chrSet = collections.defaultdict(set)
         withDict = kwargs.get("withDict", True)
 
@@ -275,7 +275,7 @@ class Genome:
             if withDict:
                 for (i,gene) in enumerate(self.lstGenes[chrom]):
                     for s in gene.names:
-                        self.dicGenes[s].append(GenePosition(chrom,i))
+                        self.dicGenes[s] = GenePosition(chrom,i)
 
             # classification into chromosomes/contigs/scaffolds
             t = contigType(chrom)
@@ -289,7 +289,7 @@ class Genome:
 
     # add a gene to the genome
     def addGene(self, names, chromosome, beg, end, strand):
-        assert 0 <= beg <= end
+        #assert 0 <= beg <= end
         assert strand in [-1,0,1,None]
         chromosome = commonChrName(chromosome)
         self.lstGenes[chromosome].append( Gene(chromosome, beg, end, strand, tuple(intern(s) for s in names)) )
@@ -349,19 +349,13 @@ class Genome:
 
     # search gene locations given by its names
     def getPositions(self, names):
-        return set([gene for s in names if s in self.dicGenes for gene in self.dicGenes[s]])
-
-    # search a gene location given by its names
-    # FIXME : only consider one position ? yes.
-    def getPosition(self, names):
-        return set([self.dicGenes[s][0] for s in names if s in self.dicGenes])
-
+		return set((self.dicGenes[s] for s in names if s in self.dicGenes))
 
     # return other names of a gene (assuming that this gene is only present at one location)
     def getOtherNames(self, name):
         if name not in self.dicGenes:
             return []
-        (c,i) = self.dicGenes[name][0]
+        (c,i) = self.dicGenes[name]
         return [x for x in self.lstGenes[c][i].names if x != name]
 
     # build the list of orthologs between the two genomes
