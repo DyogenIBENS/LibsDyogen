@@ -172,37 +172,42 @@ if __name__ == '__main__':
     ###################
     # jid = job id (cluster ID of the new job)
     # jfn = job file name
-    #jid, jfn = submit_script("#!/bin/sh\necho hey there")
-    #try:
-    #    print "running job %i" % jid
+    jid1, jfn1 = submit_script("#!/bin/sh\necho hellow world 1")
+    jid2, jfn2 = submit_script("#!/bin/sh\necho hellow world 2")
+    try:
+        stdout, stderr = getoutput(jid1)
+        print "job %i has finished" % jid1
+        print stdout
+        stdout, stderr = getoutput(jid2)
+        print "job %i has finished" % jid2
+        print stdout
+        print "jobs done"
+    finally:
+        os.unlink(jfn1)
+        os.unlink(jfn2)
+
+    ###################
+    ## Second example #
+    ###################
+    ## myCondor.py should be launched in MagSimus root folder for having good
+    ## links
+    #listOfJids = []
+    #for idxSimu in range(10):
+    #    try:
+    #        os.mkdir("res/simu1/%s/" % idxSimu)
+    #    except:
+    #        pass
+    #    genesName = 'res/simu1/' + str(idxSimu) + '/genes.%s.list.bz2'
+    #    ancGenesName = 'res/simu1/' + str(idxSimu) + '/ancGenes.%s.list.bz2'
+    #    jid = submit('src/magSimus1.py',
+    #                 arguments='res/speciesTree.phylTree -out:genomeFiles=' + genesName + ' -out:ancGenesFiles=' + ancGenesName + ' -parameterFile=data/parameters.v77 -userRatesFile=data/specRates.v78 +lazyBreakpointAnalyzer',
+    #                 universe="vanilla", log=LOG_FILE,
+    #                 outfile = OUTFILE_FMT % "$(Cluster)",
+    #                 errfile = ERRFILE_FMT % "$(Cluster)")
+    #    print "running simu %s (job id %i)" % (idxSimu, jid)
+    #    listOfJids.append((idxSimu, jid))
+
+    #for (idxSimu, jid) in listOfJids:
     #    stdout, stderr = getoutput(jid)
-    #    print "job done"
-    #    print stdout
-    #finally:
-    #    os.unlink(jfn)
-
-    ##################
-    # Second example #
-    ##################
-    # myCondor.py should be launched in MagSimus root folder for having good
-    # links
-    listOfJids = []
-    for idxSimu in range(10):
-        try:
-            os.mkdir("res/simu1/%s/" % idxSimu)
-        except:
-            pass
-        genesName = 'res/simu1/' + str(idxSimu) + '/genes.%s.list.bz2'
-        ancGenesName = 'res/simu1/' + str(idxSimu) + '/ancGenes.%s.list.bz2'
-        jid = submit('src/magSimus1.py',
-                     arguments='res/speciesTree.phylTree -out:genomeFiles=' + genesName + ' -out:ancGenesFiles=' + ancGenesName + ' -parameterFile=data/parameters.v77 -userRatesFile=data/specRates.v78 +lazyBreakpointAnalyzer',
-                     universe="vanilla", log=LOG_FILE,
-                     outfile = OUTFILE_FMT % "$(Cluster)",
-                     errfile = ERRFILE_FMT % "$(Cluster)")
-        print "running simu %s (job id %i)" % (idxSimu, jid)
-        listOfJids.append((idxSimu, jid))
-
-    for (idxSimu, jid) in listOfJids:
-        stdout, stderr = getoutput(jid)
-        # print stderr
-        print "simu %s done (job id %s)" % (idxSimu, jid)
+    #    # print stderr
+    #    print "simu %s done (job id %s)" % (idxSimu, jid)
