@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 # LibsDyogen
 # python 2.7
+# Besides function available_cpu_count(), which is under CC by-SA 3.0 (see comment in function), all code is
 # Copyright © 2013 IBENS/Dyogen Joseph LUCAS, Matthieu MUFFATO and Hugues ROEST CROLLIUS
 # mail : hrc@ens.fr or jlucas@ens.fr
 # This is free software, you may copy, modify and/or distribute this work under the terms of the GNU General Public License, version 3 (GPL v3) or later and the CeCiLL v2 license in France
@@ -140,6 +141,8 @@ def multiprocessTasks(function, tasks, **kwargs):
 
 
 def available_cpu_count():
+    # Function copied from Philipp Hagemeister
+    # https://stackoverflow.com/questions/1006289
     """ Number of available virtual or physical CPUs on this system, i.e.
     user/real as output by time(1) when called with an optimally scaling
     userspace-only program"""
@@ -147,8 +150,7 @@ def available_cpu_count():
     # cpuset
     # cpuset may restrict the number of *available* processors
     try:
-        m = re.search(r'(?m)^Cpus_allowed:\s*(.*)$',
-                      open('/proc/self/status').read())
+        m = re.search(r'(?m)^Cpus_allowed:\s*(.*)$', open('/proc/self/status').read())
         if m:
             res = bin(int(m.group(1).replace(',', ''), 16)).count('1')
             if res > 0:
@@ -159,6 +161,7 @@ def available_cpu_count():
     # Python 2.6+
     try:
         import multiprocessing
+
         return multiprocessing.cpu_count()
     except (ImportError, NotImplementedError):
         pass
@@ -166,6 +169,7 @@ def available_cpu_count():
     # http://code.google.com/p/psutil/
     try:
         import psutil
+
         return psutil.NUM_CPUS
     except (ImportError, AttributeError):
         pass
@@ -191,6 +195,7 @@ def available_cpu_count():
     # jython
     try:
         from java.lang import Runtime
+
         runtime = Runtime.getRuntime()
         res = runtime.availableProcessors()
         if res > 0:
@@ -200,8 +205,7 @@ def available_cpu_count():
 
     # BSD
     try:
-        sysctl = subprocess.Popen(['sysctl', '-n', 'hw.ncpu'],
-                                  stdout=subprocess.PIPE)
+        sysctl = subprocess.Popen(['sysctl', '-n', 'hw.ncpu'], stdout=subprocess.PIPE)
         scStdout = sysctl.communicate()[0]
         res = int(scStdout)
 
