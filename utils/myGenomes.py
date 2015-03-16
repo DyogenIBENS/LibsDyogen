@@ -264,7 +264,7 @@ class Genome:
     def init(self, **kwargs):
 
         self.dicGenes = {}
-		self.chrList = collections.defaultdict(list)
+        self.chrList = collections.defaultdict(list)
         self.chrSet = collections.defaultdict(set)
         withDict = kwargs.get("withDict", True)
 
