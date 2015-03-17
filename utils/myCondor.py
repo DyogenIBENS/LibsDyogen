@@ -325,7 +325,9 @@ if __name__ == '__main__':
        genesName = 'res/simu1/' + str(idxSimu) + '/genes.%s.list.bz2'
        ancGenesName = 'res/simu1/' + str(idxSimu) + '/ancGenes.%s.list.bz2'
        executable = 'src/magSimus1.py'
-       arguments = 'res/speciesTree.phylTree -out:genomeFiles=' + genesName + ' -out:ancGenesFiles=' + ancGenesName + ' -parameterFile=data/parameters.v77 -userRatesFile=data/specRates.v78 +lazyBreakpointAnalyzer'
+       arguments = 'res/speciesTree.phylTree -out:genomeFiles=' + genesName +\
+                   ' -out:ancGenesFiles=' + ancGenesName +\
+                   ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
        command = executable + ' ' + arguments
        jid = submitWithBuffer(command, jobName)
        print "simu %s (job id %i) sent to condor" % (idxSimu, jid)
@@ -334,6 +336,7 @@ if __name__ == '__main__':
     for (jid, jobName) in listOfJids:
         idxSimu = jobName
         stdout, stderr = getOutputWithBuffer(jid, jobName)
+        print sys.stderr, stderr
         print "simu %s done (job id %s)" % (idxSimu, jid)
 
     # look inside the remote temporary folders to verify that temporary files have been removed
