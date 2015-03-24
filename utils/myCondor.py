@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# last author: Joseph Lucas DYOGEN/IBENS 46 rue d'Ulm PARIS 75005
+# last author: Joseph Lucas DYOGEN/IBENS 46 rue d'Ulm PARIS 755
 # https://github.com/DyogenIBENS/CondorViaPython
 
 # Fork from
@@ -45,6 +45,19 @@ ERRFILE = "condorpy.%s.stderr.log"
 MACHINES = ["bioclust%02d.bioclust.biologie.ens.fr" % i for i in range(1, 11)] + \
            ["dyoclust%02d.bioclust.biologie.ens.fr" % i for i in range(4, 7) + range(9, 22)]
 
+
+# TODO: write a method that send jobs via a synthetic COND file with the executable and all info on the top and the
+# varying parameters of the different jobs in the following lines
+
+# TODO: use inspection features of python to write a python function into a file
+# https://github.com/uqfoundation/dill
+# http://stackoverflow.com/questions/1562759/can-python-print-a-function-definition
+# def pythonFunctionWrapper(func):
+#     local_buff_pythonWrapper = LOCAL_BUFF_FOLDER
+#     with open(local_buff_pythonWrapper, 'w') as f:
+#         print >> f, "#!/bin/python"
+#         print >> f, coreOfFunction
+#     os.chmod(local_buff_pythonWrapper, 0o755)
 
 class NotYetFinished(Exception):
     pass
@@ -109,7 +122,6 @@ def hasFinished(jobid, log=LOG_FILE):
         finished = False
     return finished
 
-
 def submit_text(job):
     """Submits a Condor job represented as a job file string. Returns
     the cluster ID of the submitted job.
@@ -159,15 +171,15 @@ def submit(executable, universe="vanilla",
     # If the user wrote the path toward the executable, this keeps the executable var as a path toward the executable
     executable = distutils.spawn.find_executable(executable)
 
-    outfile = LOCAL_BUFF_FOLDER + '/' + OUTFILE % "$(Cluster)"
-    errfile = LOCAL_BUFF_FOLDER + '/' + ERRFILE % "$(Cluster)"
+    outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % "$(Cluster)"
+    errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % "$(Cluster)"
 
     descparts = [
         "Executable = %s" % executable,
         "Universe = %s" % universe,
         "Log = %s" % log,
-        "output = %s" % outfile,
-        "error = %s" % errfile,
+        "output = %s" % outFileName,
+        "error = %s" % errFileName,
         "GetEnv = %s" % True,
         "Initialdir = %s" % os.getcwd()
     ]
@@ -198,25 +210,21 @@ def getoutput(jobid, waitMaxTime=None, log=LOG_FILE, cleanup=True):
     Deletes these files after reading them if ``cleanup`` is True.
     """
 
-    outfile = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
-    errfile = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
+    outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
+    errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
 
     finished = wait(jobid, maxTime=waitMaxTime, log=log)
 
     if not finished:
         raise NotYetFinished
 
-    stdout = open(outfile).read()[:-1]
-    stderr = open(errfile).read()[:-1]
+    return outFileName, errFileName
 
-    if cleanup:
-        # remove files
-        os.unlink(outfile)
-        os.unlink(errfile)
-
-    return stdout, stderr
-
-# ensure that two jobs have two different names!
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+##################################################
+# ensure that two jobs have two different names! #
+##################################################
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 def submitWithBuffer(command, jobName, **kwargs):
     try:
         # create a local buff dir
@@ -248,59 +256,42 @@ def submitWithBuffer(command, jobName, **kwargs):
 
 def getOutputWithBuffer(jobid, jobName, waitMaxTime=None, log=LOG_FILE, cleanup=True):
     local_buff_script = LOCAL_BUFF_FOLDER + '/' + SCRIPTFILE % jobName
-    local_buff_outfile = LOCAL_BUFF_FOLDER + '/' + OUTFILE % jobName
-    local_buff_errfile = LOCAL_BUFF_FOLDER + '/' + ERRFILE % jobName
     local_buff_outfile_jid = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
     local_buff_errfile_jid = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
+    outfileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % jobName
+    errfileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % jobName
 
     finished = wait(jobid, maxTime=waitMaxTime, log=log)
 
     if not finished:
         raise NotYetFinished
 
-    stdout = open(local_buff_outfile).read()[:-1]
-    stderr = open(local_buff_errfile).read()[:-1]
-
     if cleanup:
-        # remove files
-        os.unlink(local_buff_outfile)
-        os.unlink(local_buff_errfile)
-        # also need to remove the buff script
+        # remove temporary files
         os.unlink(local_buff_script)
 
         os.unlink(local_buff_outfile_jid)
         os.unlink(local_buff_errfile_jid)
 
-    return stdout, stderr
+    return (outfileName, errfileName)
 
-# if you have pb on your jobs, the directory REMOTE_BUFF_FOLDER won't be clean automatically.
-# this script allows to see what is in REMOTE_BUFF_FOLDER if it exists on all machines
-# examples :
-
-# execBashCmdOnAllMachines('ls', arguments=REMOTE_BUFF_FOLDER)
-
-# completely remove REMOTE_BUFF_FOLDER on all machines
-# execBashCmdOnAllMachines('rm', arguments='-rf ' + REMOTE_BUFF_FOLDER)
-
-# remove specific content of the REMOTE_BUFF_FOLDER on all machines, all files finishing by '.txt'
-# execBashCmdOnAllMachines('rm', arguments='-rf ' + REMOTE_BUFF_FOLDER + '/*.txt')
-def execBashCmdOnAllMachines(command, arguments=None, machines=MACHINES, mail=None, log=LOG_FILE):
+def execBashCmdOnAllMachines(command, machines=MACHINES, mail=None, log=LOG_FILE):
     listOfJids = []
     for (i, machine) in enumerate(machines):
         jobName = str(i)
-        jid = submitWithBuffer('/bin/' + command, jobName,
+        jid = submitWithBuffer(command, jobName,
                                mail=mail,
-                               arguments=arguments,
                                requirements="(Machine==\"%s\")" % machine,
                                log=log)
         listOfJids.append((machine, jid, jobName))
 
     for (machine, jid, jobName) in listOfJids:
         print >> sys.stderr, (machine, jid, jobName)
-        stdout, stderr = getOutputWithBuffer(jid, jobName)
-        print >> sys.stdout, "machine=%s  >\t" % machine, "\n", stdout
-        print >> sys.stderr, "machine=%s 2>\t" % machine, "\n", stderr
-
+        stdoutFileName, stderrFileName = getOutputWithBuffer(jid, jobName)
+        printFileIntoStream(stdoutFileName, sys.stdout)
+        printFileIntoStream(stderrFileName, sys.stderr)
+        os.unlink(stdoutFileName)
+        os.unlink(stderrFileName)
 
 # log_stderr = logging.getLogger('stderr')
 # log_stderr.propagate = False
@@ -322,7 +313,7 @@ def execBashCmdOnAllMachines(command, arguments=None, machines=MACHINES, mail=No
 # # add the Handler to the logger
 # lgr.addHandler(fh)
 
-"""
+    """
    https://docs.python.org/2/library/logging.html
    The logging module is intended to be thread-safe without any special work needing to be done by its clients.
    It achieves this though using threading locks; there is one lock to serialize access to the module’s shared data,
@@ -331,10 +322,10 @@ def execBashCmdOnAllMachines(command, arguments=None, machines=MACHINES, mail=No
    If you are implementing asynchronous signal handlers using the signal module, you may not be able to use logging
    from within such handlers. This is because lock implementations in the threading module are not always re-entrant,
    and so cannot be invoked from such signal handlers.
-"""
+        """
 
 class condorThread(threading.Thread):
-    def __init__(self, command=None, monitoringTimeStep=5, name=None, callBack=None, log=LOG_FILE, verbose=False):
+    def __init__(self, command=None, monitoringTimeStep=2, name=None, callBack=None, log=LOG_FILE, verbose=False):
         """*target* is the callable object to be invoked by the run()
         method. Defaults to None, meaning nothing is called.
 
@@ -376,172 +367,220 @@ class condorThread(threading.Thread):
 
     def run(self):
         self.logErr('run')
-        self.res = None
+        if self.command:
+            self.jid = submitWithBuffer(self.command, self.tName,
+                                        mail=None,
+                                        # group name of the job
+                                        jobGroup='<group>',
+                                        niceUser=False,
+                                        requirements='(Memory > 1024)',
+                                        priority=0,
+                                        # maximum number of simultaneous jobs with the same group name
+                                        maxSimultaneousJobsInGroup=100,
+                                        log=self.log)
+            while True:
+                self.logErr('Monitoring')
+                time.sleep(self.monitoringTimeStep)
+                try:
+                    (self.outFileName, self.errFileName) = getOutputWithBuffer(self.jid, self.tName, waitMaxTime=0, log=self.log)
+                    self.res = (self.outFileName, self.errFileName)
+                    self.logErr("thread %s has finished" % self.tName)
+                    if self.callBack:
+                        self.callBack(self.res)
+                    break
+                except NotYetFinished:
+                    self.logErr('NotYetFinished')
+                    continue
+                except Exception as e:
+                    self.logErr(str(type(e)) + ' ' + str(e))
+                    raise e
+
+    def __del__(self):
+        del self.command, self.target, self.args, self.log, self.res
+
+
+def printLogErr((stdoutFileName, stderrFileName)):
+    printFileIntoStream(stderrFileName, sys.stderr)
+
+def printLogOut((stdoutFileName, stderrFileName)):
+    printFileIntoStream(stdoutFileName, sys.stdout)
+
+def printLogs((stdoutFileName, stderrFileName)):
+    printLogErr((stdoutFileName, stdoutFileName))
+    printLogOut((stderrFileName, stderrFileName))
+
+def printFileIntoStream(fileName, stream):
+    with open(fileName, 'r') as f:
         try:
-            if self.command:
-                self.jid = submitWithBuffer(self.command, self.tName,
-                                            mail=None,
-                                            # group name of the job
-                                            jobGroup='<group>',
-                                            niceUser=False,
-                                            requirements='(Memory > 1024)',
-                                            priority=0,
-                                            # maximum number of simultaneous jobs with the same group name
-                                            maxSimultaneousJobsInGroup=100,
-                                            log=self.log)
-                while True:
-                    self.logErr('Monitoring')
-                    time.sleep(self.monitoringTimeStep)
-                    try:
-                        (stdout, stderr) = getOutputWithBuffer(self.jid, self.tName, waitMaxTime=0, log=self.log)
-                        self.res = (stdout, stderr)
-                        if self.callBack:
-                            self.callBack((stdout, stderr))
-                        break
-                    except NotYetFinished:
-                        self.logErr('NotYetFinished')
-                        continue
-                    except Exception as e:
-                        self.logErr(type(e), str(e))
-                        raise e
-        finally:
-            del self.command, self.target, self.args, self.log
-
-
-# use inspection features of python to write a python function into a file
-# https://github.com/uqfoundation/dill
-# http://stackoverflow.com/questions/1562759/can-python-print-a-function-definition
-# def pythonFunctionWrapper(func):
-#     local_buff_pythonWrapper = LOCAL_BUFF_FOLDER
-#     with open(local_buff_pythonWrapper, 'w') as f:
-#         print >> f, "#!/bin/python"
-#         print >> f, coreOfFunction
-#     os.chmod(local_buff_pythonWrapper, 0o755)
-
+            print >> stream, f.read()[:-1]
+        except:
+            pass
 
 if __name__ == '__main__':
 
-    def printLogErr((stdout, stderr)):
-        if len(stderr) > 0:
-            print >> sys.stderr, stderr
+    ##################
+    #  first example #
+    ##################
+    def example1_noBuff(nbJobs):
+        listOfJNamesIds = []
+        for jobName in range(nbJobs):
+            # jid = job id (cluster ID of the new job)
+            jid = submit("echo", arguments="Hello job %s!" % jobName)
+            print "job %s has id %i" % (jobName, jid)
+            listOfJNamesIds.append((jobName, jid))
 
-    def printLogOut((stdout, stderr)):
-        if len(stdout) > 0:
-            print >> sys.stdout, stderr
+        for (jobName, jid) in listOfJNamesIds:
+            (stdoutFileName, stderrFileName) = getoutput(jid)
+            print "job %s has finished" % jobName
+            printFileIntoStream(stdoutFileName, sys.stdout)
+            # printFileIntoStream(stderrFileName, sys.stderr)
+            # remove files
+            os.unlink(stdoutFileName)
+            os.unlink(stderrFileName)
+        print "jobs done"
 
-    def printLogs((stdout, stderr)):
-        if len(stderr) > 0:
-            print >> sys.stderr, stderr
-        if len(stdout) > 0:
-            print >> sys.stdout, stdout
+    def example1_buff(nbJobs):
+        # Same with buffer
+        listOfJNamesIds = []
+        for jobName in range(nbJobs):
+            jid = submitWithBuffer("echo \"Hello job %s!\"" % jobName, jobName)
+            print "job %s has id %i" % (jobName, jid)
+            listOfJNamesIds.append((jobName, jid))
 
-    # #################
-    # # first example #
-    # #################
-    # # jid = job id (cluster ID of the new job)
-    # jid1 = submit("echo", arguments='hello world 1')
-    # jid2 = submit("echo", arguments='hello world 2')
-    #
-    # for jid in [jid1, jid2]:
-    #     stdout, stderr = getoutput(jid)
-    #     print "job %i has finished" % jid
-    #     if len(stderr) > 0:
-    #         print >> sys.stderr, stderr
-    #     if len(stdout) > 0:
-    #         print >> sys.stdout, stdout
-    # print "jobs done"
+        for (jobName, jid) in listOfJNamesIds:
+            (stdoutFileName, stderrFileName) = getOutputWithBuffer(jid, jobName)
+            print "job %s has finished" % jobName
+            printFileIntoStream(stdoutFileName, sys.stdout)
+            # printFileIntoStream(stderrFileName, sys.stderr)
+            # remove files
+            os.unlink(stdoutFileName)
+            os.unlink(stderrFileName)
+        print "jobs done"
 
-    # Same with threads
-    verbose = True
-    t1 = condorThread(command='echo hello world 1', name='echo1', callBack=printLogs, verbose=verbose)
-    t2 = condorThread(command='echo hello world 2', name='echo2', callBack=printLogs, verbose=verbose)
-    for t in [t1, t2]:
-        t.start()
-    for t in [t1, t2]:
-        t.join()
-        (stdout, stderr) = t.res
-        # if len(stderr) > 0:
-        #     print >> sys.stderr, stderr
-        # if len(stdout) > 0:
-        #     print >> sys.stdout, stdout
-        # Take care of the RAM!
-        del t.res
+    def example1_thread(nbJobs):
+        # Same with threads
+        verbose = True
+        listOfThreads = []
+        for jobName in range(nbJobs):
+            t = condorThread(command="echo \"Hello job %s!\"" % jobName, name=jobName, callBack=printLogOut, verbose=verbose)
+            t.start()
+            listOfThreads.append(t)
+
+        for t in listOfThreads:
+            t.join()
+            (stdoutFileName, stderrFileName) = t.res
+            # printFileIntoStream(stdoutFileName, sys.stdout)
+            # printFileIntoStream(stderrFileName, sys.stderr)
+            # remove files
+            os.unlink(stdoutFileName)
+            os.unlink(stderrFileName)
+            del t
 
     # ##################
     # # second example #
     # ##################
-    # # This example uses a software called src/magSimus1.py but with specific
-    # # arguments but it could use any other executable and arguments.
-    # # condor.py should be launched in MagSimus root folder for having good links
-    # listOfJids = []
-    # for idxSimu in range(500):
-    #    try:
-    #        os.mkdir("res/simu1/%s/" % idxSimu)
-    #    except:
-    #        pass
-    #    jobName = idxSimu
-    #    genesName = 'res/simu1/' + str(idxSimu) + '/genes.%s.list.bz2'
-    #    ancGenesName = 'res/simu1/' + str(idxSimu) + '/ancGenes.%s.list.bz2'
-    #    executable = 'src/magSimus1.py'
-    #    arguments = 'res/speciesTree.phylTree -out:genomeFiles=' + genesName +\
-    #                ' -out:ancGenesFiles=' + ancGenesName +\
-    #                ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
-    #    command = executable + ' ' + arguments
-    #    jid = submitWithBuffer(command, jobName)
-    #    print "simu %s (job id %i) sent to condor" % (idxSimu, jid)
-    #    listOfJids.append((jid, jobName))
-    #
-    # for (jid, jobName) in listOfJids:
-    #     idxSimu = jobName
-    #     stdout, stderr = getOutputWithBuffer(jid, jobName)
-    #     print sys.stderr, stderr
-    #     print "simu %s done (job id %s)" % (idxSimu, jid)
+    def example2_buff(nbJobs):
+        # This example uses a software called src/magSimus1.py but with specific
+        # arguments but it could use any other executable and arguments.
+        # condor.py should be launched in MagSimus root folder for having good links
+        listOfJids = []
+        for idxSimu in range(nbJobs):
+           try:
+               os.mkdir("res/simu1/%s/" % idxSimu)
+           except:
+               pass
+           jobName = idxSimu
+           genesName = 'res/simu1/' + str(idxSimu) + '/genes.%s.list.bz2'
+           ancGenesName = 'res/simu1/' + str(idxSimu) + '/ancGenes.%s.list.bz2'
+           executable = 'src/magSimus1.py'
+           arguments = 'res/speciesTree.phylTree -out:genomeFiles=' + genesName +\
+                       ' -out:ancGenesFiles=' + ancGenesName +\
+                       ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
+           command = executable + ' ' + arguments
+           jid = submitWithBuffer(command, jobName)
+           print "simu %s (job id %i) sent to condor" % (idxSimu, jid)
+           listOfJids.append((jid, jobName))
 
-    # Same with threads
-    listOfThreads = []
-    for idxSimu in range(500):
+        for (jid, jobName) in listOfJids:
+            idxSimu = jobName
+            stdoutFileName, stderrFileName = getOutputWithBuffer(jid, jobName)
+            print "data of %s returned (thread %s)" % (idxSimu, jobName)
+            # printFileIntoStream(stdoutFileName, sys.stdout)
+            printFileIntoStream(stderrFileName, sys.stderr)
+            # remove files
+            os.unlink(stdoutFileName)
+            os.unlink(stderrFileName)
 
-        try:
-            os.mkdir("res/simu1/%s/" % idxSimu)
-        except:
-            pass
-        jobName = 'simu' + str(idxSimu)
-        genesName = 'res/simu1/' + str(idxSimu) + '/genes.%s.list.bz2'
-        ancGenesName = 'res/simu1/' + str(idxSimu) + '/ancGenes.%s.list.bz2'
-        executable = 'src/magSimus1.py'
-        arguments = 'res/speciesTree.phylTree -out:genomeFiles=' + genesName + \
-                    ' -out:ancGenesFiles=' + ancGenesName + \
-                    ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
-        command = executable + ' ' + arguments
+    def example2_thread(nbJobs):
+        # Same with threads
+        listOfThreads = []
+        for idxSimu in range(nbJobs):
+           try:
+               os.mkdir("res/simu1/%s/" % idxSimu)
+           except:
+               pass
+           jobName = 'simu' + str(idxSimu)
+           genesName = 'res/simu1/' + str(idxSimu) + '/genes.%s.list.bz2'
+           ancGenesName = 'res/simu1/' + str(idxSimu) + '/ancGenes.%s.list.bz2'
+           executable = 'src/magSimus1.py'
+           arguments = 'res/speciesTree.phylTree -out:genomeFiles=' + genesName +\
+                       ' -out:ancGenesFiles=' + ancGenesName +\
+                       ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
+           command = executable + ' ' + arguments
 
-        # do not print stdout because here we do not need it
-        t = condorThread(command=command, name=jobName, callBack=printLogErr, verbose=True)
-        t.start()
-        print "simu %s (thread name %s) sent to condor" % (idxSimu, t.tName)
-        listOfThreads.append((t, idxSimu))
+           # do not print stdout because here we do not need it
+           t = condorThread(command=command, name=jobName, callBack=printLogErr, verbose=True)
+           t.start()
+           print "simu %s (thread name %s) sent to condor" % (idxSimu, t.tName)
+           listOfThreads.append((t, idxSimu))
 
-    for (t, idxSimu) in listOfThreads:
-        t.join()
-        (stdout, stderr) = t.res
-        # if len(stderr) > 0:
-        #     print >> sys.stderr, stderr
-        #if len(stdout) > 0:
-        #    print >> sys.stdout, stdout
-        # Take care of the RAM!
-        del t.res
-        print "simu %s done (thread name %s)" % (idxSimu, t.tName)
+        for (t, idxSimu) in listOfThreads:
+            t.join()
+            stdoutFileName, stderrFileName = t.res
+            print "data of %s returned (thread %s)" % (idxSimu, t.tName)
+            # printFileIntoStream(stdoutFileName, sys.stdout)
+            # The callBack function already print the errLog
+            # printFileIntoStream(stderrFileName, sys.stderr)
+            # remove files
+            os.unlink(stdoutFileName)
+            os.unlink(stderrFileName)
+            del t
 
-        # # look inside the remote temporary folders to verify that temporary files have been removed
-        # execBashCmdOnAllMachines('ls ' + REMOTE_BUFF_FOLDER)
-        #
-        # # If you have pbs on your jobs, the directory REMOTE_BUFF_FOLDER won't be clean automatically.
-        # # this script allows to see what is in REMOTE_BUFF_FOLDER if it exists on all machines
-        # # examples :
-        #
-        # # execBashCmdOnAllMachines('ls', arguments=REMOTE_BUFF_FOLDER)
-        #
-        # # completely remove REMOTE_BUFF_FOLDER on all machines
-        # # execBashCmdOnAllMachines('rm', arguments='-rf ' + REMOTE_BUFF_FOLDER)
-        #
-        # # remove specific content of the REMOTE_BUFF_FOLDER on all machines, all files finishing by '.txt'
-        # # execBashCmdOnAllMachines('rm', arguments='-rf ' + REMOTE_BUFF_FOLDER + '/*.txt')
+    #######################################
+    # Execute commands on remote machines #
+    #######################################
+    def example3():
+        # echo 'toto
+        execBashCmdOnAllMachines('echo "toto"')
+
+        execBashCmdOnAllMachines('touch ' + REMOTE_BUFF_FOLDER + '/toto')
+        # look inside the remote temporary folders to verify that temporary files have been removed
+        execBashCmdOnAllMachines('ls ' + REMOTE_BUFF_FOLDER)
+
+        # completely remove REMOTE_BUFF_FOLDER on all machines
+        # If you have pbs on your jobs, the directory REMOTE_BUFF_FOLDER won't be clean automatically.
+        # this script allows to remove all files in REMOTE_BUFF_FOLDER on all machines
+        execBashCmdOnAllMachines('rm ' + REMOTE_BUFF_FOLDER + '/*')
+
+    import timeit
+
+    nbJobs = 20
+    t_example1_noBuff = timeit.timeit("example1_noBuff(%s)" % nbJobs, setup="from __main__ import example1_noBuff", number=1)
+    print >> sys.stderr, "example1_noBuff", t_example1_noBuff
+    t_example1_buff = timeit.timeit("example1_buff(%s)" % nbJobs, setup="from __main__ import example1_buff", number=1)
+    print >> sys.stderr, "example1_buff", t_example1_buff
+    t_example1_thread = timeit.timeit("example1_thread(%s)" % nbJobs, setup="from __main__ import example1_thread", number=1)
+    print >> sys.stderr, "t_example1_thread", t_example1_thread
+
+    print >> sys.stderr, "example1_noBuff", t_example1_noBuff
+    print >> sys.stderr, "example1_buff", t_example1_buff
+    print >> sys.stderr, "t_example1_thread", t_example1_thread
+
+    nbJobs = 20
+    t_example2_buff = timeit.timeit("example2_buff(%s)" % nbJobs, setup="from __main__ import example2_buff", number=1)
+    print >> sys.stderr, "t_example2_buff", t_example2_buff
+    t_example2_thread = timeit.timeit("example2_thread(%s)" % nbJobs, setup="from __main__ import example2_thread", number=1)
+    print >> sys.stderr, "t_example2_thread", t_example2_thread
+
+    print >> sys.stderr, "t_example2_buff", t_example2_buff
+    print >> sys.stderr, "t_example2_thread", t_example2_thread
