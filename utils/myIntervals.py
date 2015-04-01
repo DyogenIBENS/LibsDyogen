@@ -6,7 +6,8 @@
 # This is free software, you may copy, modify and/or distribute this work under the terms of the GNU General Public License, version 3 (GPL v3) or later and the CeCiLL v2 license in France
 
 import collections
-from utils.myLightGenomes import OGene, LightGenome
+from myLightGenomes import OGene, LightGenome
+import myTools
 
 # Region
 # n = gene name
@@ -25,7 +26,7 @@ def regionFromGene(og, leftOrRight):
         return Region(og.n, 't' if leftOrRight == +1 else 'h')
     else:
         assert og.s == None
-        raise ValueError('Since og has no orientation it is impossible to find the region')
+        return Region(og.n, None)
 
 class Adjacency(tuple):
     def __new__(cls, g1n, g2n):
@@ -170,6 +171,100 @@ def intergeneFromAdjacency(adjacency, genomeWithDict, default=None):
     return (c, x)
 
 
+def chromExtremityRegions(genome):
+    isinstance(genome, LightGenome)
+    res = set()
+    for chrom in genome.values():
+        res.update({regionFromGene(chrom[0], -1),
+                    regionFromGene(chrom[-1], +1)})
+    return res
+
+def analyseGenomeIntoAdjs(genome, oriented=True):
+    isinstance(genome, LightGenome)
+    setAdjs = set()
+    for chrom in genome.values():
+        assert len(chrom) > 0
+        if len(chrom) > 1:
+            for (og1, og2) in myTools.myIterator.slidingTuple(chrom):
+                og1 = OGene(str(og1.n), og1.s)
+                og2 = OGene(str(og2.n), og2.s)
+                assert og1.n != og2.n
+                if oriented:
+                    # oriented adjacencies
+                    setAdjs.add(OAdjacency(og1, og2))
+                else:
+                    # unoriented adjacencies
+                    setAdjs.add(Adjacency(og1.n, og2.n))
+    return setAdjs
+
 # TODO
 # def adjacencyFromIntergene(intergene, genomeWithDict, default=None):
 #     assert isinstance(genomeWithDict, LightGenome)
+
+# def buildGenomeFromListAdjs():
+#     genome = LightGenome()
+#     chr = '0'
+#     if not ggInGenome and not gdInGenome: # Nouveau contig etant donne que les deux genes n'ont pas ete vus
+#             genome.append(collections.deque([gg,gd]))
+#         #print >> sys.stderr, "Nouveau contig de 2 genes : deltaTicTac = %s" % ticTac()
+#
+#         elif ggInGenome and not gdInGenome:
+#             if gg_gIdx == len(genome[gg_cIdx])-1: #gg est a droite d'un contig
+#                 genome[gg_cIdx].append(gd) # on ajoute gd a droite du contig
+#             elif gg_gIdx == 0: #gg est a gauche d'un contig
+#                 genome[gg_cIdx].appendleft(Gene(gd.name,-gd.strand)) # on ajoute gd a gauche du contig en le renversant
+#             else:
+#                 print >> sys.stderr, "pb de non linearite : %s n'est pas sur un bord de contig dans l'adjacence (%s,%s) etudiee " % (gg.name,gg.name,gd.name)
+#             #print >> sys.stderr, "ajout de gd au contig de gg : deltaTicTac = %s" % ticTac()
+#
+#         elif gdInGenome and not ggInGenome:
+#             if gd_gIdx == 0: #gd est a gauche d'un contig
+#                 genome[gd_cIdx].appendleft(gg) # on ajoute gg a gauche du contig
+#             elif gd_gIdx == len(genome[gd_cIdx])-1: #gd est a droite d'un contig
+#                 genome[gd_cIdx].append(Gene(gg.name,-gg.strand)) # on ajoute gg a droite du contig en le retournant
+#             else:
+#                 print >> sys.stderr, "pb de non linearite : %s n'est pas sur un bord de contig dans l'adjacence (%s,%s) etudiee " % (gd.name,gg.name,gd.name)
+#             #print >> sys.stderr, "ajout de gg au contig de gd : deltaTicTac = %s" % ticTac()
+#
+#         elif ggInGenome and gdInGenome:
+#             if gg_cIdx == gd_cIdx:
+#                 print >> sys.stderr, "pb de linearite : %s et %s appartiennent au meme contig " % (gg.name,gd.name)
+#             else:
+#                 assert gg_cIdx != gd_cIdx
+#                 if gg_gIdx == len(genome[gg_cIdx])-1: # gg est a droite d'un contig
+#                     if gd_gIdx == 0: # gd est a gauche d'un contig
+#                         genome[gg_cIdx].extend(genome[gd_cIdx]) # ajoute le contig de gd a celui de gg
+#                         del genome[gd_cIdx]
+#                         gd_cIdx = gg_cIdx
+#                     elif gd_gIdx == len(genome[gd_cIdx])-1:
+#                         genome[gd_cIdx].reverse()
+#                         tmp = [Gene(g.name,-g.strand) for g in genome[gd_cIdx]]
+#                         genome[gg_cIdx].extend(tmp)
+#                         del genome[gd_cIdx]
+#                         gd_cIdx = gg_cIdx
+#                     else:
+#                         print >> sys.stderr, "pb de linearite : %s n'est pas sur le bord d'un contig" % gd
+#                         continue
+#                     #assert gd_gIdx != 0 and gd_gIdx != len(genome[gd_cIdx])-1 and gg_gIdx != 0 and gg_gIdx != len(genome[gg_cIdx])-1 # Onverifie que gg et gd ne sont plus a une extremite d'un contig
+#                     #print >> sys.stderr, "Fusion, gg a droite d'un contig : deltaTicTac = %s" % ticTac()
+#
+#                 elif gg_gIdx == 0: # gg est a gauche d'un contig
+#                     if gd_gIdx == 0: # gd est a gauche d'un contig
+#                         genome[gg_cIdx].reverse()
+#                         tmp = collections.deque(Gene(g.name,-g.strand) for g in genome[gg_cIdx])
+#                         genome[gg_cIdx] = tmp
+#                         genome[gg_cIdx].extend(genome[gd_cIdx])
+#                         del genome[gd_cIdx]
+#                         gd_cIdx = gg_cIdx
+#                     elif gd_gIdx == len(genome[gd_cIdx])-1:
+#                         genome[gd_cIdx].extend(genome[gg_cIdx])
+#                         del genome[gg_cIdx]
+#                         gg_cIdx = gd_cIdx
+#                     else:
+#                         print >> sys.stderr, "pb de linearite : %s n'est pas sur le bord d'un contig" % gd
+#                         continue
+#                     #assert gd_gIdx != 0 and gd_gIdx != len(genome[gd_cIdx])-1 and gg_gIdx != 0 and gg_gIdx != len(genome[gg_cIdx])-1 # Onverifie que gg et gd ne sont plus a une extremite d'un contig
+#                     #print >> sys.stderr, "Fusion, gg a gauche d'un contig : deltaTicTac = %s" % ticTac()
+#         else:
+#             print >> sys.stderr, "Cas impossible"
+#             raise # on leve une erreur

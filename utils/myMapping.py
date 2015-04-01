@@ -57,7 +57,6 @@ def labelWithFamNames(genome, families):
     assert isinstance(families, myLightGenomes.Families)
     assert isinstance(genome, myLightGenomes.LightGenome)
     assert type(genome.values()[0]) == list
-    assert isinstance(genome.values()[0][0], tuple)
     assert all(len(chrom) > 0 for chrom in genome.values())
     newGenome = myLightGenomes.LightGenome()
     for c in genome.keys():

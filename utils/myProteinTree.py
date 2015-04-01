@@ -331,13 +331,13 @@ def printTree(ft, data, info, root):
 
 
 # return the suffix associated to a duplication rank ('a' -> 'z', 'aa' -> 'az', 'ba' ...)
-def getDupSuffix(n, upper):
+def getDupSuffix(n, upper=False):
     base = 64 if upper else 96
     assert 1 <= n
     s = "."
     while n > 26:
-        s = s + chr(base + (n-1)%26)
-        n =  1 + (n-1)/26
+        s = s + chr(base + (n - 1) % 26)
+        n = 1 + (n - 1)/26
     return s + chr(base + n)
 
 

@@ -143,7 +143,6 @@ def deprecated(func):
     newFunc.__dict__.update(func.__dict__)
     return newFunc
 
-
 # record results of a function for each parameter value #
 class memoize:
     """Decorator that caches a value returned by the function each time it is called.
@@ -250,15 +249,15 @@ def which(program):
 
 # iterator of adjacent components of a list
 class myIterator:
-    # sliding couple (x,y)
+    # sliding tuple (x1, x2, ...) of width=width
     @staticmethod
-    def slidingTuple(lst):
-        if len(lst) > 0:
-            x = lst[0]
-            for i in xrange(1, len(lst)):
-                y = lst[i]
-                yield (x, y)
-                x = y
+    def slidingTuple(lst, width=2):
+        if len(lst) < width:
+            raise StopIteration
+        else:
+            # idxW0, idx of the left extremity of the sliding window
+            for idxW0 in xrange(len(lst) - width + 1):
+                yield tuple(lst[idxW0: idxW0 + width])
 
 # liste of partitions of size k in range(n)
 @memoize
@@ -527,6 +526,7 @@ def checkArgs(args, options, info, showArgs=True):
         print >> sys.stderr, "Arguments:", valArg
     return valArg
 
+# TODO
 def printArguments(arguments, stream=open(os.devnull, 'w')):
     rows, columns = getTerminalSize()
     print >> stream, '-' * rows
@@ -786,6 +786,7 @@ def _getTerminalSize_windows():
     else:
         return None
 
+# TODO
 def _getTerminalSize_tput():
     # get terminal width
     # src: http://stackoverflow.com/questions/263890/how-do-i-find-the-width-height-of-a-terminal-window

@@ -14,7 +14,6 @@ import myFile
 
 GeneSpeciesPosition = collections.namedtuple("GeneSpeciesPosition", ['species', 'chromosome', 'index'])
 
-
 # class mother of all types of trees
 class PhylogeneticTree:
 
@@ -647,3 +646,14 @@ class PhylogeneticTree:
         print >> stream, bar
         print >> stream, foo
         print >> stream, bar
+
+    # FIXME, ensure that no two species has the same acronym!!
+    def speciesAcronym(self, node):
+        if node in self.listSpecies:
+            # First char of each word with a upper char for the first
+            speciesAcronym = [word for word in node.split(' ')]
+            speciesAcronym = [speciesAcronym[0][0].upper()] + [char[0].lower() for char in speciesAcronym[1:]]
+        elif node in self.listAncestr:
+            # The two first chars
+            speciesAcronym = node[:2]
+        return ''.join(speciesAcronym)

@@ -329,7 +329,7 @@ def mergeSbs(listOfDiags, gapMax, gc2, distanceMetric = 'DPD', verbose = False):
     # means that between ag1 and ag2 there is no 2Dgap but between ag2 and ag3
     # there is a gap of 1. The gap depends on the distance metric chosen.
     # This gap gives us an information on the relevance of this adjacency in th
-    # synteny block.
+    # synteny bcurrGaplock.
     for currGap in range(0, gapMax+1):
         nbFusionCurrGap = 0
         # Sort diagonals by increasing index on the genome A (i.e. by increasing x coordinate of the leftmost hp of the diagonal)

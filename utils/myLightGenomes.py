@@ -48,6 +48,18 @@ Family = collections.namedtuple("Family", ['fn', 'dns'])
 # idx = index of the gene in that chromosome
 GeneP = collections.namedtuple("GeneP", ['c', 'idx'])
 
+
+def newChromName(genome):
+    assert isinstance(genome, LightGenome)
+    chromNames = set([int(c) for c in genome.keys()])
+    maxChromName = max(chromNames)
+    chromNamesToFillGaps = set(range(maxChromName + 1)) - chromNames
+    if len(chromNamesToFillGaps) > 0:
+        chosenChromName = str(chromNamesToFillGaps.pop())
+    else:
+        chosenChromName = str(maxChromName + 1)
+    return chosenChromName
+
 # It might be more interesting for certain applications to only use a classical
 # collections.defaultdict instead of the less specialised class
 # myTools.DefaultOrderedDict.
@@ -59,6 +71,7 @@ class LightGenome(myTools.DefaultOrderedDict):
 
     def __init__(self, *args, **kwargs):
         self.name = None
+        # kwargs.get('name', default=None)
         myTools.DefaultOrderedDict.__init__(self, default_factory=list)
         self.withDict = kwargs.get("withDict", False)
         if self.withDict:
@@ -79,7 +92,7 @@ class LightGenome(myTools.DefaultOrderedDict):
             flb = myFile.firstLineBuffer(myFile.openFile(fileName, 'r'))
             c = flb.firstLine.split("\t")
             if len(c) == 6:
-                print >> sys.stderr, "(c, beg, end, s,  gName, transcriptName) -> (c, s, gName)",
+                print >> sys.stderr, "(c, beg, end, s, gName, transcriptName) -> (c, s, gName)",
                 # c, beg, end, s,  gName, transcriptName
                 reader = myFile.myTSV.readTabular(fileName, [str, int, int, int, str, str])
                 reader = ((c, strand, gName) for (c, beg, end, strand, gName, tName) in reader)
@@ -88,7 +101,7 @@ class LightGenome(myTools.DefaultOrderedDict):
                 # c, s, gName
                 reader = myFile.myTSV.readTabular(fileName, [str, int, str])
             elif len(c) == 5:
-                print >> sys.stderr, "(c, beg, end, s,  gName) -> (c, s, gName)",
+                print >> sys.stderr, "(c, beg, end, s, gName) -> (c, s, gName)",
                 # c, beg, end, s,  gName
                 reader = myFile.myTSV.readTabular(fileName, [str, int, int, int, str])
                 reader = ((c, strand, gName) for (c, beg, end, strand, gName) in reader)
@@ -149,10 +162,10 @@ class LightGenome(myTools.DefaultOrderedDict):
     # in certain rare utilisations there might be several positions for the same gene name
     def computeDictG2Ps(self):
         # dict gene name to position's'
-        self.g2ps = collections.defaultdict(list)
+        self.g2ps = collections.defaultdict(set)
         for c in self:
             for (idx, g) in enumerate(self[c]):
-                self.g2ps[g.n].append(GeneP(c, idx))
+                self.g2ps[g.n].add(GeneP(c, idx))
 
     def getPosition(self, name, default=None):
         try:
@@ -219,7 +232,73 @@ class LightGenome(myTools.DefaultOrderedDict):
         else:
             return "%s-%s" % (self[c][x-1][0], self[c][x][0])
 
+    # see also myMapping.remapFilterGeneContent(genome, removedNames, mOld=None)
+    def removeGenes(self, setRemovedGeneNames):
+        nbRemovedGenes = 0
+        nbRemovedChrs = 0
+        for (c, chrom) in self.iteritems():
+            newChrom = []
+            lenNewChrom = 0
+            thereWasARemoval = False
+            for ogene in chrom:
+                if ogene.n in setRemovedGeneNames:
+                    if self.withDict:
+                        del self.g2p[ogene.n]
+                        try:
+                            del self.g2ps[ogene.n]
+                        except:
+                            pass
+                    thereWasARemoval = True
+                    nbRemovedGenes += 1
+                else:
+                    newChrom.append(ogene)
+                    if self.withDict and thereWasARemoval:
+                        # if there was no removal, no need to change the g2p, it stays at it was for these first genes
+                        # of the chrom until a gene is removed
+                        self.g2p[ogene.n] = GeneP(c, lenNewChrom)
+                        try:
+                            self.g2ps[ogene.n].add(GeneP(c, lenNewChrom))
+                        except:
+                            pass
+                    lenNewChrom += 1
+            if lenNewChrom > 0:
+                assert lenNewChrom == len(newChrom)
+                self[c] = newChrom
+            else:
+                del self[c]
+                nbRemovedChrs += 1
+        return (nbRemovedGenes, nbRemovedChrs)
 
+    def setGeneNames(self):
+        res = set()
+        for chrom in self.values():
+            for gene in chrom:
+                res.add(gene.n)
+        return res
+
+    def removeChrsSmallerOrEqu(self, minChrLen):
+        sCs = self.keys()
+        nbRemovedChrs = 0
+        for c in sCs:
+            if len(self[c]) < minChrLen:
+                if self.withDict:
+                    for gene in self[c]:
+                        del self.g2p[gene.n]
+                        try:
+                            del self.g2ps[gene.n]
+                        except:
+                            pass
+                del self[c]
+                nbRemovedChrs += 1
+        return nbRemovedChrs
+
+
+# FIXME, it could also be easier to use a dict here and no family IDs, but IDs are processed faster than strings when
+# FIXME managing rewritten genomes
+# FIXME families should be organised this way:
+# 1st element of the line: name of the family (or ancestral gene)
+# next elements of the line: the names of the last descendants. Most of them are in modern species, but some may be in
+# intermediary ancestors
 class Families(list):
 
     def __init__(self, *args):
@@ -306,3 +385,35 @@ class Families(list):
         for family in self:
             res.append(' '.join([family.fn] + family.dns))
         return '\n'.join(res)
+
+    def __eq__(self, other):
+        return set((fn, dn) for (fn, dns) in self for dn in dns) == set((fn, dn) for (fn, dns) in other for dn in dns)
+
+    def __ne__(self, other):
+        return not self == other
+
+def families_A0_A1_from_f_A0_D_and_f_A1_D(f_A0_D, f_A1_D):
+    """
+    Return a new Families with fn of A0 and dns of A1
+
+    Warning: ancestor A0 must be older than A1 and A1 should be in the evolutive path from A0 to D
+
+    :param f_A0_D: Families, fn of A0 and dns of D (Descendant)
+    :param f_A1_D: Families, fn of A1 and dns of D (same Descendant)
+    :return f_A0_A1: Families, fn of A0 and dns of A1
+    """
+    assert isinstance(f_A0_D, Families) and isinstance(f_A1_D, Families)
+    f_A0_A1 = Families()
+    tmp = collections.defaultdict(set)
+    for i, (gn_A1, gns_D) in enumerate(f_A1_D):
+        # FIXME, what if the gene is kept between A0 and A1 and lost after ?
+        if len(gns_D) > 0:
+            # If the ancestral gene has extant genes
+            dn = gns_D[0]
+            fn_A0 = f_A0_D.getFamilyByName(dn, default=None)
+            # assert all(f_A0_D.getFamilyByName(dn, default=None) == fn_A0 for dn in gns_D)
+            if fn_A0 is not None:
+                tmp[fn_A0.fn].add(gn_A1)
+    for (fn_A0, gns_A1) in tmp.iteritems():
+        f_A0_A1.addFamily(Family(fn_A0, list(gns_A1)))
+    return f_A0_A1

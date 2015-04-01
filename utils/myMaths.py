@@ -111,6 +111,14 @@ class myStats:
         else:
             return ''.join(pattern) % ((None,)*(10 if withN50 else 7) + (0,) )
 
+    @staticmethod
+    def distribSummary(distribution, nbFirstVals=5, nbLastVals=3):
+        assert isinstance(distribution, dict)
+        assert isinstance(distribution.values()[0], int)
+        distribRepr = [" %s:%s" % (distribution[val], val) for val in sorted(distribution.keys())]
+        if len(distribution.keys()) > nbFirstVals + nbLastVals:
+            distribRepr = distribRepr[:nbFirstVals] + ["..."] + distribRepr[-nbLastVals:]
+        return ','.join(distribRepr)
 
     # Renvoie la moyenne ponderee d'une liste
     ##############################
