@@ -612,6 +612,12 @@ def calcTandemDupFromDist(distDict, gapMax, cumulated = True):
     else:
         return (len([distance for distances in distDict.itervalues() for distance in distances if distance != -1 and distance == distMax]))
 
+def calcNumberOFDeletions(genome, family):
+
+    genome_fID = labelWithFamID(genome, family)
+    (genomeFilt, gf2gfID, _) = remapFilterGeneContent(genome_fID, {None})
+
+    return (nGeneDeleted)
 
 @myTools.deprecated
 def calcTandemDup(genome, family, allowedGap=0, cumulated=True):
