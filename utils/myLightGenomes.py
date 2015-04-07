@@ -269,7 +269,8 @@ class LightGenome(myTools.DefaultOrderedDict):
                 nbRemovedChrs += 1
         return (nbRemovedGenes, nbRemovedChrs)
 
-    def setGeneNames(self, checkNoDuplicates=True):
+    # TODO change name to getSetOfGeneNames (no ambiguity any more with a possible setter)
+    def getSetOfGeneNames(self, checkNoDuplicates=True):
         res = set()
         for chrom in self.values():
             for gene in chrom:

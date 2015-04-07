@@ -1075,8 +1075,8 @@ def extractSbsInPairCompChr(gc1, gc2, gapMax=0, distanceMetric='DPD',
 
 def crossGeneContent(g1, g2):
     # create a set with all gene names
-    geneNames1 = g1.setGeneNames(g1, checkNoDuplicates=True)
-    geneNames2 = g2.setGeneNames(g2, checkNoDuplicates=True)
+    geneNames1 = g1.getSetOfGeneNames(g1, checkNoDuplicates=True)
+    geneNames2 = g2.getSetOfGeneNames(g2, checkNoDuplicates=True)
     gNsInCommon = geneNames1.intersection(geneNames2)
     gNsInG1notInG2 = geneNames1 - gNsInCommon
     gNsInG2notInG1 = geneNames2 - gNsInCommon
@@ -1123,8 +1123,8 @@ def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
         while True:
             # after this step genes that have no homolog in the other genome are marked None
             # 'gNsInCommon' is also called the set of 'anchor genes' in bibliography
-            geneNames1 = g1.setGeneNames(checkNoDuplicates=False)
-            geneNames2 = g2.setGeneNames(checkNoDuplicates=False)
+            geneNames1 = g1.getSetOfGeneNames(checkNoDuplicates=False)
+            geneNames2 = g2.getSetOfGeneNames(checkNoDuplicates=False)
             gNsInCommon = geneNames1 & geneNames2
             gNsToRemove = ((geneNames1 | geneNames2) - gNsInCommon) | {None}
             (g1, mG1f2G1o, (tmp_nCL1, tmp_nGL1)) = remapCoFilterContentAndSize(g1, gNsToRemove, minChromLength,
@@ -1142,7 +1142,7 @@ def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
             if not hasChanged:
                 break
         # there may be duplicates which family is in both genomes
-        assert g1.setGeneNames(checkNoDuplicates=False) == g2.setGeneNames(checkNoDuplicates=False)
+        assert g1.getSetOfGeneNames(checkNoDuplicates=False) == g2.getSetOfGeneNames(checkNoDuplicates=False)
     else:
         # impossible case
         raise
