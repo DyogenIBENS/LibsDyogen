@@ -269,14 +269,16 @@ class LightGenome(myTools.DefaultOrderedDict):
                 nbRemovedChrs += 1
         return (nbRemovedGenes, nbRemovedChrs)
 
-    def setGeneNames(self):
+    def setGeneNames(self, checkNoDuplicates=True):
         res = set()
         for chrom in self.values():
             for gene in chrom:
+                if checkNoDuplicates and gene.n in res:
+                    raise ValueError("%s contains two times the same gene name %s" % (self.name, gene.n))
                 res.add(gene.n)
         return res
 
-    def removeChrsSmallerOrEqu(self, minChrLen):
+    def removeChrsStrictlySmallerThan(self, minChrLen):
         sCs = self.keys()
         nbRemovedChrs = 0
         for c in sCs:
@@ -329,7 +331,7 @@ class Families(list):
                     fID = self.fidMax
                     # Each (fID + 1) corresponds to the line number in the output file
                     # of families obtained with self.printIn(file)
-                    # Be carefull, a fID number is equal to the line number - 1
+                    # Be careful, a fID number is equal to the line number - 1
                     # (if line number begins from 1)
                     self.g2fid[n] = fID
                 self.fidMax += 1
@@ -406,14 +408,16 @@ def families_A0_A1_from_f_A0_D_and_f_A1_D(f_A0_D, f_A1_D):
     f_A0_A1 = Families()
     tmp = collections.defaultdict(set)
     for i, (gn_A1, gns_D) in enumerate(f_A1_D):
-        # FIXME, what if the gene is kept between A0 and A1 and lost after ?
+        # FIXME, what if the gene is kept between A0 and A1 and lost after ? Use Xaft
         if len(gns_D) > 0:
-            # If the ancestral gene has extant genes
+            # If the ancestral gene has descendant genes, preferentially genes in extant species...
+            gns_D_tmp = [gn for gn in gns_D if 'Xaft' not in gn]
+            gns_D = gns_D_tmp if len(gns_D_tmp) > 0 else gns_D
             dn = gns_D[0]
             fn_A0 = f_A0_D.getFamilyByName(dn, default=None)
             # assert all(f_A0_D.getFamilyByName(dn, default=None) == fn_A0 for dn in gns_D)
             if fn_A0 is not None:
                 tmp[fn_A0.fn].add(gn_A1)
-    for (fn_A0, gns_A1) in tmp.iteritems():
-        f_A0_A1.addFamily(Family(fn_A0, list(gns_A1)))
+    for (gn_A0, gns_A1) in tmp.iteritems():
+        f_A0_A1.addFamily(Family(gn_A0, sorted(list(gns_A1))))
     return f_A0_A1

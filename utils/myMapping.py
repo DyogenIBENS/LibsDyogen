@@ -13,24 +13,15 @@ import myLightGenomes
 from myLightGenomes import OGene as OGene
 import collections
 
-
-def setOfGeneNames(genome):
-    assert isinstance(genome, myLightGenomes.LightGenome)
-    geneNames = set()
-    for chrom in genome.values():
-        geneNames.update(geneName for (geneName, _) in chrom)
-    return geneNames
-
-
 # because of collections.Counter
 @myTools.minimalPythonVersion((2, 7))
-def nbDup(g_fID_filt):
-    assert isinstance(g_fID_filt, myLightGenomes.LightGenome)
+def nbDup(g_fID):
+    assert isinstance(g_fID, myLightGenomes.LightGenome)
     # create a long chromosome with all the chromosome gene names
     newF = []
-    for chr in g_fID_filt.values():
-        chr = [g for (g, _) in chr]
-        newF = newF + chr
+    for chrom in g_fID.values():
+        chrom = [gene.n for gene in chrom]
+        newF = newF + chrom
     dupCounter = collections.Counter(newF)
     nbGeneDup = sum([duplicates-1 for duplicates in dupCounter.values()])
     return (nbGeneDup, dupCounter)
@@ -65,6 +56,34 @@ def labelWithFamNames(genome, families):
             fn = families.getFamNameByName(g.n, default=None)
             newGenome[c].append(OGene(fn, g.s))
     return newGenome
+
+# Rewrite genomes as a list of orthologs
+def labelWithOrthologNames(genome, families):
+    assert isinstance(families, myLightGenomes.Families)
+    assert isinstance(genome, myLightGenomes.LightGenome)
+    assert type(genome.values()[0]) == list
+    assert all(len(chrom) > 0 for chrom in genome.values())
+    newGenome = myLightGenomes.LightGenome()
+    for c in genome.keys():
+        #assert len(genome[c]) >=1
+        for g in genome[c]:
+            family = families.getFamilyByName(g.n, default=None)
+            if family is None:
+                newGenome[c].append(OGene(None, g.s))
+            # len(family.dns) == 1 is for the specific treatment of gene names in extant genomes
+            elif g.n == family.fn:
+                # if the gene is the ortholog
+                newGenome[c].append(OGene(g.n, g.s))
+            elif len(family.dns) == 1 and 'Xaft' in family.dns[0]:
+                # FIXME debug assertion in a specific case
+                speciesAcronym = (family.dns[0])[:2]
+                print speciesAcronym
+                assert speciesAcronym in ['Hs', 'Gg', 'Md', 'Mm', 'Clf'], speciesAcronym
+                newGenome[c].append(OGene(family.n, g.s))
+            else:
+                pass
+    return newGenome
+
 
 
 # Allow to change the 1D mapping
@@ -218,23 +237,15 @@ def remapCoFilterContentAndSize(genome, removedNames, minChromLength, mOld=None)
     assert isinstance(genome, myLightGenomes.LightGenome)
     (newGenome, mfGC2old, (nbChrLoss, nbGeneLoss)) = remapFilterGeneContent(genome, removedNames)
     assert len(newGenome.keys()) == len(mfGC2old.keys())
-    (newGenome, mfS2fGC, (nbChrLossb, nbGeneLossb)) = remapFilterSize(newGenome, minChromLength)
-    nbChrLoss += nbChrLossb
-    nbGeneLoss += nbGeneLossb
+    (newGenome, mfS2fGC, (nbChrLossSize, nbGeneLossSize)) = remapFilterSize(newGenome, minChromLength)
+    nbChrLoss += nbChrLossSize
+    nbGeneLoss += nbGeneLossSize
     # Update the mapping
     mf2old = {}
     for c in mfS2fGC:
         mf2old[c] = mfS2fGC[c] + mfGC2old[c]
         if mOld is not None:
             mf2old[c] = mf2old[c] + mOld[c]
-    #for c in mf2old:
-    #    mf2old[c].drawFrom(mfGC2old[c])
-    #    mfilt2old[c].drawFrom(mOld[c])
-    #asert len(newGenome.keys()) == len(mfilt2old.keys())
-    ##DEBUG Loop assertion
-    #for (c, chrom) in genome.iteritems():
-    #    maxOldIdx = max([max(oldIdxs) for oldIdxs in mfilt2old[c].new])
-    #    assert maxOldIdx < len(chrom)
     return (newGenome, mf2old, (nbChrLoss, nbGeneLoss))
 
 

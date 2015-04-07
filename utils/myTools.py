@@ -386,7 +386,7 @@ class FileList:
 #  1. requested arguments (name, builder)
 #  2. options in the form of -opt=val (name, builder, default_value)
 # If an error occurs, user's command line is printed as well as a short description of the bug and a brief manual of the script (info).
-def checkArgs(args, options, info, showArgs=True):
+def checkArgs(args, options, info, showArgs=True, loadOnlyDefaultOptions=False):
 
     options = options + __moduleoptions
     # print error informations if wrong arguments
@@ -432,12 +432,14 @@ def checkArgs(args, options, info, showArgs=True):
         return res
 
     valOpt = collections.OrderedDict()
-    valArg = collections.OrderedDict()
     opt = {}
     for (name,typ,val) in options:
         opt[name] = (typ,val)
         valOpt[name] = val[0] if isinstance(val, list) else getattr(typ, val) if isinstance(typ, enum.Enum) else val
+    if loadOnlyDefaultOptions:
+        return valOpt
 
+    valArg = collections.OrderedDict()
     # arguments are scanned, counted and values are extracted
     for tt in sys.argv[1:]:
 

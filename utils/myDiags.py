@@ -1075,8 +1075,8 @@ def extractSbsInPairCompChr(gc1, gc2, gapMax=0, distanceMetric='DPD',
 
 def crossGeneContent(g1, g2):
     # create a set with all gene names
-    geneNames1 = myMapping.setOfGeneNames(g1)
-    geneNames2 = myMapping.setOfGeneNames(g2)
+    geneNames1 = g1.setGeneNames(g1, checkNoDuplicates=True)
+    geneNames2 = g2.setGeneNames(g2, checkNoDuplicates=True)
     gNsInCommon = geneNames1.intersection(geneNames2)
     gNsInG1notInG2 = geneNames1 - gNsInCommon
     gNsInG2notInG1 = geneNames2 - gNsInCommon
@@ -1112,31 +1112,37 @@ def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
         (g2, mG2f2G2o, (nCL2, nGL2)) = remapFilterSize(g2, minChromLength)
     # Only genes herited from an ancestral genes are conserved
     elif filterType == FilterType.InFamilies:
-        (g1, mG1f2G1o, (nCL1, nGL1)) = remapCoFilterContentAndSize(g1, set([None]), minChromLength)
-        (g2, mG2f2G2o, (nCL2, nGL2)) = remapCoFilterContentAndSize(g2, set([None]), minChromLength)
+        (g1, mG1f2G1o, (nCL1, nGL1)) = remapCoFilterContentAndSize(g1, {None}, minChromLength)
+        (g2, mG2f2G2o, (nCL2, nGL2)) = remapCoFilterContentAndSize(g2, {None}, minChromLength)
     # Only conserve genes present in both extant genomes
     elif filterType == FilterType.InBothGenomes:
         mG1f2G1o = None
         mG2f2G2o = None
+        (nCL1, nGL1) = (0, 0)
+        (nCL2, nGL2) = (0, 0)
         while True:
             # after this step genes that have no homolog in the other genome are marked None
             # 'gNsInCommon' is also called the set of 'anchor genes' in bibliography
-            (gNsInCommon, gNsInG1notInG2, gNsInG2notInG1) = crossGeneContent(g1, g2)
-            removedGNs1 = gNsInG1notInG2 | set([None])
-            removedGNs2 = gNsInG2notInG1 | set([None])
-            (g1, mG1f2G1o, (nCL1, nGL1)) =\
-                remapCoFilterContentAndSize(g1, removedGNs1,
-                                            minChromLength,
-                                            mOld=mG1f2G1o)
-            (g2, mG2f2G2o, (nCL2, nGL2)) =\
-                remapCoFilterContentAndSize(g2, removedGNs2,
-                                            minChromLength,
-                                            mOld=mG2f2G2o)
-            hasChanged = (nGL1 > 0) or (nGL2 > 0)
+            geneNames1 = g1.setGeneNames(checkNoDuplicates=False)
+            geneNames2 = g2.setGeneNames(checkNoDuplicates=False)
+            gNsInCommon = geneNames1 & geneNames2
+            gNsToRemove = ((geneNames1 | geneNames2) - gNsInCommon) | {None}
+            (g1, mG1f2G1o, (tmp_nCL1, tmp_nGL1)) = remapCoFilterContentAndSize(g1, gNsToRemove, minChromLength,
+                                                                       mOld=mG1f2G1o)
+            (g2, mG2f2G2o, (tmp_nCL2, tmp_nGL2)) = remapCoFilterContentAndSize(g2, gNsToRemove, minChromLength,
+                                                                       mOld=mG2f2G2o)
+            nCL1 += tmp_nCL1
+            nGL1 += tmp_nGL1
+            nCL2 += tmp_nCL2
+            nGL2 += tmp_nGL2
+
+            hasChanged = (tmp_nGL1 > 0) or (tmp_nGL2 > 0)
             # If a chromosome has been removed because of the filtering on the length,
             # the filtering is performed once more.
             if not hasChanged:
                 break
+        # there may be duplicates which family is in both genomes
+        assert g1.setGeneNames(checkNoDuplicates=False) == g2.setGeneNames(checkNoDuplicates=False)
     else:
         # impossible case
         raise
