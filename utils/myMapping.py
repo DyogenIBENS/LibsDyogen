@@ -26,7 +26,6 @@ def nbDup(g_fID):
     nbGeneDup = sum([duplicates-1 for duplicates in dupCounter.values()])
     return (nbGeneDup, dupCounter)
 
-
 # Rewrite genomes as a list of family Ids
 def labelWithFamID(genome, families):
     assert isinstance(families, myLightGenomes.Families)
@@ -41,7 +40,6 @@ def labelWithFamID(genome, families):
             fid = families.getFamID(g, default=None)
             newGenome[c].append(OGene(fid, s))
     return newGenome
-
 
 # Rewrite genomes as a list of family names
 def labelWithFamNames(genome, families):
@@ -83,8 +81,6 @@ def labelWithOrthologNames(genome, families):
             else:
                 pass
     return newGenome
-
-
 
 # Allow to change the 1D mapping
 class Mapping(object):
@@ -155,7 +151,6 @@ class Mapping(object):
                 for veryOldIdx in oldMapping.new[oldIdx]:
                     newMapping[-1].append(veryOldIdx)
         self = self.__init__(newMapping)
-
 
 # remap genes following instructions in genomeMapping
 # while remapping and collapsing genes into blocks, find the best consensus
@@ -248,7 +243,6 @@ def remapCoFilterContentAndSize(genome, removedNames, minChromLength, mOld=None)
             mf2old[c] = mf2old[c] + mOld[c]
     return (newGenome, mf2old, (nbChrLoss, nbGeneLoss))
 
-
 # TODO FIXME
 def remapFilterGeneLength(genome, minGeneLengthInBp, mOld=None):
     assert type(genome, myLightGenomes.LightGenome)
@@ -276,7 +270,6 @@ def mapFilterGeneLength(genome, minGeneLengthInBp, mOld=None):
             nbChrLoss += 1
     return (mfilt2old, (nbChrLoss, nbGeneLoss))
 
-
 def remapFilterSize(genome, minChromLength, mOld=None):
     assert isinstance(genome, myLightGenomes.LightGenome)
     (mf2old, (nbChrLoss, nbGeneLoss)) = mapFilterSize(genome, minChromLength)
@@ -289,7 +282,6 @@ def remapFilterSize(genome, minChromLength, mOld=None):
     #nbGenesInNewG = sum(len(chrom) for chrom in newGenome.values())
     #assert nbGenesInOldG == nbGenesInNewG + nbGeneLoss
     return (newGenome, mf2old, (nbChrLoss, nbGeneLoss))
-
 
 def remapFilterGeneContent(genome, removedNames, mOld=None):
     assert type(removedNames) == set
@@ -310,7 +302,6 @@ def remapFilterGeneContent(genome, removedNames, mOld=None):
     #assert nbGenesInOldG == nbGenesInNewG + nbGeneLoss
     return (newGenome, mf2old, (nbChrLoss, nbGeneLoss))
 
-
 def remapRewriteInTb(genome_fID, tandemGapMax=0, mOld=None):
     assert isinstance(genome_fID, myLightGenomes.LightGenome)
     # Take care to not give mOld=mOld, since mOld is not a mapping
@@ -325,7 +316,6 @@ def remapRewriteInTb(genome_fID, tandemGapMax=0, mOld=None):
     #nbGenesInNewG = sum(len(chrom) for chrom in newGenome.values())
     #assert nbGenesInOldG == nbGenesInNewG + nbTandemDup
     return (newGenome, mf2old, (nbTandemDup))
-
 
 # Returns a mapping corresponding to the removal of too small chromosomes.
 # Warning, it could be interesting to update an old mapping associated with
@@ -346,7 +336,6 @@ def mapFilterSize(genome, minChromLength, mOld=None):
         else:
             mfilt2old[c] = Mapping([[i] for (i, _) in enumerate(genome[c])])
     return (mfilt2old, (nbChrLoss, nbGeneLoss))
-
 
 # Returns a mapping corresponding to the removal a set of gene names from a
 # genome.
@@ -376,7 +365,6 @@ def mapFilterGeneContent(genome, removedNames, mOld=None):
     #elif myGenomes
     #elif list
     return (mfilt2old, (nbChrLoss, nbGeneLoss))
-
 
 # Inputs :
 #       genome_fID = [..., (fID,s), ...] with 'fID' the line number of the gene in the ancGene ans 's' the strand of the gene in the genome
@@ -623,12 +611,31 @@ def calcTandemDupFromDist(distDict, gapMax, cumulated = True):
     else:
         return (len([distance for distances in distDict.itervalues() for distance in distances if distance != -1 and distance == distMax]))
 
-def calcNumberOFDeletions(genome, family):
+def getAncFamNames(genomeOrFamDesc, famAnc):
+    if isinstance(genomeOrFamDesc, myLightGenomes.LightGenome):
+        geneNameList = [gene.n for genes in genomeOrFamDesc.itervalues() for gene in genes]
+        out = [famAnc.getFamNameByName(gene) for gene in geneNameList]
+    elif isinstance(genomeOrFamDesc, myLightGenomes.Families):
+        out = [famAnc.getFamNameByName(recFam.dns[0]) for recFam in genomeOrFamDesc]
+    else:
+        raise ValueError('Function not implemented for type ' + str(type(genomeOrFamDesc)))
+    return(out)
 
-    genome_fID = labelWithFamID(genome, family)
-    (genomeFilt, gf2gfID, _) = remapFilterGeneContent(genome_fID, {None})
-
+def calcNumberOfGeneDeletions(genomeOrFamDesc, family):
+    geneNameList = getAncFamNames(genomeOrFamDesc, family)
+    nGeneDeleted = len(set([recFamily.fn for recFamily in family]) - set(geneNameList))
     return (nGeneDeleted)
+
+def calcNumberOfGeneBirths(genomeOrFamDesc, family):
+    geneNameList = getAncFamNames(genomeOrFamDesc, family)
+    nGeneBirths = len([None for gene in geneNameList if gene is None])
+    return (nGeneBirths)
+
+def calcNumberOfGeneDuplications(genomeOrFamDesc, family):
+    geneNameList = getAncFamNames(genomeOrFamDesc, family)
+    descOfAncGenes = [gene for gene in geneNameList if gene is not None]
+    nGeneDups = len(descOfAncGenes) - len(set(descOfAncGenes))
+    return (nGeneDups)
 
 @myTools.deprecated
 def calcTandemDup(genome, family, allowedGap=0, cumulated=True):
