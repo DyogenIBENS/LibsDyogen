@@ -159,6 +159,13 @@ class LightGenome(myTools.DefaultOrderedDict):
             for (idx, g) in enumerate(self[c]):
                 self.g2p[g.n] = GeneP(c, idx)
 
+    def getPosition(self, name, default=None):
+        try:
+            # if this raise an error, g2p may need to be initialised
+            return self.g2p.get(name, default)
+        except:
+            raise ValueError("self.g2p needs to be initialised")
+
     # in certain rare utilisations there might be several positions for the same gene name
     def computeDictG2Ps(self):
         # dict gene name to position's'
@@ -167,12 +174,14 @@ class LightGenome(myTools.DefaultOrderedDict):
             for (idx, g) in enumerate(self[c]):
                 self.g2ps[g.n].add(GeneP(c, idx))
 
-    def getPosition(self, name, default=None):
+    def getPositions(self, name, default=None):
+        """ return a set of positions of genes with the gene.n = name
+        """
         try:
             # if this raise an error, g2p may need to be initialised
-            return self.g2p.get(name, default)
+            return self.g2ps.get(name, default)
         except:
-            raise ValueError("self.g2p needs to be initialised")
+            raise ValueError("self.g2ps needs to be initialised")
 
     def __repr__(self):
         res = []
@@ -277,6 +286,16 @@ class LightGenome(myTools.DefaultOrderedDict):
                 if checkNoDuplicates and gene.n in res:
                     raise ValueError("%s contains two times the same gene name %s" % (self.name, gene.n))
                 res.add(gene.n)
+        return res
+
+    def getSetOfOwnedFamilyNames(self, families):
+        assert isinstance(families, Families)
+        res = set()
+        for chrom in self.values():
+            for gene in chrom:
+                family = families.getFamilyByName(gene.n, default=None)
+                if family:
+                    res.add(family.fn)
         return res
 
     def removeChrsStrictlySmallerThan(self, minChrLen):

@@ -28,10 +28,12 @@ def nbDup(g_fID):
 
 
 # Rewrite genomes as a list of family Ids
-def labelWithFamID(genome, families):
-    assert isinstance(families, myLightGenomes.Families)
+def labelWithFamID(genome, families=None):
     assert isinstance(genome, myLightGenomes.LightGenome)
     assert type(genome.values()[0]) == list
+    if families is None:
+        return genome
+    assert isinstance(families, myLightGenomes.Families)
     assert isinstance(genome.values()[0][0], tuple)
     assert all(len(chrom) > 0 for chrom in genome.values())
     newGenome = myLightGenomes.LightGenome()
@@ -48,7 +50,7 @@ def labelWithFamNames(genome, families):
     assert isinstance(families, myLightGenomes.Families)
     assert isinstance(genome, myLightGenomes.LightGenome)
     assert type(genome.values()[0]) == list
-    assert all(len(chrom) > 0 for chrom in genome.values())
+    assert all(len(chrom) > 0 for chrom in genome.values()), " ".join(['%s:%s' % (c,len(chrom)) for c, chrom in genome.iteritems()])
     newGenome = myLightGenomes.LightGenome()
     for c in genome.keys():
         #assert len(genome[c]) >=1
