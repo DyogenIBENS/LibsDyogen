@@ -27,7 +27,7 @@ import getpass
 import distutils.spawn
 import sys
 # import logging
-from multiprocessing import Pool
+from multiprocessing.dummy import Pool
 
 
 # Logging messages which are less severe than level will be ignored
@@ -318,7 +318,7 @@ def submit_COND_ManyJobs(COND):
     the list of jobids of the submitted jobs.
     """
     # print >> sys.stdout, COND
-    print >> sys.stderr, "submission of jobs to condor, this may take some time... usually the more jobs the more time"
+    print >> sys.stderr, "submission of jobs to condor, this may take some time... usually the more jobs the more time (~5sec for 100 jobs and ~25sec for 1000 jobs)"
     out, err = chcall('condor_submit -v', COND)
     print >> sys.stderr, "submission finished"
     # list [..., (clusterId, jid), ...]
@@ -373,15 +373,22 @@ def submit_ManyJobs(executable,
     # If the user wrote the path toward the executable, this keeps the executable var as a path toward the executable
 
     # remove previous log file otherwise the new log will be written at the end and the log file will be long to parse
+    outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % "$(Cluster).%s"
+    errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % "$(Cluster).%s"
     try:
         os.unlink(log)
     except:
         pass
+    try:
+        os.unlink(outFileName)
+    except:
+        pass
+    try:
+        os.unlink(errFileName)
+    except:
+        pass
 
     executable = distutils.spawn.find_executable(executable)
-
-    outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % "$(Cluster).%s"
-    errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % "$(Cluster).%s"
 
     COND = [
         "Executable = %s" % executable,
@@ -413,18 +420,26 @@ def submit_ManyJobs(executable,
     COND = "\n".join(COND)
     return submit_COND_ManyJobs(COND)
 
-def getoutput_ManyJobs(listOfJobids, log=LOG_FILE, cleanup=True):
+def waitUntilLogOutExists(jobid, waitTime=2):
+    outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
+    while True:
+        # if the file exists and is not empty
+        if os.path.isfile(outFileName) and os.stat(outFileName).st_size != 0:
+            return jobid
+        time.sleep(waitTime)
+
+def getoutput_ManyJobs(listOfJobids, waitTime=2, log=LOG_FILE, cleanup=True):
     """Waits for a job to complete and then returns its standard output
     and standard error data if the files were given default names.
     Deletes these files after reading them if ``cleanup`` is True.
     """
 
     pool = Pool()
-    for jobid in pool.imap_unordered(wait_Jid, ((jobid, None, log) for jobid in listOfJobids)):
+    for jobid in pool.imap_unordered(waitUntilLogOutExists, (jobid for jobid in listOfJobids)):
         print >> sys.stderr, 'return logs of job', jobid
         outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
         errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
-        yield outFileName, errFileName
+        yield jobid, outFileName, errFileName
 
 def execBashCmdOnAllMachines(command, machines=MACHINES, mail=None, log=LOG_FILE):
     """
@@ -716,7 +731,7 @@ if __name__ == '__main__':
                        ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
            listOfArguments.append(arguments)
         listOfJids = submit_ManyJobs(executable, listOfArguments, niceUser=True, maxSimultaneousJobsInGroup=None)
-        for (stderrFileName, stdoutFileName) in getoutput_ManyJobs(listOfJids):
+        for (jobid, stderrFileName, stdoutFileName) in getoutput_ManyJobs(listOfJids):
             # print the 3 first lines of stdout and stderr logs
             with open(stdoutFileName, 'r') as f:
                 print >> sys.stdout, f.readline(),
@@ -726,6 +741,7 @@ if __name__ == '__main__':
                 print >> sys.stderr, f.readline(),
                 print >> sys.stdout, f.readline(),
                 print >> sys.stdout, f.readline(),
+            idxSimu = jobid.split('.')[1]
             shutil.move(stdoutFileName, 'res/simu1/' + str(idxSimu) +'/logOut')
             shutil.move(stderrFileName, 'res/simu1/' + str(idxSimu) +'/logErr')
             # os.unlink(stdoutFileName)
@@ -806,7 +822,7 @@ if __name__ == '__main__':
         command = './fib35.py'
         listOfArguments = [None] * nbJobs
         listOfJobids = submit_ManyJobs(command, listOfArguments, niceUser=True, maxSimultaneousJobsInGroup=None)
-        for (stderrFileName, stdoutFileName) in getoutput_ManyJobs(listOfJobids):
+        for (jobid, stderrFileName, stdoutFileName) in getoutput_ManyJobs(listOfJobids):
             with open(stdoutFileName, 'r') as f:
                 print >> sys.stdout, f.read()
             with open(stderrFileName, 'r') as f:
@@ -836,14 +852,15 @@ if __name__ == '__main__':
     #print >> sys.stderr, "t_helloWorld_thread", t_helloWorld_thread
     ## t_helloWorld_thread 12.5498409271
 
-    nbJobs = 200
-    # nbJobs = 150
+    nbJobs = 1000
+    #nbJobs = 200
     # t_magSimus_thread = timeit.timeit("magSimus_thread(%s)" % nbJobs, setup="from __main__ import magSimus_thread", number=1)
     # print >> sys.stderr, "t_magSimus_thread", t_magSimus_thread
     #t_magSimus_buff = timeit.timeit("magSimus_buff(%s)" % nbJobs, setup="from __main__ import magSimus_buff", number=1)
     #print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
     t_magSimus_ManyJobs = timeit.timeit("magSimus_ManyJobs(%s)" % nbJobs, setup="from __main__ import magSimus_ManyJobs", number=1)
     print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
+    # nbJobs = 150 -> t_magSimus_ManyJobs 43.3741889
 
     # print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
     # nbJobs=20 -> t_magSimus_buff 66.1677789688
