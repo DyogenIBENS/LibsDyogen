@@ -26,11 +26,12 @@ import time
 import getpass
 import distutils.spawn
 import sys
-import logging
+# import logging
+from multiprocessing import Pool
 
 
 # Logging messages which are less severe than level will be ignored
-logging.basicConfig(level=logging.DEBUG, format='(%(threadName)-10s) %(message)s')
+# logging.basicConfig(level=logging.DEBUG, format='(%(threadName)-10s) %(message)s')
 
 LOG_FILE = "cdpy.log"
 # local buffer folder
@@ -43,7 +44,12 @@ OUTFILE = "conpy.%s.stdout.log"
 ERRFILE = "conpy.%s.stderr.log"
 MACHINES = ["bioclust%02d.bioclust.biologie.ens.fr" % i for i in range(1, 11)] + \
            ["dyoclust%02d.bioclust.biologie.ens.fr" % i for i in range(4, 22)]
+# Mathieu BAHIN set 10 000 for the total quantity of available simultaneous space for one user.
+TOTAL_QUANTITY_AVAILABLE_BY_USER = 10000
+MAX_SIMULTANEOUS_JOBS = 100
 
+def quantityEatenByOneJob(maxSimultaneousJobs):
+    return float(TOTAL_QUANTITY_AVAILABLE_BY_USER) / float(maxSimultaneousJobs)
 
 # TODO: write a method that send jobs via a synthetic COND file with the executable and all info on the top and the
 # varying parameters of the different jobs in the following lines
@@ -61,17 +67,27 @@ MACHINES = ["bioclust%02d.bioclust.biologie.ens.fr" % i for i in range(1, 11)] +
 class NotYetFinished(Exception):
     pass
 
-def call(command, stdin=None):
+def call(command, stdin=None, returnStderr=True):
     """Invokes a shell command as a subprocess, optionally with some
     data sent to the standard input. Returns the standard output data,
     the standard error, and the return code.
+
+    if returnStderr is None, the sterr value equal None
     """
     if stdin is not None:
         stdin_flag = subprocess.PIPE
     else:
         stdin_flag = None
+
+    if returnStderr:
+        stderr_flag = subprocess.PIPE
+    else:
+        stderr_flag = None
+
+    # FIXME too many open files is due to this line
     proc = subprocess.Popen(command, shell=True, stdin=stdin_flag,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            stdout=subprocess.PIPE, stderr=stderr_flag, close_fds=True)
+    # returns stdout and stderr as strings
     stdout, stderr = proc.communicate(stdin)
     return stdout, stderr, proc.returncode
 
@@ -101,7 +117,7 @@ def wait(jobid, maxTime=None, log=LOG_FILE):
     maxTime: Wait no more than this time (None means unlimited)"""
     if maxTime:
         (stdout, _, _) = call("condor_wait -wait %s %s %s" % (maxTime, log, str(jobid)))
-        logging.debug('in wait' + stdout + '. Is it "Time expired." or "All jobs done."')
+        # logging.debug('in wait' + stdout + '. Is it "Time expired." or "All jobs done."')
         if stdout == 'Time expired.':
             finished = False
         else:
@@ -112,6 +128,22 @@ def wait(jobid, maxTime=None, log=LOG_FILE):
         finished = True
     return finished
 
+def wait_Jid((jobid, maxTime, log)):
+    """Waits for a cluster (or specific job) to complete.
+    maxTime: Wait no more than this time (None means unlimited)"""
+    if maxTime:
+        (stdout, _, _) = call("condor_wait -wait %s %s %s" % (maxTime, log, str(jobid)))
+        # logging.debug('in wait' + stdout + '. Is it "Time expired." or "All jobs done."')
+        if stdout == 'Time expired.':
+            finished = False
+        else:
+            assert stdout == 'All jobs done.'
+            finished = True
+    else:
+        call("condor_wait %s %s" % (log, str(jobid)))
+        finished = True
+    return jobid
+
 def hasFinished(jobid, log=LOG_FILE):
     """Return the immediately the current job status"""
     (stdout, _, _) = call("condor_wait -wait %s %s %s" % (0, log, str(jobid)))
@@ -121,15 +153,15 @@ def hasFinished(jobid, log=LOG_FILE):
         finished = False
     return finished
 
-def submit_text(job):
+def submit_COND_OneJob(COND):
     """Submits a Condor job represented as a job file string. Returns
     the cluster ID of the submitted job.
     """
-    out, _ = chcall('condor_submit -v', job)
+    out, _ = chcall('condor_submit -v', COND)
     jobid = re.search(r'Proc (\d+)\.0', out).group(1)
     return int(jobid)
 
-def submit(executable, universe="vanilla",
+def submit_OneJob(executable, universe="vanilla",
            arguments=None,
            mail=None,
            # group name of the job
@@ -138,7 +170,7 @@ def submit(executable, universe="vanilla",
            requirements='(Memory > 1024)',
            priority=0,
            # maximum number of simultaneous jobs with the same group name
-           maxSimultaneousJobsInGroup=100,
+           maxSimultaneousJobsInGroup=MAX_SIMULTANEOUS_JOBS,
            log=LOG_FILE):
     """Starts a Condor job based on specified parameters. A job
     description is generated. Returns the cluster ID of the new job.
@@ -165,6 +197,11 @@ def submit(executable, universe="vanilla",
     This option is especially important if jobs take a long time.
     """
 
+    if maxSimultaneousJobsInGroup is not None:
+        qtEatenByOneJob = quantityEatenByOneJob(maxSimultaneousJobsInGroup)
+    else:
+        qtEatenByOneJob = 1 # the smallest quantity
+
     # This is useful if the user wrote the executable as a bash command.
     # For instance if the user wrote: 'echo', distutils.spawn.find_executable(executable) returns '/bin/echo'
     # If the user wrote the path toward the executable, this keeps the executable var as a path toward the executable
@@ -173,17 +210,12 @@ def submit(executable, universe="vanilla",
     outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % "$(Cluster)"
     errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % "$(Cluster)"
 
-    descparts = [
+    COND = [
         "Executable = %s" % executable,
         "Universe = %s" % universe,
         "Log = %s" % log,
-        "output = %s" % outFileName,
-        "error = %s" % errFileName,
         "GetEnv = %s" % True,
-        "Initialdir = %s" % os.getcwd()
-    ]
-
-    descparts += [
+        "Initialdir = %s" % os.getcwd(),
         "should_transfer_files = %s" % 'NO',
         "run_as_owner = %s" % 'True',
         "Requirements = %s" % requirements,
@@ -191,19 +223,26 @@ def submit(executable, universe="vanilla",
         "Notification = %s" % 'never',
         "NiceUser = %s" % niceUser,
         "Priority = %s" % priority,
-        "Rank = %s" % 'kflops+1000*Memory'
+        "Rank = %s" % 'kflops+1000*Memory',
+        # limit the nb of simultaneous runs
+        "concurrency_limits = %s:%s" % (jobGroup, qtEatenByOneJob)
     ]
 
+    COND += ["\n"]
+
     if arguments:
-        descparts.append("Arguments = %s" % arguments)
-    # limit the nb of simultaneous runs
-    descparts.append("concurrency_limits = %s:%s" % (jobGroup, maxSimultaneousJobsInGroup))
-    descparts.append("Queue")
+        COND += ["Arguments = %s" % arguments]
+    COND += ["Input = %s" % '',
+             "Output = %s" % outFileName,
+             "Error = %s" % errFileName]
 
-    desc = "\n".join(descparts)
-    return submit_text(desc)
+    COND += ["Queue"]
 
-def getoutput(jobid, waitMaxTime=None, log=LOG_FILE, cleanup=True):
+    COND = "\n".join(COND)
+    return submit_COND_OneJob(COND)
+
+
+def getoutput(jobid, waitMaxTime=None, log=LOG_FILE):
     """Waits for a job to complete and then returns its standard output
     and standard error data if the files were given default names.
     Deletes these files after reading them if ``cleanup`` is True.
@@ -219,11 +258,7 @@ def getoutput(jobid, waitMaxTime=None, log=LOG_FILE, cleanup=True):
 
     return outFileName, errFileName
 
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-##################################################
-# ensure that two jobs have two different names! #
-##################################################
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 def submitWithBuffer(command, jobName, **kwargs):
     try:
         # create a local buff dir
@@ -249,12 +284,15 @@ def submitWithBuffer(command, jobName, **kwargs):
         print >> f, "mv " + remote_buff_errfile + " " + local_buff_errfile
     os.chmod(local_buff_script, 0o755)
 
-    jid = submit(local_buff_script, **kwargs)
+    jid = submit_OneJob(local_buff_script, **kwargs)
 
     return jid
 
+
 def getOutputWithBuffer(jobid, jobName, waitMaxTime=None, log=LOG_FILE, cleanup=True):
+
     local_buff_script = LOCAL_BUFF_FOLDER + '/' + SCRIPTFILE % jobName
+
     local_buff_outfile_jid = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
     local_buff_errfile_jid = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
     outfileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % jobName
@@ -273,6 +311,121 @@ def getOutputWithBuffer(jobid, jobName, waitMaxTime=None, log=LOG_FILE, cleanup=
         os.unlink(local_buff_errfile_jid)
 
     return (outfileName, errfileName)
+
+
+def submit_COND_ManyJobs(COND):
+    """Submits a Condor job represented as a job file string. Returns
+    the list of jobids of the submitted jobs.
+    """
+    # print >> sys.stdout, COND
+    out, err = chcall('condor_submit -v', COND)
+    # list [..., (clusterId, jid), ...]
+    listOfJobids = re.findall(r'Proc (\d+\.\d+)', out)
+    return listOfJobids
+
+
+def submit_ManyJobs(executable,
+                    listOfArguments,
+                    universe="vanilla",
+                    mail=None,
+                    # group name of the job
+                    jobGroup='<group>',
+                    niceUser=False,
+                    requirements='(Memory > 1024)',
+                    priority=0,
+                    # maximum number of simultaneous jobs with the same group name
+                    maxSimultaneousJobsInGroup=MAX_SIMULTANEOUS_JOBS,
+                    log=LOG_FILE):
+    """Starts a Condor job based on specified parameters. A job
+    description is generated. Returns the cluster ID of the new job.
+
+    examples of options:
+    1) requirements:
+    requirements = (Memory > 1024) && (Machine != "bioclust01.bioclust.biologie.ens.fr") && (slotid <= 6)
+    (slotid <= 6) means that the job won't occupy more than 6 thread on a multi-core machine.
+    This option may be interesting if the job uses several threads on a same machine.
+    For instance Blast uses 4 threads and it would be interesting to send the job with (slotid <= 4) on an octo-core
+    machine.
+    2) priority:
+    Each job may have a priority level specified by 'priority', an int >= 0.
+    Condor executes jobs by decreasing priority levels.
+    If a job1 has a priority1 and job2 has a priority2 and if priority1 > priority2, job1 will be executed before job2
+    This won't change the priority between two different users, it just changes the order of jobs of a same user.
+    3) niceUser:
+    If the user is planning to send a big amount of jobs that do not take long to execute, he may execute them with
+    the niceUser option set to True (and no limit of simultaneous runs), thus all other users will have the priority
+    over him.
+    4) maxSimRuns is an upper limit of simultaneous runs on all the machines of the cluster. The user can send an
+    unlimited amount of jobs that will be queued but no more than 100 jobs will be executed simultaneously.
+    This limit limit the saturation of cores and keep some cores free for other users.
+    This option is especially important if jobs take a long time.
+    """
+
+    if maxSimultaneousJobsInGroup is not None:
+        qtEatenByOneJob = quantityEatenByOneJob(maxSimultaneousJobsInGroup)
+    else:
+        qtEatenByOneJob = 1 # the smallest quantity
+
+    # This is useful if the user wrote the executable as a bash command.
+    # For instance if the user wrote: 'echo', distutils.spawn.find_executable(executable) returns '/bin/echo'
+    # If the user wrote the path toward the executable, this keeps the executable var as a path toward the executable
+
+    # remove previous log file otherwise the new log will be written at the end and the log file will be long to parse
+    try:
+        os.unlink(log)
+    except:
+        pass
+
+    print >> sys.stderr, executable
+    print >> sys.stderr, os.curdir
+    print >> sys.stderr, os.listdir('./')
+    executable = distutils.spawn.find_executable(executable)
+    print >> sys.stderr, executable
+
+    outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % "$(Cluster).%s"
+    errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % "$(Cluster).%s"
+
+    COND = [
+        "Executable = %s" % executable,
+        "Universe = %s" % universe,
+        "Log = %s" % log,
+        "GetEnv = %s" % True,
+        "Initialdir = %s" % os.getcwd(),
+        "should_transfer_files = %s" % 'NO',
+        "run_as_owner = %s" % 'True',
+        "Requirements = %s" % requirements,
+        "Notify_user = %s" % mail,
+        "Notification = %s" % 'never',
+        "NiceUser = %s" % niceUser,
+        "Priority = %s" % priority,
+        "Rank = %s" % 'kflops+1000*Memory',
+        # limit the nb of simultaneous runs
+        "concurrency_limits = %s:%s" % (jobGroup, qtEatenByOneJob)
+    ]
+
+    for (i, arguments) in enumerate(listOfArguments):
+        COND += "\n"
+        if arguments:
+            COND += ["Arguments = %s" % arguments]
+        COND += ["Input = %s" % '',
+                 "Output = %s" % (outFileName % i),
+                 "Error = %s" % (errFileName % i)]
+        COND += ["Queue"]
+
+    COND = "\n".join(COND)
+    return submit_COND_ManyJobs(COND)
+
+def getoutput_ManyJobs(listOfJobids, log=LOG_FILE, cleanup=True):
+    """Waits for a job to complete and then returns its standard output
+    and standard error data if the files were given default names.
+    Deletes these files after reading them if ``cleanup`` is True.
+    """
+
+    pool = Pool()
+    for jobid in pool.map(wait_Jid, ((jobid, None, log) for jobid in listOfJobids)):
+        outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
+        errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
+        yield outFileName, errFileName
 
 def execBashCmdOnAllMachines(command, machines=MACHINES, mail=None, log=LOG_FILE):
     """
@@ -316,19 +469,19 @@ def execBashCmdOnAllMachines(command, machines=MACHINES, mail=None, log=LOG_FILE
 # # add the Handler to the logger
 # lgr.addHandler(fh)
 
-    """
-   https://docs.python.org/2/library/logging.html
-   The logging module is intended to be thread-safe without any special work needing to be done by its clients.
-   It achieves this though using threading locks; there is one lock to serialize access to the module’s shared data,
-   and each handler also creates a lock to serialize access to its underlying I/O.
-
-   If you are implementing asynchronous signal handlers using the signal module, you may not be able to use logging
-   from within such handlers. This is because lock implementations in the threading module are not always re-entrant,
-   and so cannot be invoked from such signal handlers.
-        """
+#  """
+# https://docs.python.org/2/library/logging.html
+# The logging module is intended to be thread-safe without any special work needing to be done by its clients.
+# It achieves this though using threading locks; there is one lock to serialize access to the module’s shared data,
+# and each handler also creates a lock to serialize access to its underlying I/O.
+#
+# If you are implementing asynchronous signal handlers using the signal module, you may not be able to use logging
+# from within such handlers. This is because lock implementations in the threading module are not always re-entrant,
+# and so cannot be invoked from such signal handlers.
+#      """
 
 class condorThread(threading.Thread):
-    def __init__(self, command=None, monitoringTimeStep=2, name=None, callBack=None, log=LOG_FILE, verbose=False):
+    def __init__(self, command=None, monitoringTimeStep=5, name=None, callBack=None, log=LOG_FILE, verbose=False):
         """*target* is the callable object to be invoked by the run()
         method. Defaults to None, meaning nothing is called.
 
@@ -364,12 +517,12 @@ class condorThread(threading.Thread):
     # def logOut(self, msg):
     #     log_stdout.log(logging.INFO, msg)
 
-    def logErr(self, msg):
-        if self.verbose:
-            logging.debug(msg)
+    # def logErr(self, msg):
+    #     if self.verbose:
+    #         logging.debug(msg)
 
     def run(self):
-        self.logErr('run')
+        # self.logErr('run')
         if self.command:
             self.jid = submitWithBuffer(self.command, self.tName,
                                         mail=None,
@@ -379,28 +532,27 @@ class condorThread(threading.Thread):
                                         requirements='(Memory > 1024)',
                                         priority=0,
                                         # maximum number of simultaneous jobs with the same group name
-                                        maxSimultaneousJobsInGroup=100,
+                                        maxSimultaneousJobsInGroup=quantityEatenByOneJob(MAX_SIMULTANEOUS_JOBS),
                                         log=self.log)
             while True:
-                self.logErr('Monitoring')
+                # self.logErr('Monitoring')
                 time.sleep(self.monitoringTimeStep)
                 try:
                     (self.outFileName, self.errFileName) = getOutputWithBuffer(self.jid, self.tName, waitMaxTime=0, log=self.log)
                     self.res = (self.outFileName, self.errFileName)
-                    self.logErr("thread %s has finished" % self.tName)
+                    # self.logErr("thread %s has finished" % self.tName)
                     if self.callBack:
                         self.callBack(self.res)
                     break
                 except NotYetFinished:
-                    self.logErr('NotYetFinished')
+                    # self.logErr('NotYetFinished')
                     continue
                 except Exception as e:
-                    self.logErr(str(type(e)) + ' ' + str(e))
+                    # self.logErr(str(type(e)) + ' ' + str(e))
                     raise e
 
     def __del__(self):
         del self.command, self.target, self.args, self.log, self.res
-
 
 def printLogErr((stdoutFileName, stderrFileName)):
     printFileIntoStream(stderrFileName, sys.stderr)
@@ -428,7 +580,7 @@ if __name__ == '__main__':
         listOfJNamesIds = []
         for jobName in range(nbJobs):
             # jid = job id (cluster ID of the new job)
-            jid = submit("echo", arguments="Hello job %s!" % jobName)
+            jid = submit_OneJob("echo", arguments="Hello job %s!" % jobName)
             print "job %s has id %i" % (jobName, jid)
             listOfJNamesIds.append((jobName, jid))
 
@@ -549,6 +701,30 @@ if __name__ == '__main__':
             os.unlink(stderrFileName)
             del t
 
+    def magSimus_ManyJobs(nbJobs):
+        # Same with threads
+        executable = 'src/magSimus1.py'
+        listOfArguments = []
+        for idxSimu in range(nbJobs):
+           try:
+               os.mkdir("res/simu1/%s/" % idxSimu)
+           except:
+               pass
+           genesName = 'res/simu1/' + str(idxSimu) + '/genes.%s.list.bz2'
+           ancGenesName = 'res/simu1/' + str(idxSimu) + '/ancGenes.%s.list.bz2'
+           arguments = 'res/speciesTree.phylTree -out:genomeFiles=' + genesName +\
+                       ' -out:ancGenesFiles=' + ancGenesName +\
+                       ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
+           listOfArguments.append(arguments)
+        listOfJids = submit_ManyJobs(executable, listOfArguments)
+        for (stderrFileName, stdoutFileName) in getoutput_ManyJobs(listOfJids):
+            with open(stdoutFileName, 'r') as f:
+                print >> sys.stdout, f.readline()
+            with open(stderrFileName, 'r') as f:
+                print >> sys.stderr, f.readline()
+            os.unlink(stdoutFileName)
+            os.unlink(stderrFileName)
+
     #######################################
     # Execute commands on remote machines #
     #######################################
@@ -565,18 +741,7 @@ if __name__ == '__main__':
         # remove all files in remote folders
         execBashCmdOnAllMachines('rm ' + REMOTE_BUFF_FOLDER + '/*')
 
-    def fibs_localSequential(nbJobs):
-        def fib(n):
-            if n < 2:
-                return n
-            return fib(n-2) + fib(n-1)
-
-        for n in range(nbJobs):
-            print "job%s: fib(35) = %s" % (n, fib(35))
-
-    def fibs_condorThreads(nbJobs):
-
-        def createFib35Script():
+    def createFib35Script():
             code =\
             ("#!/usr/bin/python\n"
              "def fib(n):\n"
@@ -593,6 +758,17 @@ if __name__ == '__main__':
             with open(filename, 'w') as f:
                 print >> f, code
             os.chmod(filename, 0755)
+
+    def fibs_localSequential(nbJobs):
+        def fib(n):
+            if n < 2:
+                return n
+            return fib(n-2) + fib(n-1)
+
+        for n in range(nbJobs):
+            print "job%s: fib(35) = %s" % (n, fib(35))
+
+    def fibs_condorThreads(nbJobs):
 
         listOfThreads = []
         createFib35Script()
@@ -618,6 +794,24 @@ if __name__ == '__main__':
                 pass
             del t
 
+    def fibs_ManyJobs(nbJobs):
+        createFib35Script()
+
+        command = './fib35.py'
+        listOfArguments = [None] * nbJobs
+        listOfJobids = submit_ManyJobs(command, listOfArguments, niceUser=True, maxSimultaneousJobsInGroup=None)
+        for (stderrFileName, stdoutFileName) in getoutput_ManyJobs(listOfJobids):
+            with open(stdoutFileName, 'r') as f:
+                print >> sys.stdout, f.read()
+            with open(stderrFileName, 'r') as f:
+                print >> sys.stderr, f.read()
+            os.unlink(stderrFileName)
+            os.unlink(stdoutFileName)
+        try:
+            os.unlink('./fib35.py')
+        except:
+            pass
+
 
     import timeit
 
@@ -636,22 +830,31 @@ if __name__ == '__main__':
     #print >> sys.stderr, "t_helloWorld_thread", t_helloWorld_thread
     ## t_helloWorld_thread 12.5498409271
 
+    # nbJobs = 6500
     # nbJobs = 150
     # t_magSimus_thread = timeit.timeit("magSimus_thread(%s)" % nbJobs, setup="from __main__ import magSimus_thread", number=1)
     # print >> sys.stderr, "t_magSimus_thread", t_magSimus_thread
-    # t_magSimus_buff = timeit.timeit("magSimus_buff(%s)" % nbJobs, setup="from __main__ import magSimus_buff", number=1)
+    #t_magSimus_buff = timeit.timeit("magSimus_buff(%s)" % nbJobs, setup="from __main__ import magSimus_buff", number=1)
+    #print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
+    # t_magSimus_ManyJobs = timeit.timeit("magSimus_ManyJobs(%s)" % nbJobs, setup="from __main__ import magSimus_ManyJobs", number=1)
+    # print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
+
     # print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
-    #
-    # print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
-    # # nbJobs=20 -> t_magSimus_buff 66.1677789688
+    # nbJobs=20 -> t_magSimus_buff 66.1677789688
     # print >> sys.stderr, "t_magSimus_thread", t_magSimus_thread
-    # # nbJobs=20 -> t_magSimus_thread 50.775026083
+    # nbJobs=20 -> t_magSimus_thread 50.775026083
+    # print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
+    # nbJobs=150 -> t_magSimus_thread 45 seconds :D
 
-    nbJobs = 6
-    print >> sys.stderr, "Local sequential execution:"
-    t_fibs = timeit.timeit("fibs_localSequential(%s)" % nbJobs, setup="from __main__ import fibs_localSequential", number=1)
-    print >> sys.stderr, "Condor parallel execution:"
-    fibs_withThreads = timeit.timeit("fibs_condorThreads(%s)" % nbJobs, setup="from __main__ import fibs_condorThreads", number=1)
+    nbJobs = 500
+    #print >> sys.stderr, "Local sequential execution:"
+    #t_fibs = timeit.timeit("fibs_localSequential(%s)" % nbJobs, setup="from __main__ import fibs_localSequential", number=1)
+    #print >> sys.stderr, "Condor parallel execution:"
+    #fibs_withThreads = timeit.timeit("fibs_condorThreads(%s)" % nbJobs, setup="from __main__ import fibs_condorThreads", number=1)
+    print >> sys.stderr, "Condor parallel execution (ManyJobs):"
+    fibs_ManyJobs = timeit.timeit("fibs_ManyJobs(%s)" % nbJobs, setup="from __main__ import fibs_ManyJobs", number=1)
 
-    print >> sys.stderr, "fibs_localSequential", t_fibs
-    print >> sys.stderr, "fibs_condorThreads", fibs_withThreads
+    #print >> sys.stderr, "fibs_localSequential", t_fibs
+    #print >> sys.stderr, "fibs_condorThreads", fibs_withThreads
+    print >> sys.stderr, "fibs_ManyJobs", fibs_ManyJobs
+    # nbJobs=500 -> fibs_ManyJobs = 40sec
