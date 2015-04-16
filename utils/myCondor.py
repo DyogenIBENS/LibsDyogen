@@ -17,7 +17,7 @@
 """
 Abstracts access to a Condor cluster via its command-line tools.
 """
-
+import shutil
 import subprocess
 import re
 import os
@@ -318,7 +318,9 @@ def submit_COND_ManyJobs(COND):
     the list of jobids of the submitted jobs.
     """
     # print >> sys.stdout, COND
+    print >> sys.stderr, "submission of jobs to condor, this may take some time... usually the more jobs the more time"
     out, err = chcall('condor_submit -v', COND)
+    print >> sys.stderr, "submission finished"
     # list [..., (clusterId, jid), ...]
     listOfJobids = re.findall(r'Proc (\d+\.\d+)', out)
     return listOfJobids
@@ -376,11 +378,7 @@ def submit_ManyJobs(executable,
     except:
         pass
 
-    print >> sys.stderr, executable
-    print >> sys.stderr, os.curdir
-    print >> sys.stderr, os.listdir('./')
     executable = distutils.spawn.find_executable(executable)
-    print >> sys.stderr, executable
 
     outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % "$(Cluster).%s"
     errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % "$(Cluster).%s"
@@ -422,7 +420,8 @@ def getoutput_ManyJobs(listOfJobids, log=LOG_FILE, cleanup=True):
     """
 
     pool = Pool()
-    for jobid in pool.map(wait_Jid, ((jobid, None, log) for jobid in listOfJobids)):
+    for jobid in pool.imap_unordered(wait_Jid, ((jobid, None, log) for jobid in listOfJobids)):
+        print >> sys.stderr, 'return logs of job', jobid
         outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
         errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
         yield outFileName, errFileName
@@ -716,14 +715,21 @@ if __name__ == '__main__':
                        ' -out:ancGenesFiles=' + ancGenesName +\
                        ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
            listOfArguments.append(arguments)
-        listOfJids = submit_ManyJobs(executable, listOfArguments)
+        listOfJids = submit_ManyJobs(executable, listOfArguments, niceUser=True, maxSimultaneousJobsInGroup=None)
         for (stderrFileName, stdoutFileName) in getoutput_ManyJobs(listOfJids):
+            # print the 3 first lines of stdout and stderr logs
             with open(stdoutFileName, 'r') as f:
-                print >> sys.stdout, f.readline()
+                print >> sys.stdout, f.readline(),
+                print >> sys.stdout, f.readline(),
+                print >> sys.stdout, f.readline(),
             with open(stderrFileName, 'r') as f:
-                print >> sys.stderr, f.readline()
-            os.unlink(stdoutFileName)
-            os.unlink(stderrFileName)
+                print >> sys.stderr, f.readline(),
+                print >> sys.stdout, f.readline(),
+                print >> sys.stdout, f.readline(),
+            shutil.move(stdoutFileName, 'res/simu1/' + str(idxSimu) +'/logOut')
+            shutil.move(stderrFileName, 'res/simu1/' + str(idxSimu) +'/logErr')
+            # os.unlink(stdoutFileName)
+            # os.unlink(stderrFileName)
 
     #######################################
     # Execute commands on remote machines #
@@ -830,14 +836,14 @@ if __name__ == '__main__':
     #print >> sys.stderr, "t_helloWorld_thread", t_helloWorld_thread
     ## t_helloWorld_thread 12.5498409271
 
-    # nbJobs = 6500
+    nbJobs = 200
     # nbJobs = 150
     # t_magSimus_thread = timeit.timeit("magSimus_thread(%s)" % nbJobs, setup="from __main__ import magSimus_thread", number=1)
     # print >> sys.stderr, "t_magSimus_thread", t_magSimus_thread
     #t_magSimus_buff = timeit.timeit("magSimus_buff(%s)" % nbJobs, setup="from __main__ import magSimus_buff", number=1)
     #print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
-    # t_magSimus_ManyJobs = timeit.timeit("magSimus_ManyJobs(%s)" % nbJobs, setup="from __main__ import magSimus_ManyJobs", number=1)
-    # print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
+    t_magSimus_ManyJobs = timeit.timeit("magSimus_ManyJobs(%s)" % nbJobs, setup="from __main__ import magSimus_ManyJobs", number=1)
+    print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
 
     # print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
     # nbJobs=20 -> t_magSimus_buff 66.1677789688
@@ -846,15 +852,15 @@ if __name__ == '__main__':
     # print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
     # nbJobs=150 -> t_magSimus_thread 45 seconds :D
 
-    nbJobs = 500
+    # nbJobs = 500
     #print >> sys.stderr, "Local sequential execution:"
     #t_fibs = timeit.timeit("fibs_localSequential(%s)" % nbJobs, setup="from __main__ import fibs_localSequential", number=1)
     #print >> sys.stderr, "Condor parallel execution:"
     #t_fibs_withThreads = timeit.timeit("fibs_condorThreads(%s)" % nbJobs, setup="from __main__ import fibs_condorThreads", number=1)
-    print >> sys.stderr, "Condor parallel execution (ManyJobs):"
-    t_fibs_ManyJobs = timeit.timeit("fibs_ManyJobs(%s)" % nbJobs, setup="from __main__ import fibs_ManyJobs", number=1)
+    # print >> sys.stderr, "Condor parallel execution (ManyJobs):"
+    # t_fibs_ManyJobs = timeit.timeit("fibs_ManyJobs(%s)" % nbJobs, setup="from __main__ import fibs_ManyJobs", number=1)
 
     #print >> sys.stderr, "t_fibs_localSequential", t_fibs
     #print >> sys.stderr, "t_fibs_condorThreads", t_fibs_withThreads
-    print >> sys.stderr, "t_fibs_ManyJobs", t_fibs_ManyJobs
+    # print >> sys.stderr, "t_fibs_ManyJobs", t_fibs_ManyJobs
     # nbJobs=500 -> t_fibs_ManyJobs = 40sec
