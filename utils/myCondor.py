@@ -181,7 +181,7 @@ def submit_OneJob(executable, universe="vanilla",
 
     examples of options:
     1) requirements:
-    (Machine != "bioclust01.bioclust.biologie.ens.fr") && (slotid <= 6)
+     requirements = (Machine != "bioclust01.bioclust.biologie.ens.fr") && (slotid <= 6)
     (slotid <= 6) means that the job won't occupy more than 6 thread on a multi-core machine.
     This option may be interesting if the job uses several threads on a same machine.
     For instance Blast uses 4 threads and it would be interesting to send the job with (slotid <= 4) on an octo-core
@@ -224,8 +224,8 @@ def submit_OneJob(executable, universe="vanilla",
         "should_transfer_files = %s" % 'NO',
         "run_as_owner = %s" % 'True',
         "Requirements = %s" % requirements,
-        "request_memory = %s" % request_memory, # in mbytes
-        "request_disk = %s" % request_disk, # in kbytes
+        "request_memory = %s" % request_memory,  # in mbytes
+        "request_disk = %s" % request_disk,  # in kbytes
         "request_cpus = %s" % request_cpus,
         "Notify_user = %s" % mail,
         "Notification = %s" % 'never',
@@ -345,7 +345,11 @@ def submit_ManyJobs(executable,
                     # group name of the job
                     jobGroup='<group>',
                     niceUser=False,
-                    requirements='(Memory > 1024)',
+                    requirements='',
+                    # cf, https://research.cs.wisc.edu/htcondor/CondorWeek2012/presentations/thain-dynamic-slots.pdf
+                    request_memory='1000',  # request_memory is in mbytes => at least 1Go of RAM
+                    request_disk='10000',  # request_disk is in kbytes => at least 10Mbytes
+                    request_cpus='1',
                     priority=0,
                     # maximum number of simultaneous jobs with the same group name
                     maxSimultaneousJobsInGroup=MAX_SIMULTANEOUS_JOBS,
@@ -355,7 +359,7 @@ def submit_ManyJobs(executable,
 
     examples of options:
     1) requirements:
-    requirements = (Memory > 1024) && (Machine != "bioclust01.bioclust.biologie.ens.fr") && (slotid <= 6)
+    requirements = (Machine != "bioclust01.bioclust.biologie.ens.fr") && (slotid <= 6)
     (slotid <= 6) means that the job won't occupy more than 6 thread on a multi-core machine.
     This option may be interesting if the job uses several threads on a same machine.
     For instance Blast uses 4 threads and it would be interesting to send the job with (slotid <= 4) on an octo-core
@@ -411,6 +415,10 @@ def submit_ManyJobs(executable,
         "should_transfer_files = %s" % 'NO',
         "run_as_owner = %s" % 'True',
         "Requirements = %s" % requirements,
+        # cf, https://research.cs.wisc.edu/htcondor/CondorWeek2012/presentations/thain-dynamic-slots.pdf
+        "request_memory = %s" % request_memory,  # in mbytes
+        "request_disk = %s" % request_disk,  # in kbytes
+        "request_cpus = %s" % request_cpus,
         "Notify_user = %s" % mail,
         "Notification = %s" % 'never',
         "NiceUser = %s" % niceUser,
