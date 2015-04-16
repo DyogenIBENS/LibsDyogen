@@ -860,7 +860,7 @@ if __name__ == '__main__':
     #print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
     t_magSimus_ManyJobs = timeit.timeit("magSimus_ManyJobs(%s)" % nbJobs, setup="from __main__ import magSimus_ManyJobs", number=1)
     print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
-    # nbJobs = 150 -> t_magSimus_ManyJobs 43.3741889
+    # nbJobs = 1000 -> t_magSimus_ManyJobs 155 secs !
 
     # print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
     # nbJobs=20 -> t_magSimus_buff 66.1677789688
