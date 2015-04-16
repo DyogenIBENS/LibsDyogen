@@ -639,10 +639,8 @@ class PhylogeneticTree:
         self.tmpItems[newname] = self.tmpItems[node]
 
     def printBranchName(self, child, stream=sys.stderr):
-        # To print branch name to sys.stderr
-        # Please be aware that changing this breaks the analysis of the stderr by myScore.readLogErr()
         (parent, bLength) = self.parent[child]
-        foo = "# Branch %s -> %s (%s My) #" % (parent, child, bLength)
+        foo = "# Branch %s -> %s branch (%s My) #" % (parent, child, bLength)
         bar = "#" * len(foo)
         print >> stream, bar
         print >> stream, foo

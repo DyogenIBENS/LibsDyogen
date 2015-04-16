@@ -38,6 +38,7 @@ import os
 import sys
 import math
 import copy
+import time
 import itertools
 import collections
 # FIXME not the good way to import
@@ -50,10 +51,9 @@ import myMaths
 import myMapping
 import myMultiprocess
 import myLightGenomes
+import extractSbs
 
 import enum
-
-from utils.myLightGenomes import OGene
 
 FilterType = enum.Enum('InFamilies', 'InBothGenomes', 'None')
 
@@ -997,9 +997,11 @@ def extractSbsInPairCompChrWrapper(c1, c2, gc1, gc2, gapMax=0, distanceMetric = 
 def extractSbsInPairCompChr(gc1, gc2, gapMax=0, distanceMetric='DPD',
                             consistentSwDType=True, verbose=False):
     listOfDiags = []
+    nbHomo = 0
     (M,locG2) = homologyMatrix(gc1, gc2)
+    nbHomo = sum([len(M[i]) for i in M])
     if not locG2: # if locG2 is empty
-        return listOfDiags
+        return (listOfDiags, nbHomo)
     la=[]
     l1=[]
     l2=[]
@@ -1070,7 +1072,7 @@ def extractSbsInPairCompChr(gc1, gc2, gapMax=0, distanceMetric='DPD',
     # merging process, fuse diagonals
     if len(listOfDiags) > 0 and gapMax >= 0:
         listOfDiags = mergeSbs(listOfDiags, gapMax, gc2, distanceMetric=distanceMetric, verbose=False)
-    return listOfDiags
+    return (listOfDiags, nbHomo)
 
 
 def crossGeneContent(g1, g2):
@@ -1179,24 +1181,24 @@ def recommendedGap(nbHps, targetProba, N12, N1, N2, p_hpSign=None, maxGapThresho
 
 
 # Number of non-empty value in the mh or the mhp
-@myTools.tictac
-@myTools.verbose
-def numberOfHomologies(g1, g2, verbose=False):
-    nbHomologies = myTools.Dict2d(int)
-    totalNbComps = len(g1) * len(g2)
-    print >> sys.stderr, "pairwise comparison of chromosomes analysis for counting hps"
-    progressBar = myTools.ProgressBar(totalNbComps)
-    for (cptComp, (c1, c2)) in enumerate(itertools.product(g1, g2)):
-        gc1 = g1[c1]
-        gc2 = g2[c2]
-        (Ms, _) = homologyMatrix(gc1, gc2)
-        progressBar.printProgressIn(sys.stderr, cptComp)
-        nbHomologies[c1][c2] = sum([len(Ms[i1]) for i1 in Ms])
-    # new line in the print
-    nbHomologies_g = sum([nbH for nbH in nbHomologies.values2d()])
-    #assert nbHomologies_g >= min(sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2])),"%s,%s" %  (sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2]))
-    #Not needed since the two lineages may have undergone some differential gene losses
-    return nbHomologies, nbHomologies_g
+#@myTools.tictac
+#@myTools.verbose
+#def numberOfHomologies(g1, g2, verbose=False):
+#    nbHomologies = myTools.Dict2d(int)
+#    totalNbComps = len(g1) * len(g2)
+#    print >> sys.stderr, "pairwise comparison of chromosomes analysis for counting hps"
+#    progressBar = myTools.ProgressBar(totalNbComps)
+#    for (cptComp, (c1, c2)) in enumerate(itertools.product(g1, g2)):
+#        gc1 = g1[c1]
+#        gc2 = g2[c2]
+#        (Ms, _) = homologyMatrix(gc1, gc2)
+#        progressBar.printProgressIn(sys.stderr, cptComp)
+#        nbHomologies[c1][c2] = sum([len(Ms[i1]) for i1 in Ms])
+#    # new line in the print
+#    nbHomologies_g = sum([nbH for nbH in nbHomologies.values2d()])
+#    #assert nbHomologies_g >= min(sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2])),"%s,%s" %  (sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2]))
+#    #Not needed since the two lineages may have undergone some differential gene losses
+#    return nbHomologies, nbHomologies_g
 
 
 # Statistical validation of synteny blocks
@@ -1624,7 +1626,7 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True):
 
 def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      gapMax=None,
-                                     distanceMetric='CD',
+                                     distanceMetric='DPD',
                                      pThreshold=0.001,
                                      identifyBreakpointsWithinGaps=False,
                                      nonOverlappingSbs=False,
@@ -1638,18 +1640,10 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      verbose=False):
 
     # second level of verbosity
-    #verbose2 = verbose if (len(g1) > 500 or len(g2) > 500) else False
-    verbose2 = True
-    N12s, N12_g = numberOfHomologies(g1_tb, g2_tb, verbose=verbose2)
-    print >> sys.stderr, "pairwise comparison of genome1 and genome2 yields %s hps" % N12_g
+    N12s = myTools.Dict2d(int)
     # compute the recommended gapMax parameter
     #########################################
-    verbose2 = False
-    (p_hpSign, p_hpSign_g, (sTBG1, sTBG1_g), (sTBG2, sTBG2_g)) =\
-        myProbas.statsHpSign(g1_tb, g2_tb, verbose=verbose2)
-    print >> sys.stderr, "genome1 tb orientation proba = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG1_g[+1]*100, sTBG1_g[-1]*100, sTBG1_g[None]*100)
-    print >> sys.stderr, "genome2 tb orientation proba = {+1=%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG2_g[+1]*100, sTBG2_g[-1]*100, sTBG2_g[None]*100)
-    print >> sys.stderr, "hp sign proba in the 'global' mhp = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%) (probabilities are also calculated for pairwise mhp)" % (p_hpSign_g[+1]*100, p_hpSign_g[-1]*100, p_hpSign_g[None]*100)
+	
     N1_g = sum([len(g1_tb[c1]) for c1 in g1_tb])
     N2_g = sum([len(g2_tb[c2]) for c2 in g2_tb])
     #Build an average MHP
@@ -1661,21 +1655,12 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
     #Waring: if the genome is badly assembled and contain a lot of small contigs, this averaging is not relevant and the recommended gapMax won't be relevant neither
     if len(g1_tb) > 50 or len(g2_tb) > 50:
         print >> sys.stderr, "Warning: one of the two genome seems badly assembled, this may mislead the recommended gapMax calculation"
-    N1_weightedAverage = int(myMaths.myStats.getWeightedAverage([len(g1_tb[c1]) for c1 in g1_tb]))
-    N2_weightedAverage = int(myMaths.myStats.getWeightedAverage([len(g2_tb[c2]) for c2 in g2_tb]))
-    density = float(N12_g)/(N1_g*N2_g)
-    # conservation of the density
-    N12_weightedAverage = int(density*N1_weightedAverage*N2_weightedAverage)
-    gap = recommendedGap(nbHpsRecommendedGap, targetProbaRecommendedGap, N12_weightedAverage, N1_weightedAverage, N2_weightedAverage, p_hpSign=p_hpSign_g, verbose=verbose)
-    print >> sys.stderr, "recommended gapMax = %s tbs" % gap
-    if gapMax is None:
-        gapMax = gap
-    print >> sys.stderr, "used gapMax = %s tbs" % gapMax
-
-    # step 2 and 3 : build the MHP and extract putative sbs as diagonals
+        # step 2 and 3 : build the MHP and extract putative sbs as diagonals
     #################################################################################
     # extract sbs in the tb base
+    p_hpSign = myTools.Dict2d(dict)
     sbsInPairComp = myTools.Dict2d(list)
+    start = time.time()
     if multiProcess and (len(g1_tb.keys()) > 1 or len(g2_tb.keys()) > 1):
         # if the multiprocess option is True and if there is more than one pairwise comparison of chromosomes
         tasks = [(c1, c2, g1_tb[c1], g2_tb[c2]) for (c1, c2) in itertools.product([c1 for c1 in g1_tb], [c2 for c2 in g2_tb])]
@@ -1689,18 +1674,21 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                 sbsInPairComp[c1][c2] = listOfSbs
     else:
         totalNbComps = len(g1_tb.keys())*len(g2_tb.keys())
-        progressBar = myTools.ProgressBar(totalNbComps)
+        progressbar = myTools.ProgressBar(totalNbComps)
         print >> sys.stderr, "synteny block extraction"
-        for (cptComps, (c1, c2)) in enumerate(itertools.product(g1_tb.keys(), g2_tb.keys())):
-            listOfSbs = extractSbsInPairCompChr(g1_tb[c1], g2_tb[c2],
-                                                gapMax=gapMax,
-                                                distanceMetric=distanceMetric,
-                                                consistentSwDType=consistentSwDType,
-                                                verbose=verbose)
-            if len(listOfSbs) > 0:
-                sbsInPairComp[c1][c2] = listOfSbs
-            progressBar.printProgressIn(sys.stderr, cptComps)
+    	(p_hpSign, p_hpSign_g, N12s, N12_g, sbsInPairComp) = extractSbs.extractSbsInPairCompChr(g1_tb, g2_tb, consistentSwDType, distanceMetric)
 
+    	N1_weightedAverage = int(myMaths.myStats.getWeightedAverage([len(g1_tb[c1]) for c1 in g1_tb]))
+        N2_weightedAverage = int(myMaths.myStats.getWeightedAverage([len(g2_tb[c2]) for c2 in g2_tb]))
+        density = float(N12_g)/(N1_g*N2_g)
+        # conservation of the density
+        N12_weightedAverage = int(density*N1_weightedAverage*N2_weightedAverage)
+        gap = recommendedGap(nbHpsRecommendedGap, targetProbaRecommendedGap, N12_weightedAverage, N1_weightedAverage, N2_weightedAverage, p_hpSign=p_hpSign_g, verbose=verbose)
+        print >> sys.stderr, "recommended gapMax = %s tbs" % gap
+        if gapMax is None:
+        	gapMax = gap
+        print >> sys.stderr, "used gapMax = %s tbs" % gapMax
+	
     # setp 4 : statistical validation of putative sbs
     ##################################################
     #DEBUG
@@ -1849,10 +1837,11 @@ def extractSbsInPairCompGenomes(g1, g2, families,
                                 validateImpossToCalc_mThreshold=3,
                                 multiProcess=False,
                                 verbose=False):
-    isinstance(g1, myLightGenomes.LightGenome)
+ 
+    isinstance(g1, myLightGenomes.LightGenome)  
     isinstance(g2, myLightGenomes.LightGenome)
     isinstance(families, myLightGenomes.Families)
-    # TODO, raise a true warning message
+	# TODO, raise a true warning message
     if nonOverlappingSbs is False:
         if overlapMax > 0:
             print >> sys.stderr, "Warning: the maxAllowedGap specified is not used since the nonOverlappingSbs is False"
@@ -1865,8 +1854,8 @@ def extractSbsInPairCompGenomes(g1, g2, families,
     else:
         raise TypeError('g1 and/or g2 must be either myGenomes.Genome or dict')
 
-    nCini1 = len(g1.keys())
-    nCini2 = len(g2.keys())
+	nCini1 = len(g1.keys())
+	nCini2 = len(g2.keys())
     nGini1 = sum([len(chrom1) for chrom1 in g1.values()])
     nGini2 = sum([len(chrom2) for chrom2 in g2.values()])
 
@@ -1878,8 +1867,8 @@ def extractSbsInPairCompGenomes(g1, g2, families,
     # genes that are not in ancGene have a aID=None
     nGiniInFam1 = len([fID for chrom1 in g1_fID.values() for (fID, _) in chrom1 if fID is not None])
     nGiniInFam2 = len([fID for chrom2 in g2_fID.values() for (fID, _) in chrom2 if fID is not None])
-    print >> sys.stderr, "genome1 initially contains %s chromosomes" % nCini1
-    print >> sys.stderr, "genome2 initially contains %s chromosomes" % nCini2
+    #print >> sys.stderr, "genome1 initially contains %s chromosomes" % nCini1
+    #print >> sys.stderr, "genome2 initially contains %s chromosomes" % nCini2
     print >> sys.stderr, "genome1 initially contains %s genes (%s genes are in families, %.2f%%)" % (nGini1, nGiniInFam1, (100 * float(nGiniInFam1) / float(nGini1)))
     print >> sys.stderr, "genome2 initially contains %s genes (%s genes are in families, %.2f%%)" % (nGini2, nGiniInFam2, (100 * float(nGiniInFam2) / float(nGini2)))
 
@@ -1991,11 +1980,12 @@ def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True):
         nbHps = len(sb.la)
         statsSbs.append(nbHps)
         for (idxHp, (aGname, aGstrand, dist)) in enumerate(sb.la):
+            #aGname = families[fID].fn
             (g1s, s1s) = foo(genome1, c1, sb.l1, idxHp)
             (g2s, s2s) = foo(genome2, c2, sb.l2, idxHp)
             print myFile.myTSV.printLine([idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s])
 
-    print >> sys.stderr, "Distribution of the lengths of synteny blocks:", myMaths.myStats.syntheticTxtSummary(statsSbs)
+    print >> sys.stderr, "Distribution of the lengths of synteny blocks\t", myMaths.myStats.syntheticTxtSummary(statsSbs)
 
 
 #################################
@@ -2119,29 +2109,24 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
 
 # Build a genome with sbs as contigs and only conserve one ancestral gene by hp
 def buildGenomeFromSbs(sbsInPairComp, sbLengthThreshold=None):
-    cptSb = 0
-    ancSbGenome = myLightGenomes.LightGenome()
-    for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
-        old_ancGene = None
-        for (ihp, (ancGeneName, ancStrand, dist)) in enumerate(sb.la):
-            # Happens when there are paralogous hps in the same diagonal
-            # assert ancGene != old_ancGene, "%s,%s" % (ancGene, old_ancGene)
+    cptSb=0
+    ancSbGenome=myLightGenomes.LightGenome()
+    for ((c1, c2), (sb, pVal)) in sbsInPairComp.iteritems2d():
+        old_ancGene=None
+        for ihp,(ancGeneName, ancStrand, dist) in enumerate(sb.la):
+            #assert ancGene != old_ancGene, "%s,%s" % (ancGene, old_ancGene) # Happens when there are paralogous hps in the same diagonal
             if ancGeneName == old_ancGene:
-                # Be waware that this may create diags of size 1
-                continue
-            # ancGene synonymous of hp-name
-            # ancSbGenome[cptSb].append((ancGeneName, ancStrand, dist))
-            ancSbGenome[cptSb].append(OGene(ancGeneName, ancStrand))
+                continue # This may create diags of size 1 that will need to be removed
+            ancSbGenome[cptSb].append(OGene(ancGeneName, ancStrand)) # ancGene synonymous of hp-name
             old_ancGene = ancGeneName
-        # # In every cases sbs of length 1 are removed
-        # if len(ancSbGenome[cptSb]) <= 1:
-        #     del ancSbGenome[cptSb]
-        #     continue
+
+        #if len(ancSbGenome[cptSb]) <= 1: # In every cases sbs of length 1 are removed
+        #    del ancSbGenome[cptSb]
+        #    continue
         if sbLengthThreshold != None and len(ancSbGenome[cptSb]) <= sbLengthThreshold:
             del ancSbGenome[cptSb]
             continue
-        else:
-            cptSb = cptSb+1
+        cptSb = cptSb+1
     return ancSbGenome
 
 @myTools.verbose
