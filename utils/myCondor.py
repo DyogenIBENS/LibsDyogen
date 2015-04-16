@@ -850,11 +850,11 @@ if __name__ == '__main__':
     #print >> sys.stderr, "Local sequential execution:"
     #t_fibs = timeit.timeit("fibs_localSequential(%s)" % nbJobs, setup="from __main__ import fibs_localSequential", number=1)
     #print >> sys.stderr, "Condor parallel execution:"
-    #fibs_withThreads = timeit.timeit("fibs_condorThreads(%s)" % nbJobs, setup="from __main__ import fibs_condorThreads", number=1)
+    #t_fibs_withThreads = timeit.timeit("fibs_condorThreads(%s)" % nbJobs, setup="from __main__ import fibs_condorThreads", number=1)
     print >> sys.stderr, "Condor parallel execution (ManyJobs):"
-    fibs_ManyJobs = timeit.timeit("fibs_ManyJobs(%s)" % nbJobs, setup="from __main__ import fibs_ManyJobs", number=1)
+    t_fibs_ManyJobs = timeit.timeit("fibs_ManyJobs(%s)" % nbJobs, setup="from __main__ import fibs_ManyJobs", number=1)
 
-    #print >> sys.stderr, "fibs_localSequential", t_fibs
-    #print >> sys.stderr, "fibs_condorThreads", fibs_withThreads
-    print >> sys.stderr, "fibs_ManyJobs", fibs_ManyJobs
-    # nbJobs=500 -> fibs_ManyJobs = 40sec
+    #print >> sys.stderr, "t_fibs_localSequential", t_fibs
+    #print >> sys.stderr, "t_fibs_condorThreads", t_fibs_withThreads
+    print >> sys.stderr, "t_fibs_ManyJobs", t_fibs_ManyJobs
+    # nbJobs=500 -> t_fibs_ManyJobs = 40sec
