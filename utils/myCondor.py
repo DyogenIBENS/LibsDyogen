@@ -28,7 +28,7 @@ import distutils.spawn
 import sys
 # import logging
 from multiprocessing.dummy import Pool
-
+from utils import myTools
 
 # Logging messages which are less severe than level will be ignored
 # logging.basicConfig(level=logging.DEBUG, format='(%(threadName)-10s) %(message)s')
@@ -323,6 +323,10 @@ def submit_COND_ManyJobs(COND):
     print >> sys.stderr, "submission finished"
     # list [..., (clusterId, jid), ...]
     listOfJobids = re.findall(r'Proc (\d+\.\d+)', out)
+    for (jobid1, jobid2) in myTools.myIterator.slidingTuple(listOfJobids):
+        assert isinstance(jobid1, str) and isinstance(jobid2, str)
+        assert jobid1.split('.')[0] == jobid2.split('.')[0]
+        assert int(jobid1.split('.')[1]) == int(jobid2.split('.')[1]) - 1
     return listOfJobids
 
 
@@ -852,14 +856,17 @@ if __name__ == '__main__':
     #print >> sys.stderr, "t_helloWorld_thread", t_helloWorld_thread
     ## t_helloWorld_thread 12.5498409271
 
-    nbJobs = 3000
-    #nbJobs = 200
+    # over 3000 i get this error:
+    #__main__.CommandError: 'condor_submit -v' exited with status 1: '\nWARNING: your Requirements expression refers to TARGET.Memory. This is obsolete. Set request_memory and condor_submit will modify the Requirements expression as needed.\n\nERROR: Failed submission for job 30670.2085 - aborting entire submit\n\nERROR: Failed to queue
+    #nbJobs = 3000
+    nbJobs = 200
     # t_magSimus_thread = timeit.timeit("magSimus_thread(%s)" % nbJobs, setup="from __main__ import magSimus_thread", number=1)
     # print >> sys.stderr, "t_magSimus_thread", t_magSimus_thread
     #t_magSimus_buff = timeit.timeit("magSimus_buff(%s)" % nbJobs, setup="from __main__ import magSimus_buff", number=1)
     #print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
     t_magSimus_ManyJobs = timeit.timeit("magSimus_ManyJobs(%s)" % nbJobs, setup="from __main__ import magSimus_ManyJobs", number=1)
     print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
+    # nbJobs = 200 -> t_magSimus_ManyJobs 60 secs !
     # nbJobs = 1000 -> t_magSimus_ManyJobs 155 secs !
     # nbJobs = 3000 -> t_magSimus_ManyJobs 478 secs !
 
