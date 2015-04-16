@@ -428,7 +428,7 @@ def waitUntilLogOutExists(jobid, waitTime=2):
             return jobid
         time.sleep(waitTime)
 
-def getoutput_ManyJobs(listOfJobids, waitTime=2, log=LOG_FILE, cleanup=True):
+def getoutput_ManyJobs(listOfJobids):
     """Waits for a job to complete and then returns its standard output
     and standard error data if the files were given default names.
     Deletes these files after reading them if ``cleanup`` is True.
@@ -731,7 +731,7 @@ if __name__ == '__main__':
                        ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
            listOfArguments.append(arguments)
         listOfJids = submit_ManyJobs(executable, listOfArguments, niceUser=True, maxSimultaneousJobsInGroup=None)
-        for (jobid, stderrFileName, stdoutFileName) in getoutput_ManyJobs(listOfJids):
+        for (jobid, stdoutFileName, stderrFileName) in getoutput_ManyJobs(listOfJids):
             # print the 3 first lines of stdout and stderr logs
             with open(stdoutFileName, 'r') as f:
                 print >> sys.stdout, f.readline(),
@@ -852,7 +852,7 @@ if __name__ == '__main__':
     #print >> sys.stderr, "t_helloWorld_thread", t_helloWorld_thread
     ## t_helloWorld_thread 12.5498409271
 
-    nbJobs = 1000
+    nbJobs = 3000
     #nbJobs = 200
     # t_magSimus_thread = timeit.timeit("magSimus_thread(%s)" % nbJobs, setup="from __main__ import magSimus_thread", number=1)
     # print >> sys.stderr, "t_magSimus_thread", t_magSimus_thread
@@ -861,6 +861,7 @@ if __name__ == '__main__':
     t_magSimus_ManyJobs = timeit.timeit("magSimus_ManyJobs(%s)" % nbJobs, setup="from __main__ import magSimus_ManyJobs", number=1)
     print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
     # nbJobs = 1000 -> t_magSimus_ManyJobs 155 secs !
+    # nbJobs = 3000 -> t_magSimus_ManyJobs 478 secs !
 
     # print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
     # nbJobs=20 -> t_magSimus_buff 66.1677789688
