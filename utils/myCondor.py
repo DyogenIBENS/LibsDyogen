@@ -167,7 +167,11 @@ def submit_OneJob(executable, universe="vanilla",
            # group name of the job
            jobGroup='<group>',
            niceUser=False,
-           requirements='(Memory > 1024)',
+           requirements='',
+           # cf, https://research.cs.wisc.edu/htcondor/CondorWeek2012/presentations/thain-dynamic-slots.pdf
+           request_memory='1000',  # request_memory is in mbytes => at least 1Go of RAM
+           request_disk='10000',  # request_disk is in kbytes => at least 10Mbytes
+           request_cpus='1',
            priority=0,
            # maximum number of simultaneous jobs with the same group name
            maxSimultaneousJobsInGroup=MAX_SIMULTANEOUS_JOBS,
@@ -177,7 +181,7 @@ def submit_OneJob(executable, universe="vanilla",
 
     examples of options:
     1) requirements:
-    requirements = (Memory > 1024) && (Machine != "bioclust01.bioclust.biologie.ens.fr") && (slotid <= 6)
+    (Machine != "bioclust01.bioclust.biologie.ens.fr") && (slotid <= 6)
     (slotid <= 6) means that the job won't occupy more than 6 thread on a multi-core machine.
     This option may be interesting if the job uses several threads on a same machine.
     For instance Blast uses 4 threads and it would be interesting to send the job with (slotid <= 4) on an octo-core
@@ -210,6 +214,7 @@ def submit_OneJob(executable, universe="vanilla",
     outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % "$(Cluster)"
     errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % "$(Cluster)"
 
+
     COND = [
         "Executable = %s" % executable,
         "Universe = %s" % universe,
@@ -219,6 +224,9 @@ def submit_OneJob(executable, universe="vanilla",
         "should_transfer_files = %s" % 'NO',
         "run_as_owner = %s" % 'True',
         "Requirements = %s" % requirements,
+        "request_memory = %s" % request_memory, # in mbytes
+        "request_disk = %s" % request_disk, # in kbytes
+        "request_cpus = %s" % request_cpus,
         "Notify_user = %s" % mail,
         "Notification = %s" % 'never',
         "NiceUser = %s" % niceUser,
@@ -869,6 +877,7 @@ if __name__ == '__main__':
     # nbJobs = 200 -> t_magSimus_ManyJobs 60 secs !
     # nbJobs = 1000 -> t_magSimus_ManyJobs 155 secs !
     # nbJobs = 3000 -> t_magSimus_ManyJobs 478 secs !
+    # nbJobs = 6000 -> t_magSimus_ManyJobs 914 secs !
 
     # print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
     # nbJobs=20 -> t_magSimus_buff 66.1677789688
