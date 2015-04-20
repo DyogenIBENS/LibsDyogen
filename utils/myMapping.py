@@ -636,10 +636,8 @@ def calcNumberOfGeneBirths(genomeOrFamDesc, family):
 def calcNumberOfGeneDuplications(genomeOrFamDesc, family):
     geneNameList = getAncFamNames(genomeOrFamDesc, family)
     descOfAncGenes = [gene for gene in geneNameList if gene is not None]
-    nGeneDups = sum([nbParalogs - 1 for nbParalogs in collections.Counter(descOfAncGenes).values()])
-    # FIXME, remove this explanation
-    # This was false, you did not consider deletions
-    # nGeneDups = len(descOfAncGenes) - len(set(descOfAncGenes))
+    # nGeneDups = sum([nbParalogs - 1 for nbParalogs in collections.Counter(descOfAncGenes).values()]) would give the same result
+    nGeneDups = len(descOfAncGenes) - len(set(descOfAncGenes))
     return (nGeneDups)
 
 @myTools.deprecated
