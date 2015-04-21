@@ -57,7 +57,6 @@ from utils.myLightGenomes import OGene
 
 FilterType = enum.Enum('InFamilies', 'InBothGenomes', 'None')
 
-
 # TODO, write a diagonal class that is made for tbs containing genes
 class Diagonal():
     def __init__(self, *args, **kargs):
@@ -887,21 +886,7 @@ def strandProduct(sa, sb):
 # f : family, often the ancGene index
 ###################################################################################################################################
 def homologyMatrix(gc1, gc2):
-    #1
-    #M={}
-    #locG2 = {}
-    #for (i2,(f2,s2)) in enumerate(gc2):
-    #       if f2 != None:
-    #               if f2 not in locG2:
-    #                       locG2[f2]=[]
-    #                       locG2[f2].append( (i2,s2) ) # LOCalisation on Gc 2
-    #               for (i1,(f1,s1)) in enumerate(gc1):
-    #                       if f1 == f2:
-    #                               if i1 not in  M:
-    #                                       M[i1]={}
-    #                               M[i1][i2] = strandProduct(s1,s2)
-
-    #2 faster than 1
+    # 1 faster
     locG2 = {}
     for (i2,(f,s2)) in enumerate(gc2):
         if f != None:
@@ -918,7 +903,21 @@ def homologyMatrix(gc1, gc2):
             for (i2,s2) in locG2[f]:
                 M[i1][i2]= strandProduct(s1,s2)
 
-    #3 (faster than 2), but since we need to return locG2 of the input gc2 for next computations, it is not convenient
+    #2 slower than 1
+    #M={}
+    #locG2 = {}
+    #for (i2,(f2,s2)) in enumerate(gc2):
+    #       if f2 != None:
+    #               if f2 not in locG2:
+    #                       locG2[f2]=[]
+    #                       locG2[f2].append( (i2,s2) ) # LOCalisation on Gc 2
+    #               for (i1,(f1,s1)) in enumerate(gc1):
+    #                       if f1 == f2:
+    #                               if i1 not in  M:
+    #                                       M[i1]={}
+    #                               M[i1][i2] = strandProduct(s1,s2)
+
+    #3 (faster than 1), but since we need to return locG2 of the input gc2 for next computations, it is not convenient
     #TODO need to add a boolean to the returned values because locG2 may not correspond to the gc2 chromosome
     # use the dict locG2 on the smallest chromosome
     #switchedGCs = False
@@ -939,7 +938,7 @@ def homologyMatrix(gc1, gc2):
     #       (gc1,gc2) = (gc2,gc1)
     #       switchedGCs = False
 
-    #4 slower than 2
+    #4 slower than 1
     #familiesLocation1 = collections.defaultdict(list)
     #for (i1, (f, s1)) in enumerate(gc1):
     #    if f is not None:
@@ -954,6 +953,55 @@ def homologyMatrix(gc1, gc2):
     #for f in set(familiesLocation1.keys()) | set(familiesLocation2.keys()):
     #    for (i1, i2) in itertools.product(familiesLocation1[f], familiesLocation2[f]):
     #        M[i1][i2] = strandProduct(gc1[i1][1], gc2[i2][1])
+
+    #5: (slower than 2) method inspired by a discussion with Eric Tannier 10/04/2015
+    # M = {}
+    # # s: sorted, the strings are sorted following the string '<' operator, the alphabetical order
+    # gc1s = sorted(enumerate(gc1), key=lambda x: x[1].n)
+    # gc2s = sorted(enumerate(gc2), key=lambda x: x[1].n)
+    # # c: compact
+    # gc1sc = []
+    # oldGn1 = None
+    # for (idxG1, (gn1, s1)) in gc1s:
+    #     if gn1 != oldGn1:
+    #         gc1sc.append((gn1, [(idxG1, s1)]))
+    #     else:
+    #         gc1sc[-1][1].append((idxG1, s1))
+    #     oldGn1 = gn1
+    # gc2sc = []
+    # oldGn2 = None
+    # for (idxG2, (gn2, s2)) in gc2s:
+    #     if gn2 != oldGn2:
+    #         gc2sc.append((gn2, [(idxG2, s2)]))
+    #     else:
+    #         gc2sc[-1][1].append((idxG2, s2))
+    #     oldGn2 = gn2
+    #
+    # lenGC1SC = len(gc1sc)
+    # lenGC2SC = len(gc2sc)
+    # idxGN1 = 0
+    # idxGN2 = 0
+    # while idxGN1 < lenGC1SC and idxGN2 < lenGC2SC:
+    #     gn1 = gc1sc[idxGN1][0]
+    #     gn2 = gc2sc[idxGN2][0]
+    #     if gn2 == gn1:
+    #         lidxGS1 = gc1sc[idxGN1][1]
+    #         lidxGS2 = gc2sc[idxGN2][1]
+    #         for (idxG1, s1) in lidxGS1:
+    #             if idxG1 not in M:
+    #                 M[idxG1] = {}
+    #             for (idxG2, s2) in lidxGS2:
+    #                 M[idxG1][idxG2] = strandProduct(s1, s2)
+    #         idxGN1 += 1
+    #         idxGN2 += 1
+    #     else:
+    #         if gn1 < gn2:
+    #             idxGN1 += 1
+    #         else:
+    #             # gn2 < gn1
+    #             idxGN2 += 1
+    # # needed in some algorithms
+    # locG2 = dict(gc2sc)
 
     return (M, locG2)
 
@@ -1650,7 +1698,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
     print >> sys.stderr, "pairwise comparison of genome1 and genome2 yields %s hps" % N12_g
     # compute the recommended gapMax parameter
     #########################################
-    verbose2 = False
+    verbose2 = True
     (p_hpSign, p_hpSign_g, (sTBG1, sTBG1_g), (sTBG2, sTBG2_g)) =\
         myProbas.statsHpSign(g1_tb, g2_tb, verbose=verbose2)
     print >> sys.stderr, "genome1 tb orientation proba = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG1_g[+1]*100, sTBG1_g[-1]*100, sTBG1_g[None]*100)
