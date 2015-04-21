@@ -50,14 +50,15 @@ import myMaths
 import myMapping
 import myMultiprocess
 import myLightGenomes
+
 import extractSbs
+import time
 
 import enum
 
 from utils.myLightGenomes import OGene
 
 FilterType = enum.Enum('InFamilies', 'InBothGenomes', 'None')
-
 
 # TODO, write a diagonal class that is made for tbs containing genes
 class Diagonal():
@@ -300,12 +301,12 @@ class queueWithBackup:
 ########################################################################################
 # TODO : optimize the search of diags by avoiding considering diags that are on the left of diagA
 @myTools.verbose
-def mergeSbs(listOfDiags, gapMax, gc2, distanceMetric = 'DPD', verbose = False):
+def mergeSbs(listOfDiags, gapMax, gc2, distanceMetric = 'CD', verbose = False):
     assert gapMax>=0
     # assert that the diag elements in listOfDiags are either Diagonal objects
     # or SyntenyBlock objects
     assert all(diag.__class__.__name__ == 'Diagonal' for diag in listOfDiags) or\
-        all(diag.__class__.__name__ == 'SyntenyBlock' for diag in listOfDiags)
+        all(diag.__class__.__name__ == 'SyntenyBlock' for diag in listOfDiags), listOfDiags[0]
 
     if distanceMetric == 'DPD':
         print >> sys.stderr, "use Diagonal Pseudo Distance to merge diagonals with a gap up to %s elements" % gapMax
@@ -890,20 +891,20 @@ def strandProduct(sa, sb):
 def homologyMatrix(gc1, gc2):
     # 1 faster
     locG2 = {}
-    for (i2,(f,s2)) in enumerate(gc2):
+    for (i2, (f, s2)) in enumerate(gc2):
         if f != None:
             if f not in locG2:
-                locG2[f]=[]
-            locG2[f].append( (i2,s2) ) # LOCalisation on Gc 2
+                locG2[f] = []
+            locG2[f].append((i2, s2))  # LOCalisation on Gc 2
             #locG2.setdefault(f,[]).append( (i2,s2) ) # LOCalisation on Gc 2, same excecution time but less readable
-    M={}
-    if not locG2: # if locG2 is empty
+    M = {}
+    if not locG2:  # if locG2 is empty
         return (M, locG2)
-    for (i1,(f,s1)) in enumerate(gc1):
-        if f !=None and f in locG2: #TODO : remove by advance the f == None from gc1
+    for (i1, (f, s1)) in enumerate(gc1):
+        if f != None and f in locG2: #TODO : remove by advance the f == None from gc1
             M[i1]={}
-            for (i2,s2) in locG2[f]:
-                M[i1][i2]= strandProduct(s1,s2)
+            for (i2, s2) in locG2[f]:
+                M[i1][i2] = strandProduct(s1, s2)
 
     #2 slower than 1
     #M={}
@@ -1044,23 +1045,21 @@ def extractSbsInPairCompChrWrapper(c1, c2, gc1, gc2, gapMax=0, distanceMetric = 
 # Extract sbs in a pairwise comparison of two chromosomes
 ############################################################
 @myTools.verbose
-def extractSbsInPairCompChr(gc1, gc2, gapMax=0, distanceMetric='DPD',
-                            consistentSwDType=True, verbose=False):
+def extractSbsInPairCompChr(gc1, gc2, consistentSwDType=True, verbose=False):
     listOfDiags = []
-    nbHomo = 0
-    (M,locG2) = homologyMatrix(gc1, gc2)
+    (M, locG2) = homologyMatrix(gc1, gc2)
     nbHomo = sum([len(M[i]) for i in M])
-    if not locG2: # if locG2 is empty
+    if not locG2:
+        # if locG2 is empty
         return (listOfDiags, nbHomo)
-    la=[]
-    l1=[]
-    l2=[]
+    la = []
+    l1 = []
+    l2 = []
     diagType = None
-    i1_old = None
 
     #TODO scan M instead of gc1 : impossible since 'dict size cannot change during a loop over its items'
     # scan M from left to right
-    for (i1,(f,_)) in enumerate(gc1):
+    for (i1, (f, _)) in enumerate(gc1):
         # f in locG2 means that i1 has at least one homolog on gc2, locG2 never changes, that is why we iterate over locG2
         if f != None and f in locG2:
             i1_old=i1
@@ -1075,7 +1074,7 @@ def extractSbsInPairCompChr(gc1, gc2, gapMax=0, distanceMetric='DPD',
                     f = gc1[i1][0]
                     if len(la) == 0:
                         # first hp of a diagonal, the diagonalType is searched
-                        diagType = findDiagType(i1,i2,M,consistentSwDType)
+                        diagType = findDiagType(i1, i2, M, consistentSwDType)
 
                     # A hp has a unique associated gene family (often a unique ancestral gene)
                     # orientation of tbs on gc1 are used as a reference, if the orientation of a tb on gc1 is unknown, it is possible to infer the ancestral orientation by using the diagType and the orientation of the homologous tb on gc2
@@ -1098,30 +1097,27 @@ def extractSbsInPairCompChr(gc1, gc2, gapMax=0, distanceMetric='DPD',
                     #diagType == None if sameStrand == False and len(la) == 1, first element of a diagonal which we donnot take care of gene orientation
                     #if (diagType == "/" or diagType == None) and i1+1 in M and i2+1 in M[i1+1] and ((M[i1+1][i2+1] in [+1,None]) if consistentSwDType else True):
                     if diagType == "/" and i1+1 in M and i2+1 in M[i1+1] and ((M[i1+1][i2+1] in [+1,None]) if consistentSwDType else True):
-                        i1=i1+1
-                        i2=i2+1
+                        i1 = i1 + 1
+                        i2 = i2 + 1
                         #assert i2-l2[-1] == +1
                         #assert i1-l1[-1] == +1
                         #assert i2 in M[i1]
 
                     elif diagType=="\\" and i1+1 in M and i2-1 in M[i1+1] and ((M[i1+1][i2-1] in [-1,None]) if consistentSwDType else True):
-                        i1=i1+1
-                        i2=i2-1
+                        i1 = i1 + 1
+                        i2 = i2 - 1
                         #assert i2-l2[-1] == -1
                         #assert i1-l1[-1] == +1
                         #assert i2 in M[i1]
                     else:
                         # Since no more hps can be added to the current diagonal, the diagonal is recorded
                         #assert len(la) > 0
-                        listOfDiags.append(Diagonal(diagType,l1,l2,la))
-                        l1=[]
-                        l2=[]
-                        la=[]
-                        diagType=None
+                        listOfDiags.append(Diagonal(diagType, l1, l2, la))
+                        l1 = []
+                        l2 = []
+                        la = []
+                        diagType = None
                         break # exit the while loop and iter the for loop
-    # merging process, fuse diagonals
-    if len(listOfDiags) > 0 and gapMax >= 0:
-        listOfDiags = mergeSbs(listOfDiags, gapMax, gc2, distanceMetric=distanceMetric, verbose=False)
     return (listOfDiags, nbHomo)
 
 
@@ -1237,24 +1233,24 @@ def recommendedGap(nbHps, targetProba, N12, N1, N2, p_hpSign=None, maxGapThresho
 
 
 # Number of non-empty value in the mh or the mhp
-#@myTools.tictac
-#@myTools.verbose
-#def numberOfHomologies(g1, g2, verbose=False):
-#    nbHomologies = myTools.Dict2d(int)
-#    totalNbComps = len(g1) * len(g2)
-#    print >> sys.stderr, "pairwise comparison of chromosomes analysis for counting hps"
-#    progressBar = myTools.ProgressBar(totalNbComps)
-#    for (cptComp, (c1, c2)) in enumerate(itertools.product(g1, g2)):
-#        gc1 = g1[c1]
-#        gc2 = g2[c2]
-#        (Ms, _) = homologyMatrix(gc1, gc2)
-#        progressBar.printProgressIn(sys.stderr, cptComp)
-#        nbHomologies[c1][c2] = sum([len(Ms[i1]) for i1 in Ms])
-#    # new line in the print
-#    nbHomologies_g = sum([nbH for nbH in nbHomologies.values2d()])
-#    #assert nbHomologies_g >= min(sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2])),"%s,%s" %  (sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2]))
-#    #Not needed since the two lineages may have undergone some differential gene losses
-#    return nbHomologies, nbHomologies_g
+@myTools.tictac
+@myTools.verbose
+def numberOfHomologies(g1, g2, verbose=False):
+   nbHomologies = myTools.Dict2d(int)
+   totalNbComps = len(g1) * len(g2)
+   print >> sys.stderr, "pairwise comparison of chromosomes analysis for counting hps"
+   progressBar = myTools.ProgressBar(totalNbComps)
+   for (cptComp, (c1, c2)) in enumerate(itertools.product(g1, g2)):
+       gc1 = g1[c1]
+       gc2 = g2[c2]
+       (Ms, _) = homologyMatrix(gc1, gc2)
+       progressBar.printProgressIn(sys.stderr, cptComp)
+       nbHomologies[c1][c2] = sum([len(Ms[i1]) for i1 in Ms])
+   # new line in the print
+   nbHomologies_g = sum([nbH for nbH in nbHomologies.values2d()])
+   #assert nbHomologies_g >= min(sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2])),"%s,%s" %  (sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2]))
+   #Not needed since the two lineages may have undergone some differential gene losses
+   return nbHomologies, nbHomologies_g
 
 
 # Statistical validation of synteny blocks
@@ -1368,6 +1364,7 @@ def statisticalValidation(sbsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
     def statsDiagsM(sbsInPairCompX, m):
         if len(sbsInPairCompX.keys2d()) == 0:
             return 'RAS'
+        assert all([len(sbsInPairCompX[k1Foo][k2Foo]) > 0 for (k1Foo, k2Foo) in sbsInPairCompX.keys2d()])
         (k1Foo, k2Foo) = sbsInPairCompX.keys2d()[0]
         if isinstance(sbsInPairCompX[k1Foo][k2Foo][0], tuple):
             sbsInPairCompXM = [diag for sbs in sbsInPairCompX.values2d() for (diag, pValue) in sbs if len(diag.la) == m]
@@ -1695,9 +1692,6 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      multiProcess=False,
                                      verbose=False):
 
-    
-    # compute the recommended gapMax parameter
-    #########################################
     # second level of verbosity
     verbose2 = False
     (p_hpSign, p_hpSign_g, (sTBG1, sTBG1_g), (sTBG2, sTBG2_g)) =\
@@ -1732,21 +1726,50 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
             if len(listOfSbs) > 0:
                 sbsInPairComp[c1][c2] = listOfSbs
     else:
-        totalNbComps = len(g1_tb.keys())*len(g2_tb.keys())
         print >> sys.stderr, "synteny block extraction"
-    	(p_hpSign, p_hpSign_g, N12s, N12_g, sbsInPairComp) =\
-            extractSbs.extractSbsInPairCompChr(g1_tb, g2_tb, consistentSwDType, distanceMetric)
+        cythonOptimisation = False
+        if cythonOptimisation:
+            tic = time.time()
+            (p_hpSign, p_hpSign_g, N12s, N12_g, sbsInPairComp) = \
+                extractSbs.extractSbsInPairCompChr(g1_tb, g2_tb, consistentSwDType, distanceMetric)
+            tac = time.time()
+            print >> sys.stderr, "Cython(extractSbsInPairCompChr) was executed in %ss" % (tac - tic)
 
-    	N1_weightedAverage = int(myMaths.myStats.getWeightedAverage([len(g1_tb[c1]) for c1 in g1_tb]))
-        N2_weightedAverage = int(myMaths.myStats.getWeightedAverage([len(g2_tb[c2]) for c2 in g2_tb]))
-        density = float(N12_g)/(N1_g*N2_g)
-        # conservation of the density
-        N12_weightedAverage = int(density*N1_weightedAverage*N2_weightedAverage)
-        gap = recommendedGap(nbHpsRecommendedGap, targetProbaRecommendedGap, N12_weightedAverage, N1_weightedAverage, N2_weightedAverage, p_hpSign=p_hpSign_g, verbose=verbose)
-        print >> sys.stderr, "recommended gapMax = %s tbs" % gap
-        if gapMax is None:
-        	gapMax = gap
-        print >> sys.stderr, "used gapMax = %s tbs" % gapMax
+        else:
+            totalNbComps = len(g1_tb) * len(g2_tb)
+            progressBar = myTools.ProgressBar(totalNbComps)
+            N12s = myTools.Dict2d(int)
+            N12_g = 0
+            currCompNb = 0
+            tic = time.time()
+            for c1 in g1_tb.keys():
+                for c2 in g2_tb.keys():
+                    (listOfDiags, N12) = extractSbsInPairCompChr(g1_tb[c1], g2_tb[c2], consistentSwDType, distanceMetric)
+                    if len(listOfDiags) > 0:
+                        sbsInPairComp[c1][c2] = listOfDiags
+                    N12s[c1][c2] = N12
+                    N12_g += N12
+                    currCompNb += 1
+                    progressBar.printProgressIn(sys.stderr, currCompNb)
+            tac = time.time()
+            print >> sys.stderr, "extractSbsInPairCompChr was executed in %ss" % (tac - tic)
+    assert all([len(sbsInPairComp[k1Foo][k2Foo]) > 0 for (k1Foo, k2Foo) in sbsInPairComp.keys2d()])
+
+    N1_weightedAverage = int(myMaths.myStats.getWeightedAverage([len(g1_tb[c1]) for c1 in g1_tb]))
+    N2_weightedAverage = int(myMaths.myStats.getWeightedAverage([len(g2_tb[c2]) for c2 in g2_tb]))
+    density = float(N12_g)/(N1_g*N2_g)
+    # conservation of the density
+    N12_weightedAverage = int(density*N1_weightedAverage*N2_weightedAverage)
+    gap = recommendedGap(nbHpsRecommendedGap, targetProbaRecommendedGap, N12_weightedAverage, N1_weightedAverage, N2_weightedAverage, p_hpSign=p_hpSign_g, verbose=verbose)
+    print >> sys.stderr, "recommended gapMax = %s tbs" % gap
+    if gapMax is None:
+        gapMax = gap
+    print >> sys.stderr, "used gapMax = %s tbs" % gapMax
+
+    for (c1, c2) in sbsInPairComp.keys2d():
+        listOfDiags = sbsInPairComp[c1][c2]
+        if len(listOfDiags) > 0:
+            sbsInPairComp[c1][c2] = mergeSbs(listOfDiags, gapMax, g2_tb[c2], distanceMetric, verbose=False)
 	
     # setp 4 : statistical validation of putative sbs
     ##################################################
@@ -1801,7 +1824,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
             for (c1, c2) in sbsInPairComp.keys2d():
                 # BM: Before Merge
                 nbSbsBM = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
-                sbsInPairComp[c1][c2] = mergeSbs(sbsInPairComp[c1][c2], gapMax, g2_tb[c2], verbose=False)
+                sbsInPairComp[c1][c2] = mergeSbs(sbsInPairComp[c1][c2], gapMax, g2_tb[c2], distanceMetric=distanceMetric, verbose=False)
                 # AM: After Merge
                 nbSbsAM = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
                 assert nbSbsAM <= nbSbsBM

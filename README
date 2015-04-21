@@ -1,0 +1,16 @@
+Installation:
+-------------
+
+# Install cython
+sudo apt-get install cython
+
+# Move to the root of LibsDyogen containing this file
+cd <path/LibsDyogen>
+
+# If you type
+ls
+
+# You should see this README.txt and the 'utils' folder
+
+# Then cythonise the utils/extractSbs.pyx file
+bash cythonisePyxFiles.sh

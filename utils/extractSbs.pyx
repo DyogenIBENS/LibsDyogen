@@ -1,28 +1,25 @@
-from cpython cimport array as c_array
-from array import array
 import itertools
 import collections
-import copy
 import sys
 
-import utils.myTools
-import utils.myDiags
-import utils.myProbas
-import utils.myLightGenomes
+import myTools
+import myDiags
+import myProbas
+import myLightGenomes
 
 def extractSbsInPairCompChr(g1,g2,consistentSwDType,distanceMetric):
 	cdef float c11, c21, c111, c211, c1N, c2N
 	res = collections.defaultdict(lambda: collections.defaultdict(dict))
-	sbsInPairComp = utils.myTools.Dict2d(list)
-	N12s = utils.myTools.Dict2d(int)
+	sbsInPairComp = myTools.Dict2d(list)
+	N12s = myTools.Dict2d(int)
 
 	(stb1, stb1_g, _) = statsTbOrientation(g1, loc=False)
-	(stb2, stb2_g, locG2) = statsTbOrientation(g2,loc=True)
-	
-	total = len(g1.keys()) * len(g2.keys())
-	progressBar = utils.myTools.ProgressBar(total)
+	(stb2, stb2_g, locG2) = statsTbOrientation(g2, loc=True)
 
-	for (i, (c1,c2)) in enumerate(itertools.product(g1.keys(),g2.keys())):
+	totalNbComps = len(g1.keys()) * len(g2.keys())
+	progressBar = myTools.ProgressBar(totalNbComps)
+	currCompNb = 0
+	for (i, (c1,c2)) in enumerate(itertools.product(g1.keys(), g2.keys())):
 		c11 = stb1[c1][+1]
 		c21 = stb2[c2][+1]
 		c111 = stb1[c1][-1]
@@ -33,20 +30,18 @@ def extractSbsInPairCompChr(g1,g2,consistentSwDType,distanceMetric):
 		res[c1][c2][+1] = c11*c21 + c111*c211
 		res[c1][c2][-1] = c11*c211 + c111*c21
 		res[c1][c2][None] = c11*c2N + c1N*c21 + c111*c2N + c1N*c211 + c1N*c2N
-		
+
 		#####
 		# Find list of diags
 		#####
 		listOfDiags = []
 		nbHomo = 0
-		
+
 		if not locG2[c2]:
-			N12s[c1][c2] = nbHomo
-			if len(listOfDiags) > 0:
-				sbsInPairComp[c1][c2] = listOfDiags
+			N12s[c1][c2] = 0
 			continue
-		
-		M = homologyMatrix(g1[c1],locG2[c2])
+
+		M = homologyMatrix(g1[c1], locG2[c2])
 		nbHomo = sum([len(M[i]) for i in M])
 
 		la = []
@@ -54,7 +49,7 @@ def extractSbsInPairCompChr(g1,g2,consistentSwDType,distanceMetric):
 		l2 = []
 		diagType = None
 		i1_old = None
-		
+
 		for (i1,(f,_)) in enumerate(g1[c1]):
 			if f != None and f in locG2[c2]:
 				i1_old = i1
@@ -63,7 +58,7 @@ def extractSbsInPairCompChr(g1,g2,consistentSwDType,distanceMetric):
 					while i1 in M and i2 in M[i1]:
 						f = g1[c1][i1][0]
 						if len(la) == 0:
-							diagType = utils.myDiags.findDiagType(i1,i2,M,consistentSwDType)
+							diagType = myDiags.findDiagType(i1,i2,M,consistentSwDType)
 						if g1[c1][i1][1] != None:
 							ancestralStrand = g1[c1][i1][1]
 						elif diagType == '/' and g2[c2][i2][1] != None:
@@ -75,7 +70,7 @@ def extractSbsInPairCompChr(g1,g2,consistentSwDType,distanceMetric):
 						la.append((f,ancestralStrand,len(la)+1))
 						l1.append(i1)
 						l2.append(i2)
-					
+
 						del M[i1][i2]
 						if len(M[i1].keys()) == 0:
 							del M[i1]
@@ -86,17 +81,16 @@ def extractSbsInPairCompChr(g1,g2,consistentSwDType,distanceMetric):
 							i1 = i1+1
 							i2 = i2-1
 						else:
-							listOfDiags.append(utils.myDiags.Diagonal(diagType,l1,l2,la))
+							listOfDiags.append(myDiags.Diagonal(diagType,l1,l2,la))
 							l1=[]
 							l2=[]
 							la=[]
 							diagType=None
 							break
 		if len(listOfDiags) > 0:
-			listOfDiags = utils.myDiags.mergeSbs(listOfDiags, 0, g2[c2], distanceMetric, verbose=False)
-			if len(listOfDiags) > 0:
-				(N12s[c1][c2], sbsInPairComp[c1][c2]) = (nbHomo, listOfDiags)
-		progressBar.printProgressIn(sys.stderr, i)
+			(N12s[c1][c2], sbsInPairComp[c1][c2]) = (nbHomo, listOfDiags)
+		currCompNb += 1
+		progressBar.printProgressIn(sys.stderr, currCompNb)
 
 	N12s_g = sum([nbH for nbH in N12s.values2d()])
 	p_hpSign_g = {}
@@ -108,12 +102,12 @@ def extractSbsInPairCompChr(g1,g2,consistentSwDType,distanceMetric):
 	c1N = stb1_g[None]
 	c2N = stb2_g[None]
 	p_hpSign_g[+1] = c11*c21 + c111*c211
-	p_hpSign_g[-1] = c11*c211 + c111*c21 
-	p_hpSign_g[None] = c1N*(c21 + c211) + c2N*(c11+c111) + c1N*c2N 
-	
-	return (res,p_hpSign_g, N12s, N12s_g,  sbsInPairComp)
+	p_hpSign_g[-1] = c11*c211 + c111*c21
+	p_hpSign_g[None] = c1N*(c21 + c211) + c2N*(c11+c111) + c1N*c2N
 
-	
+	return (res, p_hpSign_g, N12s, N12s_g, sbsInPairComp)
+
+
 def statsTbOrientation(genome_tb, loc=False):
 	p_tbO = {}
 	locG = {}
@@ -121,7 +115,7 @@ def statsTbOrientation(genome_tb, loc=False):
 	if loc:
 		locG = collections.defaultdict(lambda: collections.defaultdict(list))
 	cdef int nbTb_plus, nbTb_minus, nbTb_None, lenc, nbTb_plus_g, nbTb_minus_g, nbTb_None_g
-	
+
 	nbTb_plus_g, nbTb_minus_g, nbTb_None_g = 0, 0, 0
 	for c in genome_tb:
 		lenc = len(genome_tb[c])
@@ -144,7 +138,7 @@ def statsTbOrientation(genome_tb, loc=False):
 		nbTb_plus_g += nbTb_plus
 		nbTb_minus_g += nbTb_minus
 		nbTb_None_g += nbTb_None
-	
+
 	nbTbs_g = sum([len(genome_tb[c]) for c in genome_tb])
 	p_tbO_g = [float(v)/nbTbs_g for v in (nbTb_plus_g, nbTb_minus_g, nbTb_None_g)]
 	p_tbO_g = dict( ((+1,p_tbO_g[0]),(-1,p_tbO_g[1]), (None,p_tbO_g[2]) ))

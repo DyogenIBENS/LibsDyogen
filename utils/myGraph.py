@@ -298,6 +298,9 @@ def calcDiags(g1, g2, orthos, fusionThreshold=-1, sameStrand=True, orthosFilter=
 
 #@utils.myTools.memoize
 def revGene((x,sx)):
+    # sx is an integer for the graph construction of AGORA
+    # sx = +1 or -1, standard case
+    # however sometimes sx is not defined, and we chose 0 and the reverse of 0 is 10
 	if sx == 0:
 		return (x, 10)
 	elif sx == 10:
