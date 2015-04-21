@@ -298,7 +298,12 @@ def calcDiags(g1, g2, orthos, fusionThreshold=-1, sameStrand=True, orthosFilter=
 
 #@utils.myTools.memoize
 def revGene((x,sx)):
-	return (x,-sx)
+	if sx == 0:
+		return (x, 10)
+	elif sx == 10:
+		return (x, 0)
+	else:
+		return (x,-sx)
 
 #
 # Un ensemble de diagonales que l'on represente comme un graphe ou les noeuds sont les genes
@@ -361,7 +366,7 @@ class WeightedDiagGraph:
 	#
 	# Garde successivement les aretes de meilleur poids tant qu'elles n'introduisent pas de carrefour ou de cycle
 	##############################################################################################################
-	def cleanGraphTopDown(self, minimalWeight, searchLoops=False):
+	def cleanGraphTopDown(self, minimalWeight, searchLoops=True):
 		allEdges = []
 		res = {}
 		allSucc = {}
@@ -437,7 +442,6 @@ class WeightedDiagGraph:
 
 			addEdge(c, xsx, ysy)
 			addEdge(c, rysy, rxsx)
-			
 	
 		allNodes.difference_update(res)
 		allNodes.difference_update(ysy for (ysy,_) in res.itervalues())
@@ -477,7 +481,7 @@ class WeightedDiagGraph:
 
 				# Traitement de l'arete inverse
 				assert self.aretes.pop(revGene(ysy)) == (revGene(xsx),c)
-
+				
 				# Passage au suivant
 				xsx = ysy
 
