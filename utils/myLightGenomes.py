@@ -278,24 +278,33 @@ class LightGenome(myTools.DefaultOrderedDict):
                 nbRemovedChrs += 1
         return (nbRemovedGenes, nbRemovedChrs)
 
-    # TODO change name to getSetOfGeneNames (no ambiguity any more with a possible setter)
-    def getSetOfGeneNames(self, checkNoDuplicates=True):
-        res = set()
+    # TODO change name to getGeneNames (no ambiguity any more with a possible setter)
+    def getGeneNames(self, asA=set, checkNoDuplicates=True):
+        res = asA()
         for chrom in self.values():
             for gene in chrom:
                 if checkNoDuplicates and gene.n in res:
                     raise ValueError("%s contains two times the same gene name %s" % (self.name, gene.n))
-                res.add(gene.n)
+                if asA == set:
+                    res.add(gene.n)
+                else:
+                    assert asA == list
+                    res.append(gene.n)
         return res
 
-    def getSetOfOwnedFamilyNames(self, families):
+    def getOwnedFamilyNames(self, families, asA=set):
+        assert asA in [set, list]
         assert isinstance(families, Families)
-        res = set()
+        res = asA()
         for chrom in self.values():
             for gene in chrom:
                 family = families.getFamilyByName(gene.n, default=None)
                 if family:
-                    res.add(family.fn)
+                    if asA == set:
+                        res.add(family.fn)
+                    else:
+                        assert asA == list
+                        res.append(family.fn)
         return res
 
     def removeChrsStrictlySmallerThan(self, minChrLen):
@@ -313,6 +322,14 @@ class LightGenome(myTools.DefaultOrderedDict):
                 del self[c]
                 nbRemovedChrs += 1
         return nbRemovedChrs
+
+    def sort(self):
+        """ Sort sbs by decreasing sizes """
+        l = self.items()
+        for c in self.keys():
+            del self[c]
+        for (c, chrom) in sorted(l, key=lambda x: len(x[1]), reverse=True):
+            self[c] = chrom
 
 
 # FIXME, it could also be easier to use a dict here and no family IDs, but IDs are processed faster than strings when

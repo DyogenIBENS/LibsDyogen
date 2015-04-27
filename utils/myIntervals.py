@@ -8,6 +8,7 @@
 import collections
 from myLightGenomes import OGene, LightGenome
 import myTools
+import sys
 
 # Region
 # n = gene name
@@ -157,17 +158,10 @@ def intergeneFromAdjacency(adjacency, genomeWithDict, default=None):
         (ogl, ogr) = (og1, og2)
         # localisation of the intergene
         (c, x) = (g1pos.c, g1pos.idx + 1)
-        # FIXME
-        # check orientations!
-        # assert (ogl, ogr) == (genomeWithDict[g1pos.c][g1pos.idx], genomeWithDict[grpos.c][grpos.idx]),\
-        #     "%s == %s" % ((ogl, ogr), (genomeWithDict[g1pos.c][g1pos.idx], genomeWithDict[grpos.c][grpos.idx]))
     else:
         (ogl, ogr) = (og2.reversed(), og1.reversed())
         # localisation of the intergene
         (c, x) = (grpos.c, grpos.idx + 1)
-        # FIXME
-        # assert (ogl, ogr) == (genomeWithDict[grpos.c][grpos.idx], genomeWithDict[g1pos.c][g1pos.idx]),\
-        #     "%s == %s" % ((ogl, ogr), (genomeWithDict[grpos.c][grpos.idx], genomeWithDict[g1pos.c][g1pos.idx]))
     return (c, x)
 
 
@@ -196,6 +190,136 @@ def analyseGenomeIntoAdjs(genome, oriented=True):
                     # unoriented adjacencies
                     setAdjs.add(Adjacency(og1.n, og2.n))
     return setAdjs
+
+# tp = nb True Positives
+# tn = nb True Negatives
+# fp = nb False Positives
+# fn = nb False Negatives
+# sn = sensitivity
+# sp = specificity
+Efficiency = collections.namedtuple('efficiency', ('tp', 'tn', 'fp', 'fn', 'sn', 'sp'))
+
+@myTools.verbose
+def compareSbsToReferenceSbsAdjs(sbsGenome, sbsGenomeR, verbose=False):
+    """
+    :param sbsGenome: the sbs returned by phylDiag
+    :param sbsGenomeR: the reference sbs returned by the breakpoint analyser of MagSimus
+    """
+
+    isinstance(sbsGenome, LightGenome)
+    isinstance(sbsGenomeR, LightGenome)
+
+    print >> sys.stderr, "nb of sbs = %s" % len(sbsGenome.keys())
+    print >> sys.stderr, "nb of monogenic-sbs = %s" % sum([1 for chrom in sbsGenome.values() if len(chrom) == 1])
+    setAdjs = analyseGenomeIntoAdjs(sbsGenome, oriented=False)
+    setOAdjs = analyseGenomeIntoAdjs(sbsGenome, oriented=True)
+    setGeneNames = sbsGenome.getGeneNames()
+
+    print >> sys.stderr, "nb of reference sbs = %s" % len(sbsGenomeR.keys())
+    print >> sys.stderr, "nb of reference monogenic-sbs = %s" % sum([1 for chrom in sbsGenomeR.values() if len(chrom) == 1])
+    # R: reference
+    setAdjsR = analyseGenomeIntoAdjs(sbsGenomeR, oriented=False)
+    setOAdjsR = analyseGenomeIntoAdjs(sbsGenomeR, oriented=True)
+    setGeneNamesR = sbsGenomeR.getGeneNames()
+
+    print >> sys.stderr, "nb gene names in sbs = %s" % len(setGeneNames)
+    print >> sys.stderr, "nb gene names in reference sbs = %s" % len(setGeneNamesR )
+    print >> sys.stderr, "nb of gene names in both = %s" % len(setGeneNamesR & setGeneNames)
+    print >> sys.stderr, "gene names that are in setGeneNames - setGeneNamesR =", setGeneNames - setGeneNamesR
+    print >> sys.stderr, "gene names that are in setGeneNamesR - setGeneNames =", setGeneNamesR - setGeneNames
+
+    print >> sys.stderr, "nb adjs in sbs = %s" % len(setAdjs)
+    print >> sys.stderr, "nb o-adjs in sbs = %s" % len(setOAdjs)
+    print >> sys.stderr, "nb reference-adjs in sbs = %s" % len(setAdjsR )
+    print >> sys.stderr, "nb o-reference-adjs in sbs = %s" % len(setOAdjsR )
+
+    # #True positive adjs
+    Tp = len(setAdjs & setAdjsR )
+    Tn = None
+    Fp = len(setAdjs - setAdjsR )
+    Fn = len(setAdjsR - setAdjs)
+    assert len(setAdjsR ) == Tp + Fn
+    sensitivity = float(Tp) / float(Tp + Fn)
+    specificity = float(Tp) / float(Tp + Fp)
+    print >> sys.stderr, "Tp=%s" % Tp
+    print >> sys.stderr, "Fp=%s" % Fp
+    print >> sys.stderr, "Fn=%s" % Fn
+    print >> sys.stderr, "sensitivity=%s" % sensitivity
+    print >> sys.stderr, "specificity=%s" % specificity
+
+    OTp = len(setOAdjs & setOAdjsR )
+    OTn = None
+    OFp = len(setOAdjs - setOAdjsR )
+    OFn = len(setOAdjsR - setOAdjs)
+    assert len(setOAdjsR ) == OTp + OFn
+    Osensitivity = float(OTp) / float(OTp + OFn)
+    Ospecificity = float(OTp) / float(OTp + OFp)
+    print >> sys.stderr, "OTp=%s" % OTp
+    print >> sys.stderr, "OFp=%s" % OFp
+    print >> sys.stderr, "OFn=%s" % OFn
+    print >> sys.stderr, "Osensitivity=%s" % Osensitivity
+    print >> sys.stderr, "Ospecificity=%s" % Ospecificity
+
+    return Efficiency(OTp, OTn, OFp, OFn, Osensitivity, Ospecificity)
+
+
+def computeDistribLenSbsWithFn(sbsGenome, sFn):
+    sbsGenome.computeDictG2P()
+    distribLenSbsWithFn = collections.defaultdict(int)
+    for (geneN, _) in sFn:
+        geneP = sbsGenome.getPosition(geneN, default=None)
+        if geneP:
+            lenSbFn = len(sbsGenome[geneP.c])
+            #print >> sys.stderr, "Fp: gene %s in chrR %s of len=%s at idx %s" % (geneN, geneP.c, lenSbFn, geneP.idx)
+            distribLenSbsWithFn[lenSbFn] += 1
+    sumLens = sum(distribLenSbsWithFn.values())
+    percentageLen1 = 100 * float(distribLenSbsWithFn[1]) / sumLens if sumLens != 0 else 'None'
+    print >> sys.stderr, "(%s%% of len1), distribLenSbsWithFn=%s" %\
+                         (percentageLen1,
+                          sorted([(l, nb) for (l, nb) in distribLenSbsWithFn.iteritems()], key=lambda x: x[0]))
+    return distribLenSbsWithFn
+
+@myTools.verbose
+def compareSbsToReferenceSbsBreakpoints(sbsGenome, sbsGenomeR, verbose=False):
+    """
+    :param sbsGenome: the sbs returned by phylDiag
+    :param sbsGenomeR: the reference sbs returned by the breakpoint analyser of MagSimus
+    """
+
+    isinstance(sbsGenome, LightGenome)
+    isinstance(sbsGenomeR, LightGenome)
+    print >> sys.stderr, "nb of sbs = %s" % len(sbsGenome.keys())
+    print >> sys.stderr, "nb of monogenic-sbs = %s" % sum([1 for chrom in sbsGenome.values() if len(chrom) == 1])
+    chromExtrRegions = chromExtremityRegions(sbsGenome)
+
+    print >> sys.stderr, "nb of reference sbs = %s" % len(sbsGenomeR.keys())
+    print >> sys.stderr, "nb of reference monogenic-sbs = %s" % sum([1 for chrom in sbsGenomeR.values() if len(chrom) == 1])
+    # R: reference
+    chromExtRegionsR = chromExtremityRegions(sbsGenomeR)
+
+    # True positive breakpoint regions
+    sTp = chromExtrRegions & chromExtRegionsR
+    # sTn = None
+    sFp = chromExtrRegions - chromExtRegionsR
+    sFn = chromExtRegionsR - chromExtrRegions
+
+    # distribLenSbsWithFn = computeDistribLenSbsWithFn(sbsGenome, sFn)
+    # distribLenSbsWithFnR = computeDistribLenSbsWithFn(sbsGenomeR, sFn)
+
+    Tp = len(sTp)
+    Tn = None
+    Fp = len(sFp)
+    Fn = len(sFn)
+    assert len(chromExtRegionsR) == Tp + Fn
+    sensitivity = float(Tp) / float(Tp + Fn)
+    specificity = float(Tp) / float(Tp + Fp)
+    print >> sys.stderr, "Tp=%s" % Tp
+    print >> sys.stderr, "Fp=%s" % Fp
+    print >> sys.stderr, "Fn=%s" % Fn
+    print >> sys.stderr, "sensitivity=%s" % sensitivity
+    print >> sys.stderr, "specificity=%s" % specificity
+
+    return Efficiency(Tp, Tn, Fp, Fn, sensitivity, specificity)
 
 # TODO
 # def adjacencyFromIntergene(intergene, genomeWithDict, default=None):

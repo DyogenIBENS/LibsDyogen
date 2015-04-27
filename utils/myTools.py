@@ -16,6 +16,7 @@ import collections
 import enum
 
 from functools import wraps
+from collections import OrderedDict, Callable
 
 import myFile
 
@@ -558,6 +559,9 @@ class Dict2d(collections.defaultdict):
             for item in self[k1][k2]:
                 yield ((k1, k2), item)
 
+    def items2d(self):
+        return list(self.iteritems2d())
+
     def __add__(self, other):
         assert isinstance(other, Dict2d)
         res = Dict2d(self.type)
@@ -620,7 +624,11 @@ class OrderedDict2dOfLists(Dict2d):
             yield (id, (k1, k2), self.getItemById(id))
 
     def removeIds(self, setOfRemovedIds):
-        copyOrderedIds = list(self.orderedIds) # need a deep copy
+        # debug assertions
+        assert len(self.id2location.keys()) == len(self.orderedIds)
+        assert set(self.id2location.keys()) == set(self.orderedIds)
+
+        copyOrderedIds = list(self.orderedIds)  # need a deep copy
         for id in copyOrderedIds:
             if id in setOfRemovedIds:
                 (k1, k2, idx) = self.getItemLocationById(id)
@@ -633,6 +641,11 @@ class OrderedDict2dOfLists(Dict2d):
                     higherSbIdx = higherSbIdx + idx
                     self.id2location[higherSbId] = (k1, k2, higherSbIdx)
                 assert len(self.location2id[k1][k2]) == len(self[k1][k2])
+
+                # debug assertions
+                assert len(self.id2location.keys()) == len(self.orderedIds)
+                assert set(self.id2location.keys()) == set(self.orderedIds)
+
                 if len(self[k1][k2]) == 0:
                     del self[k1][k2]
                     if len(self[k1]) == 0:
@@ -649,13 +662,29 @@ class OrderedDict2dOfLists(Dict2d):
 
     def addToLocation(self, (k1, k2), item):
         self.maxId += 1
-        self[k1][k2].append(item)
-        self.id2location[self.maxId] = (k1, k2, len(self[k1][k2]) - 1)
-        self.location2id[k1][k2].append(self.maxId)
-        assert len(self.location2id[k1][k2]) == len(self[k1][k2])
-        self.orderedIds.append(self.maxId)
-from collections import OrderedDict, Callable
+        id = self.maxId
+        self.addToLocationWithId((k1, k2), item, id)
+        return id
 
+    def addToLocationWithId(self, (k1, k2), item, id):
+        assert id not in self.orderedIds
+        self.maxId = id if id > self.maxId else self.maxId
+        self[k1][k2].append(item)
+        self.id2location[id] = (k1, k2, len(self[k1][k2]) - 1)
+        self.location2id[k1][k2].append(id)
+        self.orderedIds.append(id)
+
+    def __add__(self, other):
+        assert isinstance(other, OrderedDict2dOfLists)
+        res = OrderedDict2dOfLists()
+        for (id, (k1, k2), item) in self.iterByOrderedIds():
+            res.addToLocationWithId((k1, k2), item, id)
+        minSelfId = min([sys.maxint] + self.orderedIds)
+        maxSelfId = max([0] + self.orderedIds)
+        for (id, (k1, k2), item) in other.iterByOrderedIds():
+            assert id < minSelfId or maxSelfId < id
+            res.addToLocationWithId((k1, k2), item, id)
+        return res
 
 # This class is a fusion of collections.defaultdict and collections.OrderedDict
 class DefaultOrderedDict(OrderedDict):

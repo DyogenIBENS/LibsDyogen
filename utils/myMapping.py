@@ -28,6 +28,9 @@ def nbDup(g_fID):
 
 # Rewrite genomes as a list of family Ids
 def labelWithFamID(genome, families=None):
+    """
+    This function keeps the original copy
+    """
     assert isinstance(genome, myLightGenomes.LightGenome)
     assert type(genome.values()[0]) == list
     if families is None:

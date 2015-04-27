@@ -432,3 +432,6 @@ def combinations(n,p):
 @myTools.minimalPythonVersion((2,7))
 def prod(factors):
     return reduce(operator.mul, factors, 1)
+
+def mean(l):
+    return float(sum(l)) / len(l)

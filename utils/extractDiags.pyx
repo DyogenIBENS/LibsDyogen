@@ -7,10 +7,10 @@ import myDiags
 import myProbas
 import myLightGenomes
 
-def extractSbsInPairCompChr(g1,g2,consistentSwDType,distanceMetric):
+def extractDiagsInPairCompChr(g1,g2,consistentSwDType,distanceMetric):
 	cdef float c11, c21, c111, c211, c1N, c2N
 	res = collections.defaultdict(lambda: collections.defaultdict(dict))
-	sbsInPairComp = myTools.Dict2d(list)
+	diagsInPairComp = myTools.Dict2d(list)
 	N12s = myTools.Dict2d(int)
 
 	(stb1, stb1_g, _) = statsTbOrientation(g1, loc=False)
@@ -88,7 +88,7 @@ def extractSbsInPairCompChr(g1,g2,consistentSwDType,distanceMetric):
 							diagType=None
 							break
 		if len(listOfDiags) > 0:
-			(N12s[c1][c2], sbsInPairComp[c1][c2]) = (nbHomo, listOfDiags)
+			(N12s[c1][c2], diagsInPairComp[c1][c2]) = (nbHomo, listOfDiags)
 		currCompNb += 1
 		progressBar.printProgressIn(sys.stderr, currCompNb)
 
@@ -105,7 +105,7 @@ def extractSbsInPairCompChr(g1,g2,consistentSwDType,distanceMetric):
 	p_hpSign_g[-1] = c11*c211 + c111*c21
 	p_hpSign_g[None] = c1N*(c21 + c211) + c2N*(c11+c111) + c1N*c2N
 
-	return (res, p_hpSign_g, N12s, N12s_g, sbsInPairComp)
+	return (res, p_hpSign_g, N12s, N12s_g, diagsInPairComp)
 
 
 def statsTbOrientation(genome_tb, loc=False):
@@ -153,7 +153,7 @@ def homologyMatrix(gc1, locG2):
 				M[i1][i2] = strandProduct(s1,s2)
 	return M
 
-def strandProduct(sa,sb):
+def strandProduct(sa, sb):
 	if sa != None and sb != None:
 		return sa*sb
 	return None

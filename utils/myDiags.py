@@ -48,12 +48,12 @@ import myProbas
 import myFile
 import myMaths
 import myMapping
-import myMultiprocess
 import myLightGenomes
 
-import extractSbs
+import extractDiags
 import time
-
+import multiprocessing.dummy as multiprocessing  # for using threads
+import multiprocessing  # for using processes
 import enum
 
 from utils.myLightGenomes import OGene
@@ -301,7 +301,7 @@ class queueWithBackup:
 ########################################################################################
 # TODO : optimize the search of diags by avoiding considering diags that are on the left of diagA
 @myTools.verbose
-def mergeSbs(listOfDiags, gapMax, gc2, distanceMetric = 'CD', verbose = False):
+def mergeDiags(listOfDiags, gapMax, gc2, distanceMetric = 'CD', verbose = False):
     assert gapMax>=0
     # assert that the diag elements in listOfDiags are either Diagonal objects
     # or SyntenyBlock objects
@@ -503,7 +503,6 @@ def buildSetOfVertices(sbsInPairCompWithIds):
         #V[iDsb] = weight
         V.add(idsb)
     return (V, (sbsG1, sbsG2))
-
 
 def findOverlapsOnGenome(rankGenome, sbsInPairCompWithIds, sbsGX, overlapMax=0):
 
@@ -901,7 +900,7 @@ def homologyMatrix(gc1, gc2):
     if not locG2:  # if locG2 is empty
         return (M, locG2)
     for (i1, (f, s1)) in enumerate(gc1):
-        if f != None and f in locG2: #TODO : remove by advance the f == None from gc1
+        if f != None and f in locG2:  #TODO : remove by advance the f == None from gc1
             M[i1]={}
             for (i2, s2) in locG2[f]:
                 M[i1][i2] = strandProduct(s1, s2)
@@ -1032,26 +1031,22 @@ def findDiagType(i1, i2, M, consistentSwDType):
     return diagType
 
 
-@myTools.verbose
-def extractSbsInPairCompChrWrapper(c1, c2, gc1, gc2, gapMax=0, distanceMetric = 'DPD',
-                                   consistentSwDType=True, verbose=False):
-    print >> sys.stderr, "(PPID = %s, PID = %s) start to extract diagonals on G1[%s]_vs_G2[%s]" %\
-        (os.getppid(), os.getpid(), c1, c2)
-    listOfDiags = extractSbsInPairCompChr(gc1, gc2, gapMax=0, distanceMetric = 'DPD',
-                                          consistentSwDType=True, verbose=False)
-    # FIXME diagType=diag[0] could be added as an information on the diagonal here
-    return ((c1, c2), listOfDiags)
+def extractDiagsInPairCompChrWrapper((c1, c2, gc1, gc2, consistentSwDType)):
+    # print >> sys.stderr, "(PPID = %s, PID = %s) start to extract diagonals on G1[%s]_vs_G2[%s]" %\
+    #     (os.getppid(), os.getpid(), c1, c2)
+    (listOfDiags, nbHomologies) = extractDiagsInPairCompChr(gc1, gc2, consistentSwDType, verbose=False)
+    return ((c1, c2), listOfDiags, nbHomologies)
 
-# Extract sbs in a pairwise comparison of two chromosomes
+# Extract diags in a pairwise comparison of two chromosomes
 ############################################################
 @myTools.verbose
-def extractSbsInPairCompChr(gc1, gc2, consistentSwDType=True, verbose=False):
+def extractDiagsInPairCompChr(gc1, gc2, consistentSwDType=True, verbose=False):
     listOfDiags = []
     (M, locG2) = homologyMatrix(gc1, gc2)
-    nbHomo = sum([len(M[i]) for i in M])
+    nbHomologies = sum([len(M[i]) for i in M])
     if not locG2:
         # if locG2 is empty
-        return (listOfDiags, nbHomo)
+        return (listOfDiags, nbHomologies)
     la = []
     l1 = []
     l2 = []
@@ -1118,13 +1113,13 @@ def extractSbsInPairCompChr(gc1, gc2, consistentSwDType=True, verbose=False):
                         la = []
                         diagType = None
                         break # exit the while loop and iter the for loop
-    return (listOfDiags, nbHomo)
+    return (listOfDiags, nbHomologies)
 
 
 def crossGeneContent(g1, g2):
     # create a set with all gene names
-    geneNames1 = g1.getSetOfGeneNames(g1, checkNoDuplicates=True)
-    geneNames2 = g2.getSetOfGeneNames(g2, checkNoDuplicates=True)
+    geneNames1 = g1.getGeneNames(g1, checkNoDuplicates=True)
+    geneNames2 = g2.getGeneNames(g2, checkNoDuplicates=True)
     gNsInCommon = geneNames1.intersection(geneNames2)
     gNsInG1notInG2 = geneNames1 - gNsInCommon
     gNsInG2notInG1 = geneNames2 - gNsInCommon
@@ -1171,8 +1166,8 @@ def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
         while True:
             # after this step genes that have no homolog in the other genome are marked None
             # 'gNsInCommon' is also called the set of 'anchor genes' in bibliography
-            geneNames1 = g1.getSetOfGeneNames(checkNoDuplicates=False)
-            geneNames2 = g2.getSetOfGeneNames(checkNoDuplicates=False)
+            geneNames1 = g1.getGeneNames(checkNoDuplicates=False)
+            geneNames2 = g2.getGeneNames(checkNoDuplicates=False)
             gNsInCommon = geneNames1 & geneNames2
             gNsToRemove = ((geneNames1 | geneNames2) - gNsInCommon) | {None}
             (g1, mG1f2G1o, (tmp_nCL1, tmp_nGL1)) = remapCoFilterContentAndSize(g1, gNsToRemove, minChromLength,
@@ -1190,7 +1185,7 @@ def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
             if not hasChanged:
                 break
         # there may be duplicates which family is in both genomes
-        assert g1.getSetOfGeneNames(checkNoDuplicates=False) == g2.getSetOfGeneNames(checkNoDuplicates=False)
+        assert g1.getGeneNames(checkNoDuplicates=False) == g2.getGeneNames(checkNoDuplicates=False)
     else:
         # impossible case
         raise
@@ -1248,8 +1243,8 @@ def numberOfHomologies(g1, g2, verbose=False):
        nbHomologies[c1][c2] = sum([len(Ms[i1]) for i1 in Ms])
    # new line in the print
    nbHomologies_g = sum([nbH for nbH in nbHomologies.values2d()])
-   #assert nbHomologies_g >= min(sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2])),"%s,%s" %  (sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2]))
-   #Not needed since the two lineages may have undergone some differential gene losses
+   # assert nbHomologies_g >= min(sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2])),"%s,%s" %  (sum([len(g1[c]) for c in g1]), sum([len(g2[c]) for c in g2]))
+   # Not needed since the two lineages may have undergone some differential gene losses
    return nbHomologies, nbHomologies_g
 
 
@@ -1257,20 +1252,20 @@ def numberOfHomologies(g1, g2, verbose=False):
 # because of collections.Counter
 @myTools.minimalPythonVersion((2, 7))
 @myTools.verbose
-def statisticalValidation(sbsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
-                          pThreshold=0.001,
+def statisticalValidation(diagsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
+                          pThreshold=1.0,
                           NbOfHomologiesThreshold=50,
                           validateImpossToCalc_mThreshold=3,
                           considerMonogenicSb=False,
                           verbose=False):
 
-    def fNbDiags(sbsInPairCompX):
-        return len(list(sbsInPairCompX.iteritems2d()))
+    def fNbDiags(diagsInPairCompX):
+        return len(list(diagsInPairCompX.iteritems2d()))
 
-    sbsInPairCompRejected = myTools.Dict2d(list)
-    sbsInPairCompImpossibleToCalcProba = myTools.Dict2d(list)
+    diagsInPairCompRejected = myTools.Dict2d(list)
+    diagsInPairCompImpossibleToCalcProba = myTools.Dict2d(list)
     sbsInPairCompStatVal = myTools.Dict2d(list)
-    for ((c1, c2), diag) in sbsInPairComp.iteritems2d():
+    for ((c1, c2), diag) in diagsInPairComp.iteritems2d():
         (m, max_g, lw1, lw2, l1_min, l1_max, l2_min, l2_max) = diag.calculateCharacteristics()
         assert m > 0
         na = len(g1_tb[c1])  # Nb of Tbs on C1
@@ -1278,15 +1273,15 @@ def statisticalValidation(sbsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
         nab = N12s[c1][c2]  # Nb of homologies in the mhp
         if m == 1 and not considerMonogenicSb:
             # all diagonals of length 1 are rejected
-            sbsInPairCompRejected[c1][c2].append((diag, None))
+            diagsInPairCompRejected[c1][c2].append((diag, None))
             continue
         elif m > nab:
             # there are not m hps in the MHP
-            sbsInPairCompImpossibleToCalcProba[c1][c2].append((diag, None))
+            diagsInPairCompImpossibleToCalcProba[c1][c2].append((diag, None))
             continue
         elif m > min([lw1, lw2]):
             # there are too many dispersed paralogies in the window
-            sbsInPairCompImpossibleToCalcProba[c1][c2].append((diag, None))
+            diagsInPairCompImpossibleToCalcProba[c1][c2].append((diag, None))
             continue
 
         # This is to avoid excessive time consuming computations
@@ -1298,44 +1293,40 @@ def statisticalValidation(sbsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
             p = myProbas.pValue(m, max_g, lw1, lw2, nab, na, nb, p_hpSign[c1][c2], verbose=verbose)
 
         if p is None:
-            sbsInPairCompImpossibleToCalcProba[c1][c2].append((diag, None))
+            diagsInPairCompImpossibleToCalcProba[c1][c2].append((diag, None))
         elif p <= pThreshold:
-            sbsInPairCompStatVal[c1][c2].append((diag, p))
+            sbsInPairCompStatVal[c1][c2].append(SyntenyBlock(diag, p))
         else:
-            sbsInPairCompRejected[c1][c2].append((diag, p))
+            diagsInPairCompRejected[c1][c2].append((diag, p))
             assert len(diag.l1) == len(diag.l1)
             assert len(diag.la) == len(diag.l2)
 
     # automatically validate sbs that contain more than validateImpossToCalc_mThreshold hps
     sbsInPairCompImpossibleToCalcProbaStatVal = myTools.Dict2d(list)
-    sbsInPairCompImpossibleToCalcProbaRejected = myTools.Dict2d(list)
-    for ((c1, c2), (diag, pVal)) in sbsInPairCompImpossibleToCalcProba.iteritems2d():
+    diagsInPairCompImpossibleToCalcProbaRejected = myTools.Dict2d(list)
+    for ((c1, c2), (diag, pVal)) in diagsInPairCompImpossibleToCalcProba.iteritems2d():
         m = diag.calculateCharacteristics()[0]
         if m >= validateImpossToCalc_mThreshold:
             # if the diagonal contains more than validateImpossToCalc_mThreshold
             # hps, it is validated in order to avoid to reject long and perfect
             # diagonals because of only one dispersed tandem duplication
-            sbsInPairCompImpossibleToCalcProbaStatVal[c1][c2].append((diag, pVal))
+            sbsInPairCompImpossibleToCalcProbaStatVal[c1][c2].append(SyntenyBlock(diag, pVal))
         else:
-            sbsInPairCompImpossibleToCalcProbaRejected[c1][c2].append((diag, pVal))
+            diagsInPairCompImpossibleToCalcProbaRejected[c1][c2].append((diag, pVal))
 
 
-    assert fNbDiags(sbsInPairCompImpossibleToCalcProbaStatVal) + fNbDiags(sbsInPairCompImpossibleToCalcProbaRejected) == fNbDiags(sbsInPairCompImpossibleToCalcProba),\
-        "%s + %s = %s" % (fNbDiags(sbsInPairCompImpossibleToCalcProbaStatVal), fNbDiags(sbsInPairCompImpossibleToCalcProbaRejected), fNbDiags(sbsInPairCompImpossibleToCalcProba))
+    assert fNbDiags(sbsInPairCompImpossibleToCalcProbaStatVal) + fNbDiags(diagsInPairCompImpossibleToCalcProbaRejected) == fNbDiags(diagsInPairCompImpossibleToCalcProba),\
+        "%s + %s = %s" % (fNbDiags(sbsInPairCompImpossibleToCalcProbaStatVal), fNbDiags(diagsInPairCompImpossibleToCalcProbaRejected), fNbDiags(diagsInPairCompImpossibleToCalcProba))
 
     # update the lists
     sbsInPairCompStatVal = sbsInPairCompStatVal + sbsInPairCompImpossibleToCalcProbaStatVal
-    sbsInPairCompRejected = sbsInPairCompRejected + sbsInPairCompImpossibleToCalcProbaRejected
+    diagsInPairCompRejected = diagsInPairCompRejected + diagsInPairCompImpossibleToCalcProbaRejected
 
-    #print >> sys.stderr, fNbDiags(sbsInPairCompStatVal)
-    #print >> sys.stderr, fNbDiags(sbsInPairCompRejected)
-    #print >> sys.stderr, fNbDiags(sbsInPairComp)
-
-    assert fNbDiags(sbsInPairCompStatVal) + fNbDiags(sbsInPairCompRejected) == fNbDiags(sbsInPairComp),\
-        "%s + %s = %s" % (fNbDiags(sbsInPairCompStatVal), fNbDiags(sbsInPairCompRejected), fNbDiags(sbsInPairComp))
+    assert fNbDiags(sbsInPairCompStatVal) + fNbDiags(diagsInPairCompRejected) == fNbDiags(diagsInPairComp),\
+        "%s + %s = %s" % (fNbDiags(sbsInPairCompStatVal), fNbDiags(diagsInPairCompRejected), fNbDiags(diagsInPairComp))
 
     firstPrint = True
-    for ((c1, c2), (diag, pVal)) in sbsInPairCompRejected.iteritems2d():
+    for ((c1, c2), (diag, pVal)) in diagsInPairCompRejected.iteritems2d():
         (m, max_g, lw1, lw2, l1_min, l1_max, l2_min, l2_max) = diag.calculateCharacteristics()
         na = len(g1_tb[c1])  # Nb of Tbs on C1
         nb = len(g2_tb[c2])  # Nb of Tbs on C2
@@ -1346,11 +1337,11 @@ def statisticalValidation(sbsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
                 firstPrint = False
             # TODO comment se fait-il que certaines diagonales soient en double ici ?
             print >> sys.stderr, "(c1=%s:%s-%s,c2=%s:%s-%s) \t (m=%s, max_g=%s, lw1=%s lw2=%s, nab=%s, na=%s, nb=%s)" %\
-                (c1,l1_min,l1_max,c2,l2_min,l2_max,m,max_g,lw1,lw2,nab,na,nb), "\t p=", pVal
+                (c1, l1_min, l1_max, c2, l2_min, l2_max, m, max_g, lw1, lw2, nab, na, nb), "\t p=", pVal
 
     firstPrint = True
-    for ((c1, c2), (diag, pVal)) in sbsInPairCompStatVal.iteritems2d():
-        (m, max_g, lw1, lw2, l1_min, l1_max, l2_min, l2_max) = diag.calculateCharacteristics()
+    for ((c1, c2), sb) in sbsInPairCompStatVal.iteritems2d():
+        (m, max_g, lw1, lw2, l1_min, l1_max, l2_min, l2_max) = sb.calculateCharacteristics()
         if m == 2:
             na = len(g1_tb[c1])  # Nb of Tbs on C1
             nb = len(g2_tb[c2])  # Nb of Tbs on C2
@@ -1359,197 +1350,190 @@ def statisticalValidation(sbsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
                 print >> sys.stderr, "Diagonals containing 2 hps that have passed the statistical test:"
                 firstPrint = False
             print >> sys.stderr, "(c1=%s:%s-%s,c2=%s:%s-%s) \t (m=%s, max_g=%s, lw1=%s lw2=%s, nab=%s, na=%s, nb=%s)" %\
-                (c1,l1_min,l1_max,c2,l2_min,l2_max,m,max_g,lw1,lw2,nab,na,nb), "\t p=", pVal
+                (c1, l1_min, l1_max, c2, l2_min, l2_max, m, max_g, lw1, lw2, nab, na, nb), "\t p=", sb.pVal
 
-    def statsDiagsM(sbsInPairCompX, m):
-        if len(sbsInPairCompX.keys2d()) == 0:
+    def statsDiagsM(diagsInPairCompX, m):
+        if len(diagsInPairCompX.keys2d()) == 0:
             return 'RAS'
-        assert all([len(sbsInPairCompX[k1Foo][k2Foo]) > 0 for (k1Foo, k2Foo) in sbsInPairCompX.keys2d()])
-        (k1Foo, k2Foo) = sbsInPairCompX.keys2d()[0]
-        if isinstance(sbsInPairCompX[k1Foo][k2Foo][0], tuple):
-            sbsInPairCompXM = [diag for sbs in sbsInPairCompX.values2d() for (diag, pValue) in sbs if len(diag.la) == m]
+        assert all([len(diagsInPairCompX[k1Foo][k2Foo]) > 0 for (k1Foo, k2Foo) in diagsInPairCompX.keys2d()])
+        (k1Foo, k2Foo) = diagsInPairCompX.keys2d()[0]
+        if isinstance(diagsInPairCompX[k1Foo][k2Foo][0], tuple):
+            diagsInPairCompXM = [diag for sbs in diagsInPairCompX.values2d() for (diag, pValue) in sbs if len(diag.la) == m]
         else:
-            # sbsInPairComp has no pValue
-            assert isinstance(sbsInPairCompX[k1Foo][k2Foo][0], Diagonal)
-            sbsInPairCompXM = [diag for diags in sbsInPairCompX.values2d() for diag in diags if len(diag.la) == m]
-        sbsInPairCompXMGaps = [diag.max_g() for diag in sbsInPairCompXM if len(diag.la) == m]
-        diagsXMGaps = collections.Counter(sbsInPairCompXMGaps)
+            # diagsInPairComp has no pValue
+            assert isinstance(diagsInPairCompX[k1Foo][k2Foo][0], Diagonal)
+            diagsInPairCompXM = [diag for diags in diagsInPairCompX.values2d() for diag in diags if len(diag.la) == m]
+        diagsInPairCompXMGaps = [diag.max_g() for diag in diagsInPairCompXM if len(diag.la) == m]
+        diagsXMGaps = collections.Counter(diagsInPairCompXMGaps)
         diagsXMGaps = ["%s:%s" % (length, nb) for (length, nb) in sorted(diagsXMGaps.items())]
         return diagsXMGaps
-    print >> sys.stderr, "Over all sbs of 2 hps before stat. val. the distribution of gap maximum is: {%s}" % " ".join(statsDiagsM(sbsInPairComp,2))
-    print >> sys.stderr, "Over all rejected sbs of 2 hps the distribution of gap maximum is: {%s}" % " ".join(statsDiagsM(sbsInPairCompRejected,2))
-    print >> sys.stderr, "Over all sbs where it is imposs. to calculate the proba. with 2 hps the distribution of gap maximum is : {%s} (due to dispersed paralogies)" % " ".join(statsDiagsM(sbsInPairCompImpossibleToCalcProba,2))
+    print >> sys.stderr, "Over all sbs of 2 hps before stat. val. the distribution of gap maximum is: {%s}" % " ".join(statsDiagsM(diagsInPairComp,2))
+    print >> sys.stderr, "Over all rejected sbs of 2 hps the distribution of gap maximum is: {%s}" % " ".join(statsDiagsM(diagsInPairCompRejected,2))
+    print >> sys.stderr, "Over all sbs where it is imposs. to calculate the proba. with 2 hps the distribution of gap maximum is : {%s} (due to dispersed paralogies)" % " ".join(statsDiagsM(diagsInPairCompImpossibleToCalcProba,2))
     print >> sys.stderr, "Over all sbs where it is imposs. to calculate the proba. with 2 hps which are finally validated, the distribution of gap maximum is: {%s} (due to dispersed paralogies)" % " ".join(statsDiagsM(sbsInPairCompImpossibleToCalcProbaStatVal,2))
-    print >> sys.stderr, "Over all sbs where it is imposs. to calculate the proba. with 2 hps which are finally rejected, the distribution of gap maximum is: {%s} (due to dispersed paralogies)" % " ".join(statsDiagsM(sbsInPairCompImpossibleToCalcProbaRejected,2))
+    print >> sys.stderr, "Over all sbs where it is imposs. to calculate the proba. with 2 hps which are finally rejected, the distribution of gap maximum is: {%s} (due to dispersed paralogies)" % " ".join(statsDiagsM(diagsInPairCompImpossibleToCalcProbaRejected,2))
 
     print >> sys.stderr, "Over all stat. val. sbs of 2 hps the distribution of gap maximum is: {%s}" % " ".join(statsDiagsM(sbsInPairCompStatVal,2))
 
-    def statsDiagLengths(sbsInPairCompX):
-        if len(sbsInPairCompX.keys2d()) == 0:
+    def statsDiagLengths(diagsInPairCompX):
+        if len(diagsInPairCompX.keys2d()) == 0:
             return 'RAS'
-        (k1Foo, k2Foo) = sbsInPairCompX.keys2d()[0]
-        if isinstance(sbsInPairCompX[k1Foo][k2Foo][0], tuple):
-            sbsInPairCompX_ = [diag for sbs in sbsInPairCompX.values2d() for (diag, pValue) in sbs]
+        (k1Foo, k2Foo) = diagsInPairCompX.keys2d()[0]
+        if isinstance(diagsInPairCompX[k1Foo][k2Foo][0], tuple):
+            diagsInPairCompX_ = [diag for sbs in diagsInPairCompX.values2d() for (diag, pValue) in sbs]
         else:
-            # sbsInPairComp has no pValue
-            #assert sbsInPairCompX[k1Foo][k2Foo][0].__class__.name == 'Diagonal'
-            assert isinstance(sbsInPairCompX[k1Foo][k2Foo][0], Diagonal)
-            sbsInPairCompX_ = [diag for diags in sbsInPairCompX.values2d() for diag in diags]
-        diagXLengths = collections.Counter([len(diags.la) for diags in sbsInPairCompX_])
+            # diagsInPairComp has no pValue
+            # assert diagsInPairCompX[k1Foo][k2Foo][0].__class__.name == 'Diagonal'
+            assert isinstance(diagsInPairCompX[k1Foo][k2Foo][0], Diagonal)
+            diagsInPairCompX_ = [diag for diags in diagsInPairCompX.values2d() for diag in diags]
+        diagXLengths = collections.Counter([len(diags.la) for diags in diagsInPairCompX_])
         diagXLengths = ["%s:%s" % (length, nb) for (length, nb) in sorted(diagXLengths.items())]
         return diagXLengths
-    print >> sys.stderr, "Over all diagonal before the stat. val., distribution of the diag lengths: {%s}" % " ".join(statsDiagLengths(sbsInPairComp))
-    print >> sys.stderr, "Over all rejected diagonals, distribution of all diag lengths: {%s}" %  " ".join(statsDiagLengths(sbsInPairCompRejected))
-    print >> sys.stderr, "Over all diagonals with p-Value impossible to compute (mainly due to paralogies), distribution of diag lengths: {%s}" %  " ".join(statsDiagLengths(sbsInPairCompImpossibleToCalcProba))
-    print >> sys.stderr, "Over all diagonals with p-Value impossible to compute (mainly due to paralogies) which are finally validated, distribution of diag lengths: {%s}" %  " ".join(statsDiagLengths(sbsInPairCompImpossibleToCalcProbaStatVal))
-    print >> sys.stderr, "Over all diagonals with p-Value impossible to compute (mainly due to paralogies) which are finally rejected, distribution of diag lengths: {%s}" %  " ".join(statsDiagLengths(sbsInPairCompImpossibleToCalcProbaRejected))
-    print >> sys.stderr, "Over all diagonals that passed the stat. val., distribution of diag lengths: {%s}" %  " ".join(statsDiagLengths(sbsInPairCompStatVal))
+    print >> sys.stderr, "Over all diagonal before the stat. val., distribution of the diag lengths: {%s}" % " ".join(statsDiagLengths(diagsInPairComp))
+    print >> sys.stderr, "Over all rejected diagonals, distribution of all diag lengths: {%s}" % " ".join(statsDiagLengths(diagsInPairCompRejected))
+    print >> sys.stderr, "Over all diagonals with p-Value impossible to compute (mainly due to paralogies), distribution of diag lengths: {%s}" % " ".join(statsDiagLengths(diagsInPairCompImpossibleToCalcProba))
+    print >> sys.stderr, "Over all diagonals with p-Value impossible to compute (mainly due to paralogies) which are finally validated, distribution of diag lengths: {%s}" % " ".join(statsDiagLengths(sbsInPairCompImpossibleToCalcProbaStatVal))
+    print >> sys.stderr, "Over all diagonals with p-Value impossible to compute (mainly due to paralogies) which are finally rejected, distribution of diag lengths: {%s}" % " ".join(statsDiagLengths(diagsInPairCompImpossibleToCalcProbaRejected))
+    print >> sys.stderr, "Over all diagonals that passed the stat. val., distribution of diag lengths: {%s}" % " ".join(statsDiagLengths(sbsInPairCompStatVal))
 
-    for (c1, c2) in sbsInPairCompStatVal.keys2d():
-        sbsInPairCompStatVal[c1][c2] = [SyntenyBlock(diag, pVal) for (diag, pVal) in sbsInPairCompStatVal[c1][c2]]
-    return sbsInPairCompStatVal
 
+    tmp = myTools.Dict2d(list)
+    for ((c1, c2), (diag, sb)) in diagsInPairCompRejected.iteritems2d():
+        tmp[c1][c2].append(diag)
+    diagsInPairCompRejected = tmp
+
+    return (sbsInPairCompStatVal, diagsInPairCompRejected)
+
+
+# Check if list2 is nested in the gaps of list1
+# list1: contains the indices of the first sb
+# list2: contains the indices of the second sb
+def noOverlapList(list1, list2):
+    setList1 = set(list1)
+    setList2 = set(list2)
+    if len(setList1 & setList2) > 0:
+        # TODO: for ancestral genome reconstruction, the fractionation
+        # of the segmental duplication should be taken into account to
+        # find what was the ancestral gene order.
+        # This fractionation should at first sight be similar to the
+        # fractionation that follows a WGD.
+
+        #shortestListLength = min(len(setList1), len(setList2))
+        #if float(len(setList1 & setList2)) > (0.8 * shortestListLength):
+            #print >> sys.stderr, "A probable segmental duplication has been seen (>80% genes in common with the smallest sb of the pair of overlapping sbs)"
+        return False
+    else:
+        return True
+
+def noOverlapSb(((c1a, c2a), sba), ((c1b, c2b), sbb)):
+    if c1a != c1b and c2a != c2b:
+        return False
+    res = True
+    if c1a == c1b:
+        res = res and noOverlapList(sba.l1, sbb.l1)
+    if c2a == c2b:
+        res = res and noOverlapList(sba.l2, sbb.l2)
+    return res
+
+# Split nested lists 'list1' and 'list2' by introducing breakpoints in gaps
+# of the list that contain nested indices of the other list.
+def splitNestedLists(lista, listb):
+    alternatingList = [('a', ia) for ia in lista] + [('b', ib) for ib in listb]
+    alternatingList.sort(key=lambda x: x[1])
+    # DEBUG assertion
+    # check that there are no duplicated indices
+    #l = [x for (_, x) in alternatingList]
+    #assert len(set([x for x in l if l.count(x) > 1])) == 0,\
+    #    "Indices of list2 are not nested within the gaps of list1"
+    #
+    splitRanks_a = []
+    splitRanks_b = []
+    nbIDa = 0
+    nbIDb = 0
+    iDold = sys.maxint
+    for (iD, _) in alternatingList:
+        if iD == 'a':
+            if iD != iDold:
+                splitRanks_a.append(nbIDa)
+            nbIDa += 1
+        else:
+            assert iD == 'b'
+            if iD != iDold:
+                splitRanks_b.append(nbIDb)
+            nbIDb += 1
+        iDold = iD
+    splitRanks_a.append(nbIDa)
+    splitRanks_b.append(nbIDb)
+    return (splitRanks_a, splitRanks_b)
+
+def splitSbBySplitRanks(sb, splitRanks):
+    newSbs = []
+    for (xBeg, xEnd) in myTools.myIterator.slidingTuple(splitRanks):
+        newDt = sb.dt
+        newl1 = sb.l1[xBeg:xEnd]
+        newl2 = sb.l2[xBeg:xEnd]
+        newla = sb.la[xBeg:xEnd]
+        if newla[0][2] > 1:
+            newla = [(aG, aGs, (dist - newla[0][2] + 1)) for (aG, aGs, dist) in newla]
+        assert newla[0][2] == 1
+        # Here we assign the former pVal to all sub-sbs. The
+        # hypothesis is to consider that since the sub-sbs were
+        # neighbours within the former sb, their significances have
+        # already been assessed by the former pValue calculation.
+        if isinstance(sb, SyntenyBlock):
+            newPval = sb.pVal
+        else:
+            assert isinstance(sb, Diagonal)
+            newPval = 0
+        newSbs.append(SyntenyBlock(Diagonal(newDt, newl1, newl2, newla), newPval))
+    return newSbs
+
+def splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb)):
+    # DEBUG assertion
+    assert len(sba.l1) == len(sba.l2) == len(sba.la)
+    assert len(sbb.l1) == len(sbb.l2) == len(sbb.la)
+    #
+    if c1a == c1b:
+        (splitRanks_1a, splitRanks_1b) = splitNestedLists(sba.l1, sbb.l1)
+        (splitRanks_a, splitRanks_b) = (splitRanks_1a, splitRanks_1b)
+    if c2a == c2b:
+        (splitRanks_2a, splitRanks_2b) = splitNestedLists(sba.l2, sbb.l2)
+        # if the diagType is '\', l2 starts from the highest idx on c2 and
+        # ends with the lowest idx.
+        if sba.dt == '\\':
+            splitRanks_2a = [len(sba.l2) - rank for rank in  splitRanks_2a]
+        if sbb.dt == '\\':
+            splitRanks_2b = [len(sbb.l2) - rank for rank in  splitRanks_2b]
+        (splitRanks_a, splitRanks_b) = (splitRanks_2a, splitRanks_2b)
+    if c1a == c1b and c2a == c2b:
+        # take into account the splits in the two genomes
+        # For instance a short transposition
+        # C1 = +A+B+C+D+E+F
+        # C2 = +A+D+B+C+E+F
+        # if gapMax >=2:
+        #   sba = [+A+D+E+F]
+        #   sbb = [+B+C]
+        #   splitRanks_1a = [1]
+        #   splitRanks_2a = [2]
+        #   splitRanks_1b = []
+        #   splitRanks_2b = []
+        #   splitRanks_a = [1, 2] # which means a split before element
+        #   at idx 1 (D) and another split before element at idx 2 (E)
+        #   sba -> [+A] [+D] [+E+F]
+        #   Yields 4 sbs: [A], [D], [+E+F], and [+B+C]
+        splitRanks_a = sorted(list(set(splitRanks_1a + splitRanks_2a)))
+        splitRanks_b = sorted(list(set(splitRanks_1b + splitRanks_2b)))
+
+        assert splitRanks_a[0] == 0 and splitRanks_a[-1] == len(sba.la)
+        assert splitRanks_b[0] == 0 and splitRanks_b[-1] == len(sbb.la)
+
+    #newSbs = splitSbBySplitRanks(sba, splitRanks_a)
+    #newSbs.extend(splitSbBySplitRanks(sbb, splitRanks_b))
+    return (splitRanks_a, splitRanks_b)
 
 # Split a sb as soon as one of its gap contains another sb
 # the other sb may be a micro-inversion or a transposition-like sb
-def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True):
-
-    # Check if list2 is nested in the gaps of list1
-    # list1: contains the indices of the first sb
-    # list2: contains the indices of the second sb
-    def noOverlapList(list1, list2):
-        setList1 = set(list1)
-        setList2 = set(list2)
-        if len(setList1 & setList2) > 0:
-            # TODO: for ancestral genome reconstruction, the fractionation
-            # of the segmental duplication should be taken into account to
-            # find what was the ancestral gene order.
-            # This fractionation should at first sight be similar to the
-            # fractionation that follows a WGD.
-
-            #shortestListLength = min(len(setList1), len(setList2))
-            #if float(len(setList1 & setList2)) > (0.8 * shortestListLength):
-                #print >> sys.stderr, "A probable segmental duplication has been seen (>80% genes in common with the smallest sb of the pair of overlapping sbs)"
-            return False
-        else:
-            return True
-
-    def noOverlapSb(((c1a, c2a), sba), ((c1b, c2b), sbb)):
-        sba = id2sb(idsba)
-        sbb = id2sb(idsbb)
-        if c1a != c1b and c2a != c2b:
-            return False
-        res = True
-        if c1a == c1b:
-            res = res and noOverlapList(sba.l1, sbb.l1)
-        if c2a == c2b:
-            res = res and noOverlapList(sba.l2, sbb.l2)
-        return res
-
-    # Split nested lists 'list1' and 'list2' by introducing breakpoints in gaps
-    # of the list that contain nested indices of the other list.
-    def splitNestedLists(lista, listb):
-        alternatingList = [('a', ia) for ia in lista] + [('b', ib) for ib in listb]
-        alternatingList.sort(key=lambda x: x[1])
-        # DEBUG assertion
-        # check that there are no duplicated indices
-        #l = [x for (_, x) in alternatingList]
-        #assert len(set([x for x in l if l.count(x) > 1])) == 0,\
-        #    "Indices of list2 are not nested within the gaps of list1"
-        #
-        splitRanks_a = []
-        splitRanks_b = []
-        nbIDa = 0
-        nbIDb = 0
-        iDold = sys.maxint
-        for (iD, _) in alternatingList:
-            if iD == 'a':
-                if iD != iDold:
-                    splitRanks_a.append(nbIDa)
-                nbIDa += 1
-            else:
-                assert iD == 'b'
-                if iD != iDold:
-                    splitRanks_b.append(nbIDb)
-                nbIDb += 1
-            iDold = iD
-        splitRanks_a.append(nbIDa)
-        splitRanks_b.append(nbIDb)
-        return (splitRanks_a, splitRanks_b)
-
-        #def adjIdxs(listX):
-        #    lAdjIdxs = []
-        #    i1Old = sys.maxint
-        #    for i1 in listX:
-        #        if i1 != i1Old + 1:
-        #            # start a new strict diagonal
-        #            lAdjIdxs.append([i1])
-        #        else:
-        #            lAdjIdxs[-1].append(i1)
-        #        i1Old = i1
-        #    return lAdjIdxs
-        #filledList1 = set(range(min(list1), max(list1) +1))
-        #gapsList1 = sorted(list(filledList1 - setList1))
-        #gapsList1 = adjIdxs(gapsList1)
-
-    def splitSbBySplitRanks(sb, splitRanks):
-        newSbs = []
-        for (xBeg, xEnd) in myTools.myIterator.slidingTuple(splitRanks):
-            newDt = sb.dt
-            newl1 = sb.l1[xBeg:xEnd]
-            newl2 = sb.l2[xBeg:xEnd]
-            newla = sb.la[xBeg:xEnd]
-            if newla[0][2] > 1:
-                newla = [(aG, aGs, (dist - newla[0][2] + 1)) for (aG, aGs, dist) in newla]
-            assert newla[0][2] == 1
-            # Here we assign the former pVal to all sub-sbs. The
-            # hypothesis is to consider that since the sub-sbs were
-            # neighbours within the former sb, their significances have
-            # already been assessed by the former pValue calculation.
-            newPval = sb.pVal
-            newSbs.append(SyntenyBlock(Diagonal(newDt, newl1, newl2, newla), newPval))
-        return newSbs
-
-    def splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb)):
-        # DEBUG assertion
-        assert len(sba.l1) == len(sba.l2) == len(sba.la)
-        assert len(sbb.l1) == len(sbb.l2) == len(sbb.la)
-        #
-        if c1a == c1b:
-            (splitRanks_1a, splitRanks_1b) = splitNestedLists(sba.l1, sbb.l1)
-            (splitRanks_a, splitRanks_b) = (splitRanks_1a, splitRanks_1b)
-        if c2a == c2b:
-            (splitRanks_2a, splitRanks_2b) = splitNestedLists(sba.l2, sbb.l2)
-            # if the diagType is '\', l2 starts from the highest idx on c2 and
-            # ends with the lowest idx.
-            if sba.dt == '\\':
-                splitRanks_2a = [len(sba.l2) - rank for rank in  splitRanks_2a]
-            if sbb.dt == '\\':
-                splitRanks_2b = [len(sbb.l2) - rank for rank in  splitRanks_2b]
-            (splitRanks_a, splitRanks_b) = (splitRanks_2a, splitRanks_2b)
-        if c1a == c1b and c2a == c2b:
-            # take into account the splits in the two genomes
-            # For instance a short transposition
-            # C1 = +A+B+C+D+E+F
-            # C2 = +A+D+B+C+E+F
-            # if gapMax >=2:
-            #   sba = [+A+D+E+F]
-            #   sbb = [+B+C]
-            #   splitRanks_1a = [1]
-            #   splitRanks_2a = [2]
-            #   splitRanks_1b = []
-            #   splitRanks_2b = []
-            #   splitRanks_a = [1, 2] # which means a split before element
-            #   at idx 1 (D) and another split before element at idx 2 (E)
-            #   sba -> [+A] [+D] [+E+F]
-            #   Yields 4 sbs: [A], [D], [+E+F], and [+B+C]
-            splitRanks_a = sorted(list(set(splitRanks_1a + splitRanks_2a)))
-            splitRanks_b = sorted(list(set(splitRanks_1b + splitRanks_2b)))
-
-        #newSbs = splitSbBySplitRanks(sba, splitRanks_a)
-        #newSbs.extend(splitSbBySplitRanks(sbb, splitRanks_b))
-        return (splitRanks_a, splitRanks_b)
-
+def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=False):
 
     # Find sbs that are nested within gaps of other sbs
     #   * nested inversions (micro-inversions, nested segments and inversed
@@ -1589,14 +1573,23 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True):
                 # diagonal in the case of an intra-synteny-block transposition
                 #if sba.dt == '/' and sbb.dt == '\\' or sba.dt == '\\' and sbb.dt == '/':
 
-                # Return tuples (id du sb splité, splitRanks)
-                # This allows to incrementaly update the splitRanks
-                #  and then it wil be possible to perform the splits
-                #  after the for loops
-                (splitRanks_a, splitRanks_b) = splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb))
-                id2splitRanks[idsba] = sorted(list(set(id2splitRanks[idsba] + splitRanks_a)))
-                id2splitRanks[idsbb] = sorted(list(set(id2splitRanks[idsbb] + splitRanks_b)))
-                todo = todo | {idsba, idsbb}
+                (splitRanks_al1, splitRanks_bl1) = splitNestedLists(sba.l1, sbb.l1)
+                (splitRanks_al2, splitRanks_bl2) = splitNestedLists(sba.l2, sbb.l2)
+                if len(splitRanks_al1) == len(splitRanks_al2) and len(splitRanks_bl1)  == len(splitRanks_bl2):
+                    # this last condition was for avoiding strange cases
+                    # +A+B+C+D+E
+                    # +A-D+B-C+E
+                    # where -C-D is seen has an inluded diagonal
+
+                    # Return tuples (id du sb splité, splitRanks)
+                    # This allows to incrementaly update the splitRanks
+                    #  and then it wil be possible to perform the splits
+                    #  after the for loops
+                    (splitRanks_a, splitRanks_b) = splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb))
+
+                    id2splitRanks[idsba] = sorted(list(set(id2splitRanks[idsba] + splitRanks_a)))
+                    id2splitRanks[idsbb] = sorted(list(set(id2splitRanks[idsbb] + splitRanks_b)))
+                    todo = todo | {idsba, idsbb}
 
     # extra-sb rearrangement, for instance a transposition
     # FIXME: allow only 'one' nested segment, to avoid considering segmental
@@ -1630,28 +1623,15 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True):
 
     # With 'todo' and (id of the splited sb, splitRanks)s, calculate the newSbs
     # and removed sbs
-    # TODO update the set of sbs
-    #for (idsb, ) in sbsInPairCompWithIds.iteritemsWithIds:
-    #    if idsb in removedSbIds:
-    #        pass
-    #    else:
-    #        # keep
-    #for sb in newSbs:
-    #    # add sb in sbsInPairCompWithIds
-    # END TODO
-    newSbs = []
     removedSbIds = set([])
     for idsb in todo:
         (c1, c2, _) = id2location(idsb)
         for newSb in splitSbBySplitRanks(id2sb(idsb), id2splitRanks[idsb]):
-            newSbs.append((c1, c2, newSb))
+            sbsInPairCompWithIds.addToLocation((c1, c2), newSb)
         removedSbIds = removedSbIds | {idsb}
     sbsInPairCompWithIds.removeIds(removedSbIds)
-    intersTmp = set(id for (id, _, _) in sbsInPairCompWithIds.iterByOrderedIds()) & removedSbIds
-    # DEBUG assertion
-    assert len(intersTmp) == 0
-    for (c1, c2, newSb) in newSbs:
-        sbsInPairCompWithIds.addToLocation((c1, c2), newSb)
+
+    assert len(set(sbsInPairCompWithIds.orderedIds) & removedSbIds) == 0
 
     # also remove sbs of only one hp!
     # TODO print in stderr the reason of the removal
@@ -1676,114 +1656,288 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=True):
         new_sbsInPairComp[c1][c2].append(sb)
     return new_sbsInPairComp
 
+def fIdentifyMicroInversions(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv=0):
+
+        # 1: Give unique id to each sb and diag
+        sbsInPairCompWithIds = myTools.OrderedDict2dOfLists()
+        for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
+            new_sb = SyntenyBlock(sb)
+            sbsInPairCompWithIds.addToLocation((c1, c2), new_sb)
+        putativeMicroInversionsInPairCompWithIds = myTools.OrderedDict2dOfLists()
+        id = sbsInPairCompWithIds.maxId
+        for ((c1, c2), diag) in putativeMicroInversionsInPairComp.iteritems2d():
+            new_diag = Diagonal(diag)
+            id += 1
+            putativeMicroInversionsInPairCompWithIds.addToLocationWithId((c1, c2), new_diag, id)
+
+        idsOfPutativeMicroInversions = set(putativeMicroInversionsInPairCompWithIds.orderedIds)
+        idsOfSbs = set(sbsInPairCompWithIds.orderedIds)
+        assert len(idsOfSbs & idsOfPutativeMicroInversions) == 0
+
+        sbsAndDiagsInPairCompWithIds = sbsInPairCompWithIds + putativeMicroInversionsInPairCompWithIds
+        assert len(sbsAndDiagsInPairCompWithIds.items2d()) == len(sbsInPairCompWithIds.items2d()) + len(putativeMicroInversionsInPairCompWithIds.items2d())
+        assert len(sbsAndDiagsInPairCompWithIds.orderedIds) == len(set(sbsAndDiagsInPairCompWithIds.orderedIds))
+        idsIdentifiedMicroInv = set()
+
+        (V, (sbsG1, sbsG2)) = buildSetOfVertices(sbsAndDiagsInPairCompWithIds)
+        (N1, O1, I1) = findOverlapsOnGenome(1, sbsAndDiagsInPairCompWithIds, sbsG1, overlapMax=0)
+        (N2, O2, I2) = findOverlapsOnGenome(2, sbsAndDiagsInPairCompWithIds, sbsG2, overlapMax=0)
+        # method "getItemById" of sbsInPairCompWithIds"
+        id2sb = sbsAndDiagsInPairCompWithIds.getItemById
+        id2location = sbsAndDiagsInPairCompWithIds.getItemLocationById
+
+        todo = set([])
+        id2splitRanks = collections.defaultdict(list)
+
+        # Intra-synteny block microInv
+        for idsbb in (set(I1.keys()) & set(I2.keys())):
+            for idsba in (I1[idsbb] & I2[idsbb]):
+                # sbb is included in sba in both genomes
+                sba = id2sb(idsba)
+                sbb = id2sb(idsbb)
+                (c1a, c2a, _) = id2location(idsba)
+                (c1b, c2b, _) = id2location(idsbb)
+                assert c1a == c1b and c2a == c2b
+                if idsbb in idsOfPutativeMicroInversions:
+                    if noOverlapSb(((c1a, c2a), sba), ((c1b, c2b), sbb)):
+                        if sba.dt == '/' and sbb.dt == '\\' or sba.dt == '\\' and sbb.dt == '/':
+                            (splitRanks_a, splitRanks_b) = splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb))
+                            if len(splitRanks_a[1:-1]) == 1 and len(splitRanks_b[1:-1]) == 0:
+                                # if sbb is nested in a gap of sba, with a gapMaxMicroInv
+                                sbb_l = min(sbb.l1)
+                                sbb_r = max(sbb.l1)
+                                sbb_b = min(sbb.l2)
+                                sbb_t = max(sbb.l2)
+                                sba_ll = min([(sbb_l - idx, idx) for idx in sba.l1 if idx < sbb_l])[1]
+                                sba_rr = min([(idx - sbb_r, idx) for idx in sba.l1 if sbb_r < idx])[1]
+                                sba_bb = min([(sbb_b - idx, idx) for idx in sba.l2 if idx < sbb_b])[1]
+                                sba_tt = min([(idx - sbb_t, idx) for idx in sba.l2 if sbb_t < idx])[1]
+                                assert all(sba_xx > 0 for sba_xx in {sba_rr, sba_tt}), "%s" % [sba_rr, sba_tt]
+                                assert all(sba_xx >= 0 for sba_xx in {sba_ll, sba_bb})
+                                distance1 = CD((sbb_l, sbb_b), (sba_ll, sba_bb))
+                                distance2 = CD((sbb_r, sbb_t), (sba_rr, sba_tt))
+                                distance = max(distance1, distance2)
+                                gap = distance - 1
+                                assert gap >= 0, gap
+                                # FIXME, gapMaxMicroInv=0 yields the same result as gapMaxMicroInv=None or -1 ...
+                                if gap <= gapMaxMicroInv:
+                                    # its a micro-inversion perfectly nested
+                                    # a is splited in one point
+                                    idsIdentifiedMicroInv.add(idsbb)
+                                    splitRanks_b = splitRanks_b[1:-1]
+                                    assert len(splitRanks_b) == 0, "%s" % str((splitRanks_b, len(sbb.la), len(sbb.l1), len(sbb.l2)))
+                                    id2splitRanks[idsba] = sorted(list(set(id2splitRanks[idsba] + splitRanks_a)))
+                                    #id2splitRanks[idsbb] = sorted(list(set(id2splitRanks[idsbb] + splitRanks_b)))
+                                    todo = todo | {idsba}
+
+        print >> sys.stderr, "%s diags identified as micro-inversions" % len(idsIdentifiedMicroInv)
+
+        # With 'todo' and (id of the splited sb, splitRanks)s, calculate the newSbs
+        # and removed sbs
+
+        # debug assertions
+        assert len(sbsAndDiagsInPairCompWithIds.id2location.keys()) == len(sbsAndDiagsInPairCompWithIds.orderedIds)
+        assert set(sbsAndDiagsInPairCompWithIds.id2location.keys()) == set(sbsAndDiagsInPairCompWithIds.orderedIds)
+
+        removedSbIds = set()
+        newSbIds = set()
+        for idsb in todo:
+            (c1, c2, _) = id2location(idsb)
+            for newSb in splitSbBySplitRanks(id2sb(idsb), id2splitRanks[idsb]):
+                newSbId = sbsAndDiagsInPairCompWithIds.addToLocation((c1, c2), newSb)
+                newSbIds.add(newSbId)
+            removedSbIds = removedSbIds | {idsb}
+        sbsAndDiagsInPairCompWithIds.removeIds(removedSbIds)
+
+        assert len(set(sbsAndDiagsInPairCompWithIds.orderedIds) & removedSbIds) == 0
+
+        assert len((idsOfSbs - removedSbIds) & newSbIds) == 0
+        assert len(idsIdentifiedMicroInv & newSbIds) == 0
+        assert len(idsIdentifiedMicroInv & idsOfSbs) == 0
+
+        # TODO, translate into a simpler Dict2D!!
+        new_sbsInPairComp = myTools.Dict2d(list)
+        for (idsb, (c1, c2), sb) in sbsAndDiagsInPairCompWithIds.iterByOrderedIds():
+            if idsb in idsOfSbs | newSbIds | idsIdentifiedMicroInv:
+                if idsb in idsIdentifiedMicroInv:
+                    sb = SyntenyBlock(sb, 0)
+                assert all(isinstance(idx, int) for idx in sb.l1)
+                assert all(isinstance(idx, int) for idx in sb.l2)
+                new_sbsInPairComp[c1][c2].append(sb)
+
+        diagsThatAreNotSbsInPairComp = myTools.Dict2d(list)
+        for (idsb, (c1, c2), sb) in sbsAndDiagsInPairCompWithIds.iterByOrderedIds():
+            if sb in idsOfPutativeMicroInversions - idsIdentifiedMicroInv:
+                assert all(isinstance(idx, int) for idx in sb.l1)
+                assert all(isinstance(idx, int) for idx in sb.l2)
+                diagsThatAreNotSbsInPairComp[c1][c2].append(sb)
+
+        # update the small overlap dict ??
+        #newO = {}
+        #for (idsba, idsbbs) in O.iteritems():
+        #    if idsba in noOrSmallOverlapIds:
+        #        newO[idsba] = set([idsbb for idsbb in idsbbs if idsbb in noOrSmallOverlapIds])
+        #O = newO
+
+        return (new_sbsInPairComp, diagsThatAreNotSbsInPairComp)
 
 def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      gapMax=None,
                                      distanceMetric='CD',
-                                     pThreshold=0.001,
-                                     identifyBreakpointsWithinGaps=False,
-                                     nonOverlappingSbs=False,
-                                     overlapMax=0,
+                                     pThreshold=1.0,
+                                     gapMaxMicroInv=0,
+                                     identifyBreakpointsWithinGaps=True,
+                                     overlapMax=None,
                                      consistentSwDType=True,
-                                     considerMonogenicSb=False,
                                      nbHpsRecommendedGap=2,
                                      targetProbaRecommendedGap=0.01,
                                      validateImpossToCalc_mThreshold=3,
                                      multiProcess=False,
                                      verbose=False):
 
-    # second level of verbosity
-    verbose2 = False
-    (p_hpSign, p_hpSign_g, (sTBG1, sTBG1_g), (sTBG2, sTBG2_g)) =\
-        myProbas.statsHpSign(g1_tb, g2_tb, verbose=verbose2)
-    print >> sys.stderr, "genome1 tb orientation proba = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG1_g[+1]*100, sTBG1_g[-1]*100, sTBG1_g[None]*100)
-    print >> sys.stderr, "genome2 tb orientation proba = {+1=%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG2_g[+1]*100, sTBG2_g[-1]*100, sTBG2_g[None]*100)
-    print >> sys.stderr, "hp sign proba in the 'global' mhp = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%) (probabilities are also calculated for pairwise mhp)" % (p_hpSign_g[+1]*100, p_hpSign_g[-1]*100, p_hpSign_g[None]*100)
-    N1_g = sum([len(g1_tb[c1]) for c1 in g1_tb])
-    N2_g = sum([len(g2_tb[c2]) for c2 in g2_tb])
-    #Build an average MHP
-    #N50 is better than the mean of the chromosome lengths, since it is less sensitive to numerous and very small chromosome lengths
-    #N1_N50 = myMaths.myStats.getValueNX(sorted([len(g1_tb[c1]) for c1 in g1_tb]),50) # calculate the N50
-    #N2_N50 = myMaths.myStats.getValueNX(sorted([len(g2_tb[c2]) for c2 in g2_tb]),50) # calculate the N50
-    #weightedAverage is even better than N50 since it returns a more stable value, not a length of a chromosome of the karyotype, it better reflects the global distribution
-
-    #Waring: if the genome is badly assembled and contain a lot of small contigs, this averaging is not relevant and the recommended gapMax won't be relevant neither
-    if len(g1_tb) > 50 or len(g2_tb) > 50:
-        print >> sys.stderr, "Warning: one of the two genome seems badly assembled, this may mislead the recommended gapMax calculation"
-        # step 2 and 3 : build the MHP and extract putative sbs as diagonals
+    # step 2 and 3 : build the MHP and extract strict and consistent diagonals
     #################################################################################
-    # extract sbs in the tb base
-    sbsInPairComp = myTools.Dict2d(list)
+    diagsInPairComp = myTools.Dict2d(list)
+    N12s = myTools.Dict2d(int)
+    N12_g = 0
     if multiProcess and (len(g1_tb.keys()) > 1 or len(g2_tb.keys()) > 1):
+        tic = time.time()
         # if the multiprocess option is True and if there is more than one pairwise comparison of chromosomes
-        tasks = [(c1, c2, g1_tb[c1], g2_tb[c2]) for (c1, c2) in itertools.product([c1 for c1 in g1_tb], [c2 for c2 in g2_tb])]
-        resGen = myMultiprocess.multiprocessTasks(extractSbsInPairCompChrWrapper, tasks,
-                                                  gapMax=gapMax,
-                                                  distanceMetric=distanceMetric,
-                                                  consistentSwDType=consistentSwDType,
-                                                  verbose=False)
-        for ((c1, c2), listOfSbs) in resGen:
-            if len(listOfSbs) > 0:
-                sbsInPairComp[c1][c2] = listOfSbs
+        pool = multiprocessing.Pool()
+        tasks = [(c1, c2, g1_tb[c1], g2_tb[c2], consistentSwDType) for (c1, c2) in itertools.product([c1 for c1 in g1_tb], [c2 for c2 in g2_tb])]
+        for ((c1, c2), listOfDiags, N12) in pool.map(extractDiagsInPairCompChrWrapper, tasks, chunksize=(len(tasks)/4)):
+            if len(listOfDiags) > 0:
+                diagsInPairComp[c1][c2] = listOfDiags
+            N12s[c1][c2] = N12
+            N12_g += N12
+        tac = time.time()
+        print >> sys.stderr, "Multiprocessing(extractDiagsInPairCompChr) was executed in %ss" % (tac - tic)
+
+        # second level of verbosity
+        verbose2 = False
+        (p_hpSign, p_hpSign_g, (sTBG1, sTBG1_g), (sTBG2, sTBG2_g)) =\
+            myProbas.statsHpSign(g1_tb, g2_tb, verbose=verbose2)
+        print >> sys.stderr, "genome1 tb orientation proba = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG1_g[+1]*100, sTBG1_g[-1]*100, sTBG1_g[None]*100)
+        print >> sys.stderr, "genome2 tb orientation proba = {+1=%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG2_g[+1]*100, sTBG2_g[-1]*100, sTBG2_g[None]*100)
+        print >> sys.stderr, "hp sign proba in the 'global' mhp = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%) (probabilities are also calculated for pairwise mhp)" % (p_hpSign_g[+1]*100, p_hpSign_g[-1]*100, p_hpSign_g[None]*100)
     else:
         print >> sys.stderr, "synteny block extraction"
-        cythonOptimisation = False
+        cythonOptimisation = True
         if cythonOptimisation:
             tic = time.time()
-            (p_hpSign, p_hpSign_g, N12s, N12_g, sbsInPairComp) = \
-                extractSbs.extractSbsInPairCompChr(g1_tb, g2_tb, consistentSwDType, distanceMetric)
+            (p_hpSign, p_hpSign_g, N12s, N12_g, diagsInPairComp) = \
+                extractDiags.extractDiagsInPairCompChr(g1_tb, g2_tb, consistentSwDType, distanceMetric)
             tac = time.time()
-            print >> sys.stderr, "Cython(extractSbsInPairCompChr) was executed in %ss" % (tac - tic)
+            print >> sys.stderr, "Cython(extractDiagsInPairCompChr) was executed in %ss" % (tac - tic)
 
         else:
             totalNbComps = len(g1_tb) * len(g2_tb)
             progressBar = myTools.ProgressBar(totalNbComps)
-            N12s = myTools.Dict2d(int)
-            N12_g = 0
             currCompNb = 0
             tic = time.time()
             for c1 in g1_tb.keys():
                 for c2 in g2_tb.keys():
-                    (listOfDiags, N12) = extractSbsInPairCompChr(g1_tb[c1], g2_tb[c2], consistentSwDType, distanceMetric)
+                    (listOfDiags, N12) = extractDiagsInPairCompChr(g1_tb[c1], g2_tb[c2], consistentSwDType, verbose=verbose)
                     if len(listOfDiags) > 0:
-                        sbsInPairComp[c1][c2] = listOfDiags
+                        diagsInPairComp[c1][c2] = listOfDiags
                     N12s[c1][c2] = N12
                     N12_g += N12
                     currCompNb += 1
                     progressBar.printProgressIn(sys.stderr, currCompNb)
             tac = time.time()
-            print >> sys.stderr, "extractSbsInPairCompChr was executed in %ss" % (tac - tic)
-    assert all([len(sbsInPairComp[k1Foo][k2Foo]) > 0 for (k1Foo, k2Foo) in sbsInPairComp.keys2d()])
+            print >> sys.stderr, "extractDiagsInPairCompChr was executed in %ss" % (tac - tic)
 
-    N1_weightedAverage = int(myMaths.myStats.getWeightedAverage([len(g1_tb[c1]) for c1 in g1_tb]))
-    N2_weightedAverage = int(myMaths.myStats.getWeightedAverage([len(g2_tb[c2]) for c2 in g2_tb]))
-    density = float(N12_g)/(N1_g*N2_g)
-    # conservation of the density
-    N12_weightedAverage = int(density*N1_weightedAverage*N2_weightedAverage)
-    gap = recommendedGap(nbHpsRecommendedGap, targetProbaRecommendedGap, N12_weightedAverage, N1_weightedAverage, N2_weightedAverage, p_hpSign=p_hpSign_g, verbose=verbose)
-    print >> sys.stderr, "recommended gapMax = %s tbs" % gap
+            # second level of verbosity
+            verbose2 = False
+            (p_hpSign, p_hpSign_g, (sTBG1, sTBG1_g), (sTBG2, sTBG2_g)) =\
+                myProbas.statsHpSign(g1_tb, g2_tb, verbose=verbose2)
+            print >> sys.stderr, "genome1 tb orientation proba = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG1_g[+1]*100, sTBG1_g[-1]*100, sTBG1_g[None]*100)
+            print >> sys.stderr, "genome2 tb orientation proba = {+1=%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG2_g[+1]*100, sTBG2_g[-1]*100, sTBG2_g[None]*100)
+            print >> sys.stderr, "hp sign proba in the 'global' mhp = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%) (probabilities are also calculated for pairwise mhp)" % (p_hpSign_g[+1]*100, p_hpSign_g[-1]*100, p_hpSign_g[None]*100)
+
+    print >> sys.stderr, "Nb strict and consistent diags = %s" % len(diagsInPairComp.items2d())
+    assert all([len(diagsInPairComp[k1Foo][k2Foo]) > 0 for (k1Foo, k2Foo) in diagsInPairComp.keys2d()])
+
+    # Compute a recommended gapMax parameter value
+    ###############################################
     if gapMax is None:
+        #Build an average MHP
+        #weightedAverage is even better than N50 since it returns a more stable value, not a length of a chromosome of the karyotype, it better reflects the global distribution
+        #Waring: if the genome is badly assembled and contain a lot of small contigs, this averaging is not relevant and the recommended gapMax won't be relevant neither
+        if len(g1_tb) > 50 or len(g2_tb) > 50:
+            print >> sys.stderr, "Warning: one of the two genome seems badly assembled, this may mislead the recommended gapMax calculation"
+        N1_weightedAverage = int(myMaths.myStats.getWeightedAverage([len(g1_tb[c1]) for c1 in g1_tb]))
+        N2_weightedAverage = int(myMaths.myStats.getWeightedAverage([len(g2_tb[c2]) for c2 in g2_tb]))
+        N1_g = sum([len(g1_tb[c1]) for c1 in g1_tb])
+        N2_g = sum([len(g2_tb[c2]) for c2 in g2_tb])
+        density = float(N12_g)/(N1_g*N2_g)
+        # conservation of the density
+        N12_weightedAverage = int(density*N1_weightedAverage*N2_weightedAverage)
+        gap = recommendedGap(nbHpsRecommendedGap, targetProbaRecommendedGap, N12_weightedAverage, N1_weightedAverage, N2_weightedAverage, p_hpSign=p_hpSign_g, verbose=verbose)
+        print >> sys.stderr, "recommended gapMax = %s tbs" % gap
         gapMax = gap
     print >> sys.stderr, "used gapMax = %s tbs" % gapMax
 
-    for (c1, c2) in sbsInPairComp.keys2d():
-        listOfDiags = sbsInPairComp[c1][c2]
+    # merge strict and consistent diagonals into gaped consistent diagonals
+    ########################################################################
+    print >> sys.stderr, "Nb diags before merging diags = %s" % len(diagsInPairComp.items2d())
+    for (c1, c2) in diagsInPairComp.keys2d():
+        listOfDiags = diagsInPairComp[c1][c2]
         if len(listOfDiags) > 0:
-            sbsInPairComp[c1][c2] = mergeSbs(listOfDiags, gapMax, g2_tb[c2], distanceMetric, verbose=False)
-	
-    # setp 4 : statistical validation of putative sbs
-    ##################################################
-    #DEBUG
-    #print >> sys.stderr, "sTBG1['Y']=%s" % sTBG1['Y']
-    #print >> sys.stderr, "sTBG2['Y']=%s" % sTBG2['Y']
-    #print >> sys.stderr, "p_hpSign[('Y','Y')]=%s" % p_hpSign[('Y','Y')]
-    # 'SV' stands for statistical validation
-    sbsInPairComp = statisticalValidation(sbsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
-                                          pThreshold=pThreshold,
-                                          NbOfHomologiesThreshold=50,
-                                          validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
-                                          considerMonogenicSb=considerMonogenicSb,
-                                          verbose=verbose)
+            diagsInPairComp[c1][c2] = mergeDiags(listOfDiags, gapMax, g2_tb[c2], distanceMetric, verbose=False)
+    print >> sys.stderr, "Nb diags after merging diags = %s" % len(diagsInPairComp.items2d())
+
+    # Filter diags of length 1 that might be due to annotation errors or dispersed duplications
+    # (maybe followed by gaped tandem duplications)
+    ############################################################################################
+    monogenicDiagsInPairComp = myTools.Dict2d(list)
+    # FIXME, it might be interesting to add an option here
+
+    if True:
+        print >> sys.stderr, "Nb diags before removing mono-ancGenic diags = %s" % len(diagsInPairComp.items2d())
+        for c1 in diagsInPairComp.keys():
+            for c2 in diagsInPairComp[c1].keys():
+                lDiags = []
+                for diag in diagsInPairComp[c1][c2]:
+                    (m, max_g, lw1, lw2, l1_min, l1_max, l2_min, l2_max) = diag.calculateCharacteristics()
+                    # m==1 and (lw1 == 1 or lw2 == 1) corresponds to a dispersed duplication followed by gaped tandem duplications
+                    if m > 1 and lw1 > 1 and lw2 > 1:
+                        lDiags.append(diag)
+                    else:
+                        monogenicDiagsInPairComp[c1][c2].append(diag)
+                if len(lDiags) > 0:
+                    diagsInPairComp[c1][c2] = lDiags
+                else:
+                    del diagsInPairComp[c1][c2]
+            if len(diagsInPairComp[c1].keys()) == 0:
+                del diagsInPairComp[c1]
+        print >> sys.stderr, "Nb diags after removing mono-ancGenic diags = %s" % len(diagsInPairComp.items2d())
+
+    # setp 4 : statistical validation of diags (putative sbs) into sbs
+    ###################################################################
+    if pThreshold == 1.0:
+        for (c1, c2) in diagsInPairComp.keys2d():
+            diagsInPairComp[c1][c2] = [SyntenyBlock(diag, None) for diag in diagsInPairComp[c1][c2]]
+        sbsInPairCompStatVal = diagsInPairComp
+        diagsInPairCompRejected = myTools.Dict2d(list)
+    else:
+        (sbsInPairCompStatVal, diagsInPairCompRejected) = statisticalValidation(diagsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
+                                                                                pThreshold=pThreshold,
+                                                                                NbOfHomologiesThreshold=50,
+                                                                                validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
+                                                                                # diagsInPairComp contains no monogenic diag
+                                                                                considerMonogenicSb=False,
+                                                                                verbose=verbose)
+    sbsInPairComp = sbsInPairCompStatVal
+
+
+    # identify monogenic diags and diags previously rejected during the stat-validation that can be validated as
+    # non-ambiguous micro-inversions
+    if gapMaxMicroInv is not None:
+        print >> sys.stderr, "Nb sbs before identifying micro inversions = %s" % len(sbsInPairComp.items2d())
+        putativeMicroInversionsInPairComp = diagsInPairCompRejected + monogenicDiagsInPairComp
+        (sbsInPairComp, diagsThatAreNotSbsInPairComp) = fIdentifyMicroInversions(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv=gapMaxMicroInv)
+        print >> sys.stderr, "Nb sbs after identifying micro inversions = %s" % len(sbsInPairComp.items2d())
 
     cptLoopIter = 0
     # initialise la condition d'arrêt de la boucle
@@ -1792,23 +1946,20 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
 
         if identifyBreakpointsWithinGaps:
             # Do this task until no more change (stability!)
-            nbSbs = len([sb for (_, sb) in sbsInPairComp.iteritems2d()])
             if cptLoopIter == 0:
-                print >> sys.stderr, "Nb sbs before identifying breakpoints within gaps = %s" % nbSbs
+                print >> sys.stderr, "Nb sbs before identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
             while True:
-                nbSbsOld = len(list(sbsInPairComp.iteritems2d()))
+                nbSbsOld = len(sbsInPairComp.items2d())
                 sbsInPairComp = fIdentifyBreakpointsWithinGaps(sbsInPairComp)
-                nbSbsNew = len(list(sbsInPairComp.iteritems2d()))
+                nbSbsNew = len(sbsInPairComp.items2d())
                 if nbSbsNew == nbSbsOld:
                     break
-            nbSbs = len([sb for (_, sb) in sbsInPairComp.iteritems2d()])
             if cptLoopIter == 0:
-                print >> sys.stderr, "Nb sbs after identifying breakpoints within gaps = %s" % nbSbs
+                print >> sys.stderr, "Nb sbs after identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
 
-        if nonOverlappingSbs:
-            nbSbs = len([sb for (_, sb) in sbsInPairComp.iteritems2d()])
+        if overlapMax is not None:
             if cptLoopIter == 0:
-                print >> sys.stderr, "Nb sbs before overlap-truncation-filtering = %s" % nbSbs
+                print >> sys.stderr, "Nb sbs before overlap-truncation-filtering = %s" % len(sbsInPairComp.items2d())
             # TODO, compute the variation of the coverage before and after this step
             sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=False)
             # DEBUG, verify that the filtered sbs are not overlapping
@@ -1816,29 +1967,27 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                 (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0)
                 assert len(N) == 0, N
                 assert len(O) == 0, O
-            nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
             if cptLoopIter == 0:
-                print >> sys.stderr, "Nb sbs after overlap-truncation-filtering = %s" % nbSbs
+                print >> sys.stderr, "Nb sbs after overlap-truncation-filtering = %s" % len(sbsInPairComp.items2d())
 
             # mergeNonOverlappingSbs
             for (c1, c2) in sbsInPairComp.keys2d():
                 # BM: Before Merge
-                nbSbsBM = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
-                sbsInPairComp[c1][c2] = mergeSbs(sbsInPairComp[c1][c2], gapMax, g2_tb[c2], distanceMetric=distanceMetric, verbose=False)
+                nbSbsBM = len(sbsInPairComp.items2d())
+                sbsInPairComp[c1][c2] = mergeDiags(sbsInPairComp[c1][c2], gapMax, g2_tb[c2], distanceMetric=distanceMetric, verbose=False)
                 # AM: After Merge
-                nbSbsAM = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
+                nbSbsAM = len(sbsInPairComp.items2d())
                 assert nbSbsAM <= nbSbsBM
                 atLeastOneNonOverlappingMerge = atLeastOneNonOverlappingMerge or (True if nbSbsAM != nbSbsBM else False)
-            nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
             if cptLoopIter == 0:
-                print >> sys.stderr, "Nb sbs after merging non-overlapping sbs = %s" % nbSbs
+                print >> sys.stderr, "Nb sbs after merging non-overlapping sbs = %s" % len(sbsInPairComp.items2d())
 
         cptLoopIter += 1
 
         if atLeastOneNonOverlappingMerge and cptLoopIter <= 10:
             continue
         else:
-            if cptLoopIter  > 1:
+            if cptLoopIter > 1:
                 # the first merge non-overlapping sbs was usefull, thus other
                 # iterations of
                 # IdentifyBreakpointsWithinGaps|nonOverlappingSbs|mergeNonOverlappingSbs
@@ -1849,32 +1998,87 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                 # nonOverlappingSbs without a merge
                 if identifyBreakpointsWithinGaps:
                     # Do this task until no more change (stability!)
-                    nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
-                    print >> sys.stderr, "Nb sbs before identifying breakpoints within gaps = %s" % nbSbs
+                    print >> sys.stderr, "Nb sbs before identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
                     while True:
-                        nbSbsOld = len(list(sbsInPairComp.iteritems2d()))
+                        nbSbsOld = len(sbsInPairComp.items2d())
                         sbsInPairComp = fIdentifyBreakpointsWithinGaps(sbsInPairComp)
-                        nbSbsNew = len(list(sbsInPairComp.iteritems2d()))
+                        nbSbsNew = len(sbsInPairComp.items2d())
                         if nbSbsNew == nbSbsOld:
                             break
-                    nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
-                    print >> sys.stderr, "Nb sbs after identifying breakpoints within gaps = %s" % nbSbs
-                if nonOverlappingSbs:
-                    nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
-                    print >> sys.stderr, "Nb sbs before overlap-truncation-filtering = %s" % nbSbs
+                    print >> sys.stderr, "Nb sbs after identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
+                if overlapMax is not None:
+                    print >> sys.stderr, "Nb sbs before overlap-truncation-filtering = %s" % len(sbsInPairComp.items2d())
                     # TODO, compute the variation of the coverage before and after this step
                     sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=False)
                     # DEBUG, verify that the filtered sbs are not overlapping
                     (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0)
                     assert len(N) == 0
                     assert len(O) == 0
-                    nbSbs = len([sb for (cc, sb) in sbsInPairComp.iteritems2d()])
-                    print >> sys.stderr, "Nb sbs after overlap-truncation-filtering = %s" % nbSbs
+                    print >> sys.stderr, "Nb sbs after overlap-truncation-filtering = %s" % len(sbsInPairComp.items2d())
                 # No merge non-overlapping sbs
             # leave the while loop
             break
 
     return sbsInPairComp
+
+
+def editGenomes(g1, g2, families, filterType, minChromLength, tandemGapMax, keepOriginal=False):
+    nCini1 = len(g1.keys())
+    nCini2 = len(g2.keys())
+    nGini1 = sum([len(chrom1) for chrom1 in g1.values()])
+    nGini2 = sum([len(chrom2) for chrom2 in g2.values()])
+    #step 1 :filter genomes and rewrite in tandem blocks if needed
+    ##############################################################
+    # rewrite genomes by family names (ie ancGene names)
+    g1_fID = myMapping.labelWithFamID(g1, families)
+    g2_fID = myMapping.labelWithFamID(g2, families)
+    # genes that are not in ancGene have a aID=None
+    nGiniInFam1 = len([fID for chrom1 in g1_fID.values() for (fID, _) in chrom1 if fID is not None])
+    nGiniInFam2 = len([fID for chrom2 in g2_fID.values() for (fID, _) in chrom2 if fID is not None])
+    print >> sys.stderr, "genome1 initially contains %s chromosomes" % nCini1
+    print >> sys.stderr, "genome2 initially contains %s chromosomes" % nCini2
+    print >> sys.stderr, "genome1 initially contains %s genes (%s genes are in families, %.2f%%)" % (nGini1, nGiniInFam1, (100 * float(nGiniInFam1) / float(nGini1)))
+    print >> sys.stderr, "genome2 initially contains %s genes (%s genes are in families, %.2f%%)" % (nGini2, nGiniInFam2, (100 * float(nGiniInFam2) / float(nGini2)))
+    # Must be applied on the two genomes, because of the mode inBothGenomes (InFamilies => not only anchor genes are kept but all genes herited from a gene of the LCA)
+    #mfilt2origin1 -> mGf2Go1
+    ((g1_fID, mGf2Go1, (nCL1, nGL1)), (g2_fID, mGf2Go2, (nCL2, nGL2))) =\
+        filter2D(g1_fID, g2_fID, filterType, minChromLength, keepOriginal=keepOriginal)
+    print >> sys.stderr, "genome1 after filterType=%s and minChromLength=%s contains %s genes" %\
+        (filterType, minChromLength, sum([len(g1_fID[c1]) for c1 in g1_fID]))
+    print >> sys.stderr, "genome2 after filterType=%s and minChromLength=%s contains %s genes" %\
+        (filterType, minChromLength, sum([len(g2_fID[c2]) for c2 in g2_fID]))
+    nGD1 = myMapping.nbDup(g1_fID)[0]
+    nGD2 = myMapping.nbDup(g2_fID)[0]
+    (g1_tb, mtb2g1, nGTD1) = myMapping.remapRewriteInTb(g1_fID, tandemGapMax=tandemGapMax, mOld=mGf2Go1)
+    (g2_tb, mtb2g2, nGTD2) = myMapping.remapRewriteInTb(g2_fID, tandemGapMax=tandemGapMax, mOld=mGf2Go2)
+    print >> sys.stderr, "genome1 rewritten in tbs, contains %s tbs" % sum([len(g1_tb[c1]) for c1 in g1_tb])
+    print >> sys.stderr, "genome2 rewritten in tbs, contains %s tbs" % sum([len(g2_tb[c2]) for c2 in g2_tb])
+    nDD1 = myMapping.nbDup(g1_tb)[0]
+    nDD2 = myMapping.nbDup(g2_tb)[0]
+    print >> sys.stderr, "genome1 contains %s gene duplicates (initial gene excluded)" % nGD1
+    print >> sys.stderr, "genome1 contains %s tandem duplicated genes (initial gene excluded)" % nGTD1
+    print >> sys.stderr, "genome1 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD1
+    print >> sys.stderr, "genome2 contains %s gene duplicates (initial gene excluded)" % nGD2
+    print >> sys.stderr, "genome2 contains %s tandem duplicated genes (initial gene excluded)" % nGTD2
+    print >> sys.stderr, "genome2 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD2
+    assert nDD1 + nGTD1 == nGD1
+    assert nDD2 + nGTD2 == nGD2
+
+    # conservation law genes
+    def nbOfGenesInAGenomeInTbs(g_tb, mtb2g):
+        nbGenes = 0
+        for (chr, chrom) in g_tb.iteritems():
+            nbGenes += sum(len(mtb2g[chr][itb]) for (itb, _) in enumerate(chrom))
+        return nbGenes
+    assert nGini1 == nGL1 + nbOfGenesInAGenomeInTbs(g1_tb, mtb2g1)
+    assert nGini2 == nGL2 + nbOfGenesInAGenomeInTbs(g2_tb, mtb2g2)
+    # conservation law chromosomes
+    assert nCini1 == nCL1 + len(g1_tb.keys())
+    assert nCini2 == nCL2 + len(g2_tb.keys())
+
+    return ((g1_tb, mtb2g1, (nCL1, nGL1)), (g2_tb, mtb2g2, (nCL2, nGL2)))
+
+
 
 # Complete procedure to compute synteny blocks (sbs) between 2 genomes, using homology relationships contained in ancGenes
 # Inputs:
@@ -1903,17 +2107,16 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
 @myTools.tictac
 @myTools.verbose
 def extractSbsInPairCompGenomes(g1, g2, families,
-                                filterType=FilterType.None,
+                                filterType='InBothSpecies',
                                 tandemGapMax=0,
                                 gapMax=None,
-                                distanceMetric='DPD',
-                                pThreshold=0.001,
-                                identifyBreakpointsWithinGaps=False,
-                                nonOverlappingSbs=False,
-                                overlapMax=0,
+                                distanceMetric='CD',
+                                pThreshold=1.0,
+                                gapMaxMicroInv=0,
+                                identifyBreakpointsWithinGaps=True,
+                                overlapMax=None,
                                 consistentSwDType=True,
-                                considerMonogenicSb=False,
-                                minChromLength=0,
+                                minChromLength=2,
                                 nbHpsRecommendedGap=2,
                                 targetProbaRecommendedGap=0.01,
                                 validateImpossToCalc_mThreshold=3,
@@ -1922,10 +2125,6 @@ def extractSbsInPairCompGenomes(g1, g2, families,
     isinstance(g1, myLightGenomes.LightGenome)
     isinstance(g2, myLightGenomes.LightGenome)
     isinstance(families, myLightGenomes.Families)
-    # TODO, raise a true warning message
-    if nonOverlappingSbs is False:
-        if overlapMax > 0:
-            print >> sys.stderr, "Warning: the maxAllowedGap specified is not used since the nonOverlappingSbs is False"
 
     if isinstance(g1, myGenomes.Genome) and isinstance(g2, myGenomes.Genome):
         g1 = g1.intoDict()
@@ -1935,59 +2134,16 @@ def extractSbsInPairCompGenomes(g1, g2, families,
     else:
         raise TypeError('g1 and/or g2 must be either myGenomes.Genome or dict')
 
-    nCini1 = len(g1.keys())
-    nCini2 = len(g2.keys())
-    nGini1 = sum([len(chrom1) for chrom1 in g1.values()])
-    nGini2 = sum([len(chrom2) for chrom2 in g2.values()])
-
-    #step 1 :filter genomes and rewrite in tandem blocks if needed
-    ##############################################################
-    # rewrite genomes by family names (ie ancGene names)
-    g1_fID = myMapping.labelWithFamID(g1, families)
-    g2_fID = myMapping.labelWithFamID(g2, families)
-    # genes that are not in ancGene have a aID=None
-    nGiniInFam1 = len([fID for chrom1 in g1_fID.values() for (fID, _) in chrom1 if fID is not None])
-    nGiniInFam2 = len([fID for chrom2 in g2_fID.values() for (fID, _) in chrom2 if fID is not None])
-    print >> sys.stderr, "genome1 initially contains %s chromosomes" % nCini1
-    print >> sys.stderr, "genome2 initially contains %s chromosomes" % nCini2
-    print >> sys.stderr, "genome1 initially contains %s genes (%s genes are in families, %.2f%%)" % (nGini1, nGiniInFam1, (100 * float(nGiniInFam1) / float(nGini1)))
-    print >> sys.stderr, "genome2 initially contains %s genes (%s genes are in families, %.2f%%)" % (nGini2, nGiniInFam2, (100 * float(nGiniInFam2) / float(nGini2)))
-
-    # Must be applied on the two genomes, because of the mode inBothGenomes (InFamilies => not only anchor genes are kept but all genes herited from a gene of the LCA)
-    #mfilt2origin1 -> mGf2Go1
-    ((g1_fID, mGf2Go1, (nCL1, nGL1)), (g2_fID, mGf2Go2, (nCL2, nGL2))) =\
-        filter2D(g1_fID, g2_fID, filterType, minChromLength)
-    print >> sys.stderr, "genome1 after filterType=%s and minChromLength=%s contains %s genes" %\
-        (filterType, minChromLength, sum([len(g1_fID[c1]) for c1 in g1_fID]))
-    print >> sys.stderr, "genome2 after filterType=%s and minChromLength=%s contains %s genes" %\
-        (filterType, minChromLength, sum([len(g2_fID[c2]) for c2 in g2_fID]))
-    nGD1 = myMapping.nbDup(g1_fID)[0]
-    nGD2 = myMapping.nbDup(g2_fID)[0]
-    (g1_tb, mtb2g1, nGTD1) = myMapping.remapRewriteInTb(g1_fID, tandemGapMax=tandemGapMax, mOld=mGf2Go1)
-    (g2_tb, mtb2g2, nGTD2) = myMapping.remapRewriteInTb(g2_fID, tandemGapMax=tandemGapMax, mOld=mGf2Go2)
-    print >> sys.stderr, "genome1 rewritten in tbs, contains %s tbs" % sum([len(g1_tb[c1]) for c1 in g1_tb])
-    print >> sys.stderr, "genome2 rewritten in tbs, contains %s tbs" % sum([len(g2_tb[c2]) for c2 in g2_tb])
-    #TODO, optimise next step
-    nDD1 = myMapping.nbDup(g1_tb)[0]
-    nDD2 = myMapping.nbDup(g2_tb)[0]
-    print >> sys.stderr, "genome1 contains %s gene duplicates (initial gene excluded)" % nGD1
-    print >> sys.stderr, "genome1 contains %s tandem duplicated genes (initial gene excluded)" % nGTD1
-    print >> sys.stderr, "genome1 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD1
-    print >> sys.stderr, "genome2 contains %s gene duplicates (initial gene excluded)" % nGD2
-    print >> sys.stderr, "genome2 contains %s tandem duplicated genes (initial gene excluded)" % nGTD2
-    print >> sys.stderr, "genome2 contains %s dispersed duplicated tbs (initial tb excluded)" % nDD2
-    assert nDD1 + nGTD1 == nGD1
-    assert nDD2 + nGTD2 == nGD2
+    ((g1_tb, mtb2g1, (nCL1, nGL1)), (g2_tb, mtb2g2, (nCL2, nGL2))) = editGenomes(g1, g2, families, filterType, minChromLength, tandemGapMax)
 
     sbsInPairComp = extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                                      gapMax=gapMax,
                                                      distanceMetric=distanceMetric,
                                                      pThreshold=pThreshold,
+                                                     gapMaxMicroInv=gapMaxMicroInv,
                                                      identifyBreakpointsWithinGaps=identifyBreakpointsWithinGaps,
-                                                     nonOverlappingSbs=nonOverlappingSbs,
                                                      overlapMax=overlapMax,
                                                      consistentSwDType=consistentSwDType,
-                                                     considerMonogenicSb=considerMonogenicSb,
                                                      nbHpsRecommendedGap=nbHpsRecommendedGap,
                                                      targetProbaRecommendedGap=targetProbaRecommendedGap,
                                                      validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
@@ -2010,6 +2166,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
         # each hp corresponds to an ancestral gene
         for (indx_HP, aGene) in enumerate(sb.la):
             indx_tb_g1 = sb.l1[indx_HP]
+            assert isinstance(indx_tb_g1, int), indx_tb_g1
             l1.append([gIndxs for gIndxs in mtb2gc1.new[indx_tb_g1]])
             indx_tb_g2 = sb.l2[indx_HP]
             l2.append([gIdxs for gIdxs in mtb2gc2.new[indx_tb_g2]])
@@ -2036,10 +2193,12 @@ def extractSbsInPairCompGenomes(g1, g2, families,
 def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True):
     print >> sys.stderr, "Print synteny blocks"
 
-    def foo(genomeX, cX, lX, idxHp):
-        gXs = [genomeX[cX][gIdx].n for gIdx in lX[idxHp]]
+    def foo(genomeX, cX, lX, idxHp, reverseOrder=False):
+        assert reverseOrder in {True, False, None}, reverseOrder
+        tb = lX[idxHp] if (reverseOrder in {+1, None}) else list(reversed(lX[idxHp]))
+        gXs = [genomeX[cX][gIdx].n for gIdx in tb]
         gXs = ' '.join(gXs)
-        sXs = [genomeX[cX][gIdx].s for gIdx in lX[idxHp]]
+        sXs = [genomeX[cX][gIdx].s for gIdx in tb]
         for (i, s) in enumerate(sXs):
             if s == +1:
                 sXs[i] = '+'
@@ -2062,11 +2221,11 @@ def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True):
         statsSbs.append(nbHps)
         for (idxHp, (aGname, aGstrand, dist)) in enumerate(sb.la):
             (g1s, s1s) = foo(genome1, c1, sb.l1, idxHp)
-            (g2s, s2s) = foo(genome2, c2, sb.l2, idxHp)
+            reverseOrderOnG2 = True if sb.dt in {'/' or None} else False
+            (g2s, s2s) = foo(genome2, c2, sb.l2, idxHp, reverseOrder=reverseOrderOnG2)
             print myFile.myTSV.printLine([idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s])
 
     print >> sys.stderr, "Distribution of the lengths of synteny blocks:", myMaths.myStats.syntheticTxtSummary(statsSbs)
-
 
 #################################
 # Parser function
@@ -2139,11 +2298,12 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
                 # record the former synteny block that has been parsed
                 # TODO find the diagType
 
-                assert l1[0] <= l1[-1], "%s <= %s" % (l1[0], l1[-1])
-                if l1[0] < l1[-1]:
-                    if l2[0] < l2[-1]:
+                #assert l1[0] <= l1[-1], "%s <= %s" % (l1[0], l1[-1])
+
+                if myMaths.mean(l1[0]) < myMaths.mean(l1[-1]):
+                    if myMaths.mean(l2[0]) < myMaths.mean(l2[-1]):
                         diagType = '/'
-                    elif l2[0] > l2[-1]:
+                    elif myMaths.mean(l2[0]) > myMaths.mean(l2[-1]):
                         diagType = '\\'
                     else:
                         # horizontal synteny block
