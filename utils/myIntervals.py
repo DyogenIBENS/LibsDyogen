@@ -10,24 +10,29 @@ from myLightGenomes import OGene, LightGenome
 import myTools
 import sys
 
-# Region
+# GeneExtremity
 # n = gene name
-# ht = 'h' if the region is close to the 'h'ead of the gene else ht = 't' the region is close to the 't'ail of the gene
+# ht = 'h' if the gene extremity is close to the 'h'ead of the gene else ht = 't' the gene extremity is close to the 't'ail of the gene
 #   ht = None if the gene has no orientation
-Region = collections.namedtuple("Region", ['n', 'ht'])
+GeneExtremity = collections.namedtuple("GeneExtremity", ['n', 'ht'])
 
-# returns the region either on the left (-1) or the right (+1), depending on leftOrRight, of the oriented gene 'og'
-def regionFromGene(og, leftOrRight):
-    # leftOrRight = +1 means that we want the region on the right of og
-    assert leftOrRight in {+1, -1}
+
+# returns the gene extremity either on the left (-1) or the right (+1), depending on leftOrRight, of the oriented gene 'og'
+def geneExtremityFromGene(og, leftOrRight):
+    # leftOrRight = +1 means that we want the gene extremity on the right of og
+    assert leftOrRight in {+1, -1, None}
     assert isinstance(og, OGene)
-    if og.s == +1:
-        return Region(og.n, 'h' if leftOrRight == +1 else 't')
-    elif og.s == -1:
-        return Region(og.n, 't' if leftOrRight == +1 else 'h')
+    if leftOrRight is None:
+        geneExtr = GeneExtremity(og.n, None)
     else:
-        assert og.s == None
-        return Region(og.n, None)
+        if og.s == +1:
+            geneExtr = GeneExtremity(og.n, 'h' if leftOrRight == +1 else 't')
+        elif og.s == -1:
+            geneExtr = GeneExtremity(og.n, 't' if leftOrRight == +1 else 'h')
+        else:
+            assert og.s == None
+            geneExtr = GeneExtremity(og.n, None)
+    return geneExtr
 
 class Adjacency(tuple):
     def __new__(cls, g1n, g2n):
@@ -102,7 +107,7 @@ def findConsideredFlankingGenesIdxs(chrom, x, ignoredGeneNames=set()):
     return (idxGl, idxGr)
 
 
-def regionsFromAdjacency(adj):
+def geneExtremitiesFromAdjacency(adj):
     assert isinstance(adj, OAdjacency)
     (og1, og2) = adj
     assert og1.s in {+1, -1} and og2.s in {+1, -1}
@@ -111,13 +116,13 @@ def regionsFromAdjacency(adj):
     g1ht = 'h' if og1.s == +1 else 't'
     # 'Head or Tail of the 2nd gene', (same principle as above)
     g2ht = 't' if og2.s == +1 else 'h'
-    return (Region(og1.n, g1ht), Region(og2.n, g2ht))
+    return (GeneExtremity(og1.n, g1ht), GeneExtremity(og2.n, g2ht))
 
-def intergeneFromRegion(region, genomeWithDict):
+def intergeneFromGeneExtremity(geneExtr, genomeWithDict):
     assert isinstance(genomeWithDict, LightGenome)
-    assert isinstance(region, Region), region
+    assert isinstance(geneExtr, GeneExtremity), geneExtr
     assert genomeWithDict.withDict
-    (gn, ht) = region
+    (gn, ht) = geneExtr
     assert isinstance(gn, int) or isinstance(gn, str)
     assert ht in ['h', 't']
     # localisation of gene gn: 'c' is the chromosome and 'idxG' is the index of the gene on 'c'
@@ -165,15 +170,21 @@ def intergeneFromAdjacency(adjacency, genomeWithDict, default=None):
     return (c, x)
 
 
-def chromExtremityRegions(genome):
+def analyseGenomeIntoChromExtremities(genome, oriented=True):
     isinstance(genome, LightGenome)
     res = set()
     for chrom in genome.values():
-        res.update({regionFromGene(chrom[0], -1),
-                    regionFromGene(chrom[-1], +1)})
+        if oriented:
+            chromGeneExtrLeft = geneExtremityFromGene(chrom[0], -1)
+            chromGeneExtrRight = geneExtremityFromGene(chrom[-1], +1)
+        else:
+            assert oriented == False
+            chromGeneExtrLeft = chrom[0]
+            chromGeneExtrRight = chrom[-1]
+        res.update({chromGeneExtrLeft, chromGeneExtrRight})
     return res
 
-def analyseGenomeIntoAdjs(genome, oriented=True):
+def analyseGenomeIntoAdjacencies(genome, oriented=True):
     isinstance(genome, LightGenome)
     setAdjs = set()
     for chrom in genome.values():
@@ -200,67 +211,68 @@ def analyseGenomeIntoAdjs(genome, oriented=True):
 Efficiency = collections.namedtuple('efficiency', ('tp', 'tn', 'fp', 'fn', 'sn', 'sp'))
 
 @myTools.verbose
-def compareSbsToReferenceSbsAdjs(sbsGenome, sbsGenomeR, verbose=False):
+def compareGenomes(genome, refGenome, mode='adjacency', oriented=True, verbose=False):
     """
-    :param sbsGenome: the sbs returned by phylDiag
-    :param sbsGenomeR: the reference sbs returned by the breakpoint analyser of MagSimus
+    :param genome: studied genome
+    :param refGenome: the reference genome
+    :param mode: either 'adjacency' or 'chromExtremity'
+    :param oriented: use oriented genes if True, else use unoriented genes
+    :param verbose: print infos in sys.stderr
+    :return: Efficiency(Tp, Tn, Fp, Fn, sensitivity, specificity)
     """
+    assert mode in {'adjacency', 'chromExtremity'}
+    isinstance(genome, LightGenome)
+    isinstance(refGenome, LightGenome)
 
-    isinstance(sbsGenome, LightGenome)
-    isinstance(sbsGenomeR, LightGenome)
+    print >> sys.stderr, "nb of chroms = %s" % len(genome.keys())
+    print >> sys.stderr, "nb of monogenic-chroms = %s" % sum([1 for chrom in genome.values() if len(chrom) == 1])
+    print >> sys.stderr, "nb of reference chroms = %s" % len(refGenome.keys())
+    print >> sys.stderr, "nb of reference monogenic-chroms = %s" % sum([1 for chrom in refGenome.values() if len(chrom) == 1])
 
-    print >> sys.stderr, "nb of sbs = %s" % len(sbsGenome.keys())
-    print >> sys.stderr, "nb of monogenic-sbs = %s" % sum([1 for chrom in sbsGenome.values() if len(chrom) == 1])
-    setAdjs = analyseGenomeIntoAdjs(sbsGenome, oriented=False)
-    setOAdjs = analyseGenomeIntoAdjs(sbsGenome, oriented=True)
-    setGeneNames = sbsGenome.getGeneNames()
-
-    print >> sys.stderr, "nb of reference sbs = %s" % len(sbsGenomeR.keys())
-    print >> sys.stderr, "nb of reference monogenic-sbs = %s" % sum([1 for chrom in sbsGenomeR.values() if len(chrom) == 1])
+    setGeneNames = genome.getGeneNames(asA=set, checkNoDuplicates=False)
     # R: reference
-    setAdjsR = analyseGenomeIntoAdjs(sbsGenomeR, oriented=False)
-    setOAdjsR = analyseGenomeIntoAdjs(sbsGenomeR, oriented=True)
-    setGeneNamesR = sbsGenomeR.getGeneNames()
-
-    print >> sys.stderr, "nb gene names in sbs = %s" % len(setGeneNames)
-    print >> sys.stderr, "nb gene names in reference sbs = %s" % len(setGeneNamesR )
+    setGeneNamesR = refGenome.getGeneNames(asA=set, checkNoDuplicates=True)
+    print >> sys.stderr, "nb gene names = %s" % len(setGeneNames)
+    print >> sys.stderr, "nb gene names in reference = %s" % len(setGeneNamesR)
     print >> sys.stderr, "nb of gene names in both = %s" % len(setGeneNamesR & setGeneNames)
     print >> sys.stderr, "gene names that are in setGeneNames - setGeneNamesR =", setGeneNames - setGeneNamesR
     print >> sys.stderr, "gene names that are in setGeneNamesR - setGeneNames =", setGeneNamesR - setGeneNames
 
-    print >> sys.stderr, "nb adjs in sbs = %s" % len(setAdjs)
-    print >> sys.stderr, "nb o-adjs in sbs = %s" % len(setOAdjs)
-    print >> sys.stderr, "nb reference-adjs in sbs = %s" % len(setAdjsR )
-    print >> sys.stderr, "nb o-reference-adjs in sbs = %s" % len(setOAdjsR )
+    setRes = set()
+    refSetRes = set()
+    if mode == 'adjacency':
+        itemType = 'OAdjacency' if oriented else 'Adjacency'
+        setRes = analyseGenomeIntoAdjacencies(genome, oriented=oriented)
+        refSetRes = analyseGenomeIntoAdjacencies(refGenome, oriented=oriented)
+    else:
+        assert mode == 'chromExtremity'
+        itemType = 'OChromosomeExtremity' if oriented else "chromosomeExtremity"
+        setRes = analyseGenomeIntoChromExtremities(genome, oriented=oriented)
+        refSetRes = analyseGenomeIntoChromExtremities(refGenome, oriented=oriented)
 
-    # #True positive adjs
-    Tp = len(setAdjs & setAdjsR )
+    print >> sys.stderr, "nb of %s = %s" % (itemType, len(setRes))
+    print >> sys.stderr, "nb of %s in ref = %s" % (itemType, len(refSetRes))
+
+    # True positive adjs
+    Tp = len(setRes & refSetRes)
     Tn = None
-    Fp = len(setAdjs - setAdjsR )
-    Fn = len(setAdjsR - setAdjs)
-    assert len(setAdjsR ) == Tp + Fn
+    Fp = len(setRes - refSetRes)
+    Fn = len(refSetRes - setRes)
+    assert len(refSetRes) == Tp + Fn
     sensitivity = float(Tp) / float(Tp + Fn)
     specificity = float(Tp) / float(Tp + Fp)
+
+    # to see more informations concerning the chroms where are the Fp
+    # distribLenSbsWithFn = computeDistribLenSbsWithFn(genome, refSetRes - setRes)
+    # distribLenSbsWithFnR = computeDistribLenSbsWithFn(refGenome, refSetRes - setRes)
+
     print >> sys.stderr, "Tp=%s" % Tp
     print >> sys.stderr, "Fp=%s" % Fp
     print >> sys.stderr, "Fn=%s" % Fn
     print >> sys.stderr, "sensitivity=%s" % sensitivity
     print >> sys.stderr, "specificity=%s" % specificity
 
-    OTp = len(setOAdjs & setOAdjsR )
-    OTn = None
-    OFp = len(setOAdjs - setOAdjsR )
-    OFn = len(setOAdjsR - setOAdjs)
-    assert len(setOAdjsR ) == OTp + OFn
-    Osensitivity = float(OTp) / float(OTp + OFn)
-    Ospecificity = float(OTp) / float(OTp + OFp)
-    print >> sys.stderr, "OTp=%s" % OTp
-    print >> sys.stderr, "OFp=%s" % OFp
-    print >> sys.stderr, "OFn=%s" % OFn
-    print >> sys.stderr, "Osensitivity=%s" % Osensitivity
-    print >> sys.stderr, "Ospecificity=%s" % Ospecificity
-
-    return Efficiency(OTp, OTn, OFp, OFn, Osensitivity, Ospecificity)
+    return Efficiency(Tp, Tn, Fp, Fn, sensitivity, specificity)
 
 
 def computeDistribLenSbsWithFn(sbsGenome, sFn):
@@ -278,48 +290,6 @@ def computeDistribLenSbsWithFn(sbsGenome, sFn):
                          (percentageLen1,
                           sorted([(l, nb) for (l, nb) in distribLenSbsWithFn.iteritems()], key=lambda x: x[0]))
     return distribLenSbsWithFn
-
-@myTools.verbose
-def compareSbsToReferenceSbsBreakpoints(sbsGenome, sbsGenomeR, verbose=False):
-    """
-    :param sbsGenome: the sbs returned by phylDiag
-    :param sbsGenomeR: the reference sbs returned by the breakpoint analyser of MagSimus
-    """
-
-    isinstance(sbsGenome, LightGenome)
-    isinstance(sbsGenomeR, LightGenome)
-    print >> sys.stderr, "nb of sbs = %s" % len(sbsGenome.keys())
-    print >> sys.stderr, "nb of monogenic-sbs = %s" % sum([1 for chrom in sbsGenome.values() if len(chrom) == 1])
-    chromExtrRegions = chromExtremityRegions(sbsGenome)
-
-    print >> sys.stderr, "nb of reference sbs = %s" % len(sbsGenomeR.keys())
-    print >> sys.stderr, "nb of reference monogenic-sbs = %s" % sum([1 for chrom in sbsGenomeR.values() if len(chrom) == 1])
-    # R: reference
-    chromExtRegionsR = chromExtremityRegions(sbsGenomeR)
-
-    # True positive breakpoint regions
-    sTp = chromExtrRegions & chromExtRegionsR
-    # sTn = None
-    sFp = chromExtrRegions - chromExtRegionsR
-    sFn = chromExtRegionsR - chromExtrRegions
-
-    # distribLenSbsWithFn = computeDistribLenSbsWithFn(sbsGenome, sFn)
-    # distribLenSbsWithFnR = computeDistribLenSbsWithFn(sbsGenomeR, sFn)
-
-    Tp = len(sTp)
-    Tn = None
-    Fp = len(sFp)
-    Fn = len(sFn)
-    assert len(chromExtRegionsR) == Tp + Fn
-    sensitivity = float(Tp) / float(Tp + Fn)
-    specificity = float(Tp) / float(Tp + Fp)
-    print >> sys.stderr, "Tp=%s" % Tp
-    print >> sys.stderr, "Fp=%s" % Fp
-    print >> sys.stderr, "Fn=%s" % Fn
-    print >> sys.stderr, "sensitivity=%s" % sensitivity
-    print >> sys.stderr, "specificity=%s" % specificity
-
-    return Efficiency(Tp, Tn, Fp, Fn, sensitivity, specificity)
 
 # TODO
 # def adjacencyFromIntergene(intergene, genomeWithDict, default=None):
