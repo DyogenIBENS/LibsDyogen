@@ -60,31 +60,39 @@ def labelWithFamNames(genome, families):
             newGenome[c].append(OGene(fn, g.s))
     return newGenome
 
-# Rewrite genomes as a list of orthologs
 def labelWithOrthologNames(genome, families):
+    """
+    Rewrite genomes as a list of orthologs
+    works with the gene name nomenclature of MagSimus1
+    :param genome: myLightGenomes.LightGenome
+    :param families: myLightGenomes.Families
+    :return newGenome:
+    """
     assert isinstance(families, myLightGenomes.Families)
     assert isinstance(genome, myLightGenomes.LightGenome)
     assert type(genome.values()[0]) == list
     assert all(len(chrom) > 0 for chrom in genome.values())
+
     newGenome = myLightGenomes.LightGenome()
     for c in genome.keys():
-        #assert len(genome[c]) >=1
         for g in genome[c]:
             family = families.getFamilyByName(g.n, default=None)
             if family is None:
                 newGenome[c].append(OGene(None, g.s))
-            # len(family.dns) == 1 is for the specific treatment of gene names in extant genomes
             elif g.n == family.fn:
-                # if the gene is the ortholog
+                # positional ortholog
                 newGenome[c].append(OGene(g.n, g.s))
-            elif len(family.dns) == 1 and 'Xaft' in family.dns[0]:
-                # FIXME debug assertion in a specific case
-                speciesAcronym = (family.dns[0])[:2]
-                print speciesAcronym
-                assert speciesAcronym in ['Hs', 'Gg', 'Md', 'Mm', 'Clf'], speciesAcronym
-                newGenome[c].append(OGene(family.n, g.s))
+            elif family is not None:
+                # paralog
+                newGenome[c].append(OGene(None, g.s))
             else:
-                pass
+                raise ValueError
+            # elif len(family.dns) == 1:
+            #     if (family.dns[0])[:2] in ['Hs', 'Gg', 'Md', 'Mm', 'Clf']:
+            #         # the family is the family of one extant species, i.e. just a one to one relationship ancName-modernName
+            #         newGenome[c].append(OGene(family.n, g.s))
+            #     elif 'Xaft' in family.dns[0]:
+            #         newGenome[c].append(OGene(family.n, g.s))
     return newGenome
 
 # Allow to change the 1D mapping

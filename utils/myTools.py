@@ -534,7 +534,7 @@ def printArguments(arguments, stream=open(os.devnull, 'w')):
     rows, columns = getTerminalSize()
     print >> stream, '-' * rows
     print >> stream, "{:<25} | {:<50}".format('key', 'value')
-    print >> stream, '-' * width
+    print >> stream, '-' * columns
     for (key, value) in arguments.iteritems():
         print >> stream, "{:<25} = {:<50}".format(key, value)
 
@@ -554,7 +554,7 @@ class Dict2d(collections.defaultdict):
         collections.defaultdict.__init__(self, lambda: collections.defaultdict(type))
 
     def iteritems2d(self):
-        assert self.type == list
+        assert self.type == list or self.type == set
         for (k1, k2) in self.keys2d():
             for item in self[k1][k2]:
                 yield ((k1, k2), item)
@@ -850,9 +850,4 @@ def _getTerminalSize_linux():
             os.close(fd)
         except:
             pass
-    if not cr:
-        try:
-            cr = (env['LINES'], env['COLUMNS'])
-        except:
-            return None
     return int(cr[1]), int(cr[0])

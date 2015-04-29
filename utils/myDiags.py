@@ -62,7 +62,7 @@ FilterType = enum.Enum('InFamilies', 'InBothGenomes', 'None')
 
 # TODO, write a diagonal class that is made for tbs containing genes
 class Diagonal():
-    def __init__(self, *args, **kargs):
+    def __init__(self, *args):
         if len(args) == 4 and (isinstance(args[0], str) or args[0] is None)\
                 and all([isinstance(l, list) for l in args[1:]]):
             # args = [diagType, l1, l2, la]
@@ -172,7 +172,7 @@ class Diagonal():
         for (idxH, aG) in enumerate(self.la):
             i1 = self.l1[idxH]
             i2 = self.l2[idxH]
-            if (range1[0] <= i1 and i1 <= range1[1]) and (range2[0] <= i2 and i2 <= range2[1]):
+            if (range1[0] <= i1 and i1 < range1[1]) and (range2[0] <= i2 and i2 < range2[1]):
                 new_l1.append(i1)
                 new_l2.append(i2)
                 new_la.append(aG)
@@ -195,11 +195,152 @@ class Diagonal():
     def __repr__(self):
         return "\ndiagType=%s\nl1=%s\nl2=%s\nla=%s\n" % (self.dt, self.l1, self.l2, self.la)
 
+# Diagonal Pseudo Distance
+def DPD((x0, y0), (x1, y1)):
+    return 2 * max(abs(x1 - x0), abs(y1 - y0)) - min(abs(x1 - x0), abs(y1 - y0))
+
+# Chebyshev Distance
+def CD((x0, y0), (x1, y1)):
+    return max(abs(x1 - x0), abs(y1 - y0))
+
+# Manhattan Distance
+def MD((x0, y0), (x1, y1)):
+    return abs(x1 - x0) + abs(y1 - y0)
+
+# Euclidean Distance
+def ED((x0, y0), (x1, y1)):
+    return round(math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2))
+
+# The frame of all the distances used during the merging process
+def framed(f):
+    def distance((x0, y0), (x1, y1), diagType):
+        if diagType == '/':
+            # Only consider the top right part of the distance matrix, (x1 >= x0 and y1 >= y0)
+            # in i-adhore "...>0", here we allow '=' to take care of close dispered paralogies that can be understood as tandem duplicates
+            if (x1-x0) >= 0 and (y1 - y0) >= 0:
+                res = f((x0, y0), (x1, y1))
+            else:
+                res = sys.maxint
+        elif diagType == '\\':
+            # Only consider the bottom right part of the distance matrix, (x1>=x0 and y1<=y0)
+            # in i-adhore "...<0", here we allow '=', idem than before
+            if (x1-x0) >= 0 and (y1 - y0) <= 0:
+                res = f((x0, y0), (x1, y1))
+            else:
+                res = sys.maxint
+        else:
+            # diagType == None, diag is composed of a single gene
+            res = f((x0, y0), (x1, y1))
+        return res
+    return distance
+
+def intervalsOverlap((x1, x2), (y1, y2)):
+    """
+    check if two 1D intervals overlap
+    """
+    assert x1 <= x2
+    assert y1 <= y2
+    # If there is an overlap it means there exists some number C which is in both ranges, i.e.
+    # x1 <= C <= x2
+    # y1 <= C <= y2
+    # Now, if we are allowed to assume that the ranges are well-formed (so that x1 <= x2 and y1 <= y2) then it is sufficient to test
+    # x1 <= y2 & y1 <= x2
+    # other solution: max(x1, y1) <= min(x2, y2)
+    return x1 <= y2 and y1 <= x2
+
+def boundingBoxesOfDiagsOverlap(diagA, diagB):
+    """
+    check if two bounding boxes of diagonals overlap
+    """
+    assert isinstance(diagA, Diagonal)
+    assert isinstance(diagB, Diagonal)
+    res = False
+    if intervalsOverlap((diagA.minOnG(1), diagA.maxOnG(1)), (diagB.minOnG(1), diagB.maxOnG(1))):
+        res = True
+    elif intervalsOverlap((diagA.minOnG(2), diagA.maxOnG(2)), (diagB.minOnG(2), diagB.maxOnG(2))):
+        res = True
+    return res
+
+def distanceBetweenBoundingBoxesOfDiags(diagA, diagB, distance=CD):
+    """
+    compute the distance between two bounding boxes of diagonals
+    """
+    assert isinstance(diagA, Diagonal)
+    assert isinstance(diagB, Diagonal)
+
+    if boundingBoxesOfDiagsOverlap(diagA, diagB):
+        res = 0
+        # pA = None
+        # pB = None
+    else:
+        # invertedOn1 = False
+        minA1 = diagA.minOnG(1)
+        minB1 = diagB.minOnG(1)
+        if minB1 < minA1:
+            # invertedOn1 = True
+            (diagA, diagB) = (diagB, diagA)
+            minA1 = diagA.minOnG(1)
+            minB1 = diagB.minOnG(1)
+        assert minA1 < minB1
+        maxA1 = diagA.maxOnG(1)
+        # maxB1 = diagB.maxOnG(1)
+        minA2 = diagA.minOnG(2)
+        maxA2 = diagA.maxOnG(2)
+        minB2 = diagB.minOnG(2)
+        maxB2 = diagB.maxOnG(2)
+        # since no overlap
+        assert maxA1 < minB1
+        if maxA2 < minB2:
+            pA = (maxA1, maxA2)
+            pB = (minB1, minB2)
+            res = distance(pA, pB)
+        elif maxB2 < minA2:
+            pA = (maxA1, minA2)
+            pB = (minB1, maxB2)
+            res = distance(pA, pB)
+        else:
+            raise ValueError
+        # if invertedOn1:
+        #     (pA, pB) = (pB, pA)
+    return res
+
+# TODO: use it in mergeDiags()
+# def distanceBetweenDiags(diagA, diagB, distance=CD):
+#     assert isinstance(diagA, Diagonal)
+#     assert isinstance(diagB, Diagonal)
+#     inverted = False
+#     if diagB.minOnG(1) < diagA.minOnG(1):
+#         inverted = True
+#         (diagA, diagB) = (diagB, diagA)
+#     if diagonalsOverlap(diagA, diagB):
+#         res = 0
+#     else:
+#         d1 = distance(diagA.beg(), diagB.beg())
+#         d2 = distance(diagA.beg(), diagB.end())
+#     # ensure that diagA.beg() is on the left of diagB.beg()
+#     if diagB.beg()[0] <= diagA.end()[0] + gapMax + 1:
+#         # Check if diagTypes are compatible
+#         if diagA.dt == diagB.dt or diagA.dt == None or diagB.dt == None:
+#             # take the known diagType if it is known in at least one of the 2 diags
+#             dT = diagA.dt if diagA.dt != None else diagB.dt
+#             # Check the distance
+#             if distance(diagA.end(), diagB.beg(), dT) == currGap+1:
+#                 fusionableDiags.append(diagB)
+#             else:
+#                 impossibleToMergeDiags.append(diagB)
+#                 continue
+#         else:
+#             impossibleToMergeDiags.append(diagB)
+#             continue
+#     else:
+#         # diagA.end()[0] + currGap < diagB.beg()[0]
+#         # stop the loop (remember that the diags are sorted!)
+#         # Impossible to merge next diags to diagA
+#         continueToSearch = False
+#         impossibleToMergeDiags.append(diagB)
 
 class SyntenyBlock(Diagonal):
-    def __init__(self, *args, **kwargs):
-        #args -- tuple of anonymous arguments
-        #kwargs -- dictionary of named arguments
+    def __init__(self, *args):
         if len(args) == 2 and isinstance(args[0], Diagonal) and (isinstance(args[1], float) or isinstance(args[1], int) or args[1] is None):
             # args = [diag, pVal]
             (diag, pVal) = args
@@ -215,44 +356,6 @@ class SyntenyBlock(Diagonal):
 
     def __repr__(self):
         return Diagonal.__repr__(self) + "pVal=%s\n" % self.pVal
-
-# Diagonal Pseudo Distance
-def DPD((x0,y0), (x1,y1)):
-    return 2 * max(abs(x1-x0), abs(y1-y0)) - min(abs(x1-x0), abs(y1-y0))
-
-# Chebyshev Distance
-def CD((x0, y0), (x1, y1)):
-    return max(abs(x1-x0), abs(y1-y0))
-
-# Manhattan Distance
-def MD((x0,y0),(x1,y1)):
-    return abs(x1-x0) + abs(y1-y0)
-
-# Euclidean Distance
-def ED((x0,y0),(x1,y1)):
-    return round(math.sqrt((x1-x0)**2 + (y1-y0)**2))
-
-# The frame of all the distances used during the merging process
-def framed(f):
-    def distance((x0,y0), (x1,y1), diagType):
-        if diagType == '/':
-            # Only consider the top right part of the distance matrix, (x1>=x0 and y1>=y0)
-            if (x1-x0)>=0 and (y1-y0) >= 0: # in i-adhore "...>0", here we allow '=' to take care of close dispered paralogies that can be understood as tandem duplicates
-                res = f((x0,y0),(x1,y1))
-            else:
-                res = sys.maxint
-        elif diagType == '\\':
-            # Only consider the bottom right part of the distance matrix, (x1>=x0 and y1<=y0)
-            if (x1-x0) >= 0 and (y1-y0) <= 0: # in i-adhore "...<0", here we allow '=', idem than before
-                res = f((x0,y0),(x1,y1))
-            else:
-                res = sys.maxint
-        else:
-            # diagType == None, diag is composed of a single gene
-            res = f((x0,y0),(x1,y1))
-        return res
-    return distance
-
 #
 # Generator managing the queue of diagonals for the merging process
 ####################################################################
@@ -282,7 +385,6 @@ class queueWithBackup:
         self.todofirst.extend(self.backup)
         self.backup = collections.deque()
 
-#
 # Merge diagonals if they are separated by a gap less long than 'gapMax' relatively to a distance metric
 # inputs:
 # listOfDiags : a list containing elements as (l1, l2, la)
@@ -303,27 +405,26 @@ class queueWithBackup:
 @myTools.verbose
 def mergeDiags(listOfDiags, gapMax, gc2, distanceMetric = 'CD', verbose = False):
     assert gapMax>=0
-    # assert that the diag elements in listOfDiags are either Diagonal objects
-    # or SyntenyBlock objects
+    # assert that the diag elements in listOfDiags are either Diagonal objects or SyntenyBlock objects
     assert all(diag.__class__.__name__ == 'Diagonal' for diag in listOfDiags) or\
         all(diag.__class__.__name__ == 'SyntenyBlock' for diag in listOfDiags), listOfDiags[0]
 
     if distanceMetric == 'DPD':
-        print >> sys.stderr, "use Diagonal Pseudo Distance to merge diagonals with a gap up to %s elements" % gapMax
+        print >> sys.stderr, "Use Diagonal Pseudo Distance to merge diagonals with a gap up to %s elements" % gapMax
         distance = framed(DPD)
     elif distanceMetric == 'CD':
-        print >> sys.stderr, "use Chebyshev Distance to merge diagonals with a gap up to %s elements" % gapMax
+        print >> sys.stderr, "Use Chebyshev Distance to merge diagonals with a gap up to %s elements" % gapMax
         distance = framed(CD)
     elif distanceMetric == 'MD':
-        print >> sys.stderr, "use Manhattan Distance to merge diagonals with a gap up to %s elements" % gapMax
+        print >> sys.stderr, "Use Manhattan Distance to merge diagonals with a gap up to %s elements" % gapMax
         distance = framed(MD)
     elif distanceMetric == 'ED':
-        print >> sys.stderr, "use Euclidean Distance to merge diagonals with a gap up to %s elements" % gapMax
+        print >> sys.stderr, "Use Euclidean Distance to merge diagonals with a gap up to %s elements" % gapMax
         distance = framed(ED)
     else:
         raise ValueError('Must use a distance either DPD (Diagonal PSeudo Distance) or MD (Manhattan Distance), Euclidean Distance (ED) or Chebyshev Distance (CD)')
 
-    print >> sys.stderr, "Number of Diags before DiagMerger = ", len(listOfDiags)
+    print >> sys.stderr, "Nb Diags before DiagMerger = ", len(listOfDiags)
     diagGen = []
     listOfFinishedDiags = []
     nbFusion = 0
@@ -367,7 +468,7 @@ def mergeDiags(listOfDiags, gapMax, gc2, distanceMetric = 'CD', verbose = False)
                 ### DEBUG example
                 # Thanks to the sort at the beginning, we known that the starting hp of diagB is on the right of the starting hp of diagA
                 #TODO : change diagGen to put diags that are on the left of diagA in a buffer and avoid considering them
-                if diagB.beg()[0] < diagA.end()[0]: # in i-adhore diagB.beg()[0] <= diagA.end()[0]
+                if diagB.beg()[0] < diagA.end()[0]:  # in i-adhore diagB.beg()[0] <= diagA.end()[0]
                     impossibleToMergeDiags.append(diagB)
                     continue
                 elif diagB.beg()[0] <= diagA.end()[0] + currGap+1:
@@ -377,7 +478,7 @@ def mergeDiags(listOfDiags, gapMax, gc2, distanceMetric = 'CD', verbose = False)
                         # take the known diagType if it is known in at least one of the 2 diags
                         dT = diagA.dt if diagA.dt != None else diagB.dt
                         # Check the distance
-                        if distance(diagA.end(),diagB.beg(),dT) == currGap+1 :
+                        if distance(diagA.end(), diagB.beg(), dT) == currGap+1:
                             fusionableDiags.append(diagB)
                         else:
                             impossibleToMergeDiags.append(diagB)
@@ -476,11 +577,11 @@ def mergeDiags(listOfDiags, gapMax, gc2, distanceMetric = 'CD', verbose = False)
             for diag in sorted(fusionableDiags + impossibleToMergeDiags, key=lambda diag: diag.l1[0]):
                 diagGen.putBack(diag) # diagonals that were not fusionable are recorded to try to merge them after
             diagGen.rewind()
-        print >> sys.stderr, "number of merges for currGap=%s :%s" % (currGap, nbFusionCurrGap)
+        print >> sys.stderr, "Nb of merges for currGap=%s :%s" % (currGap, nbFusionCurrGap)
     # Once all merges have been performed for a currGap it is necessary to repeat the merging process with all the diagonals for currGap+1
-    print >> sys.stderr, "Total number of merges =", nbFusion
+    print >> sys.stderr, "Total nb of merges =", nbFusion
     listOfSortedAndMergedDiagonals = sorted(list(diagGen) + listOfFinishedDiags, key=lambda diag: diag.l1[0])
-    print >> sys.stderr, "number of Diags after the merging process =", len(listOfSortedAndMergedDiagonals)
+    print >> sys.stderr, "Nb Diags after the merging process =", len(listOfSortedAndMergedDiagonals)
 
     return listOfSortedAndMergedDiagonals
 
@@ -1534,9 +1635,8 @@ def splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb)):
 # Split a sb as soon as one of its gap contains another sb
 # the other sb may be a micro-inversion or a transposition-like sb
 def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=False):
-
     # Find sbs that are nested within gaps of other sbs
-    #   * nested inversions (micro-inversions, nested segments and inversed
+    #   * nested inversions (micro-inversions, nested segments and inverted
     #     diagonalType).
     #   * transpositions (only 'one' nested segment, to avoid considering
     #     segmental duplications followed by fractionation).
@@ -1544,20 +1644,19 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=False):
     for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
         new_sb = SyntenyBlock(sb)
         sbsInPairCompWithIds.addToLocation((c1, c2), new_sb)
-    (V, (sbsG1, sbsG2)) = buildSetOfVertices(sbsInPairCompWithIds)
-    (N1, O1, I1) = findOverlapsOnGenome(1, sbsInPairCompWithIds, sbsG1, overlapMax=0)
-    (N2, O2, I2) = findOverlapsOnGenome(2, sbsInPairCompWithIds, sbsG2, overlapMax=0)
-    # method "getItemById" of sbsInPairCompWithIds"
     id2sb = sbsInPairCompWithIds.getItemById
     id2location = sbsInPairCompWithIds.getItemLocationById
 
-    todo = set([])
-    id2splitRanks = collections.defaultdict(list)
+    (V, (sbsG1, sbsG2)) = buildSetOfVertices(sbsInPairCompWithIds)
+    (N1, O1, I1) = findOverlapsOnGenome(1, sbsInPairCompWithIds, sbsG1, overlapMax=0)
+    (N2, O2, I2) = findOverlapsOnGenome(2, sbsInPairCompWithIds, sbsG2, overlapMax=0)
 
     # Intra-synteny block rearrangement: either an intra-sb
-    # micro-transposition or an intra-sb micro-inversion (inversed
-    # diagType). Or a mix of both. To disantangle both phenomenon, it
+    # micro-transposition or an intra-sb micro-inversion (inverted
+    # diagType). Or a mix of both. To disentangle both phenomenon, it
     # would be necessary to check the rank location in the host sb.
+    todo = set([])
+    id2splitRanks = collections.defaultdict(list)
     for idsbb in (set(I1.keys()) & set(I2.keys())):
         for idsba in (I1[idsbb] & I2[idsbb]):
             # sbb is included in sba in both genomes
@@ -1579,10 +1678,10 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=False):
                     # this last condition was for avoiding strange cases
                     # +A+B+C+D+E
                     # +A-D+B-C+E
-                    # where -C-D is seen has an inluded diagonal
+                    # where -C-D is seen has an included diagonal
 
-                    # Return tuples (id du sb splité, splitRanks)
-                    # This allows to incrementaly update the splitRanks
+                    # Return tuples (id of the splited sb, splitRanks)
+                    # This allows to incrementally update the splitRanks
                     #  and then it wil be possible to perform the splits
                     #  after the for loops
                     (splitRanks_a, splitRanks_b) = splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb))
@@ -1612,8 +1711,8 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=False):
             assert c1a == c1b or c2a == c2b
             #
             if noOverlapSb(((c1a, c2a), sba), ((c1b, c2b), sbb)):
-                # Return tuples (id of the splited sb, splitRanks)
-                # This allows to incrementaly update the splitRanks
+                # Return tuples (id of the spited sb, splitRanks)
+                # This allows to incrementally update the splitRanks
                 #  and then it wil be possible to perform the splits
                 #  after the for loops
                 (splitRanks_a, splitRanks_b) = splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb))
@@ -1621,8 +1720,7 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=False):
                 id2splitRanks[idsbb] = sorted(list(set(id2splitRanks[idsbb] + splitRanks_b)))
                 todo = todo | {idsba, idsbb}
 
-    # With 'todo' and (id of the splited sb, splitRanks)s, calculate the newSbs
-    # and removed sbs
+    # With 'todo' and (id of the splited sb, splitRanks)s, calculate the newSbs and removed sbs
     removedSbIds = set([])
     for idsb in todo:
         (c1, c2, _) = id2location(idsb)
@@ -1633,9 +1731,9 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=False):
 
     assert len(set(sbsInPairCompWithIds.orderedIds) & removedSbIds) == 0
 
-    # also remove sbs of only one hp!
     # TODO print in stderr the reason of the removal
     if removeSingleHpSbs:
+        # remove sbs of only one hp
         singleHpSbs = set([])
         for (idsb, _, sb) in sbsInPairCompWithIds.iterByOrderedIds():
             assert len(sb.la) > 0
@@ -1643,148 +1741,190 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=False):
                 singleHpSbs.add(idsb)
         sbsInPairCompWithIds.removeIds(singleHpSbs)
 
-    # update the small overlap dict ??
-    #newO = {}
-    #for (idsba, idsbbs) in O.iteritems():
-    #    if idsba in noOrSmallOverlapIds:
-    #        newO[idsba] = set([idsbb for idsbb in idsbbs if idsbb in noOrSmallOverlapIds])
-    #O = newO
-
-    # TODO, translate into a simpler Dict2D!!
     new_sbsInPairComp = myTools.Dict2d(list)
     for (idsb, (c1, c2), sb) in sbsInPairCompWithIds.iterByOrderedIds():
         new_sbsInPairComp[c1][c2].append(sb)
     return new_sbsInPairComp
 
-def fIdentifyMicroInversions(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv=0):
+# TODO: split this function in two modules:
+# 1) IdentifyMicroInversions nested in sbs gaps
+def fIdentifyMicroInversionsNestedInSbsGaps(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv=0):
+    # 1) Give unique id to each sb and diag
+    idsSbs = set()
+    idsPutativeMicroInversions = set()
+    sbsAndDiagsInPairCompWithIds = myTools.OrderedDict2dOfLists()
+    id = None
+    for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
+        new_sb = SyntenyBlock(sb)
+        id = sbsAndDiagsInPairCompWithIds.addToLocation((c1, c2), new_sb)
+        idsSbs.add(id)
+    assert id == sbsAndDiagsInPairCompWithIds.maxId
+    for ((c1, c2), diag) in putativeMicroInversionsInPairComp.iteritems2d():
+        id += 1
+        new_diag = Diagonal(diag)
+        sbsAndDiagsInPairCompWithIds.addToLocationWithId((c1, c2), new_diag, id)
+        idsPutativeMicroInversions.add(id)
+    assert len(idsSbs & idsPutativeMicroInversions) == 0
+    id2sb = sbsAndDiagsInPairCompWithIds.getItemById
+    id2location = sbsAndDiagsInPairCompWithIds.getItemLocationById
 
-        # 1: Give unique id to each sb and diag
-        sbsInPairCompWithIds = myTools.OrderedDict2dOfLists()
-        for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
-            new_sb = SyntenyBlock(sb)
-            sbsInPairCompWithIds.addToLocation((c1, c2), new_sb)
-        putativeMicroInversionsInPairCompWithIds = myTools.OrderedDict2dOfLists()
-        id = sbsInPairCompWithIds.maxId
-        for ((c1, c2), diag) in putativeMicroInversionsInPairComp.iteritems2d():
-            new_diag = Diagonal(diag)
-            id += 1
-            putativeMicroInversionsInPairCompWithIds.addToLocationWithId((c1, c2), new_diag, id)
+    # 2) build the overlap graph
+    (V, (sbsG1, sbsG2)) = buildSetOfVertices(sbsAndDiagsInPairCompWithIds)
+    (N1, O1, I1) = findOverlapsOnGenome(1, sbsAndDiagsInPairCompWithIds, sbsG1, overlapMax=0)
+    (N2, O2, I2) = findOverlapsOnGenome(2, sbsAndDiagsInPairCompWithIds, sbsG2, overlapMax=0)
 
-        idsOfPutativeMicroInversions = set(putativeMicroInversionsInPairCompWithIds.orderedIds)
-        idsOfSbs = set(sbsInPairCompWithIds.orderedIds)
-        assert len(idsOfSbs & idsOfPutativeMicroInversions) == 0
+    # 3) identify micro-inversions nested in sbs gaps
+    todo = set()
+    id2splitRanks = collections.defaultdict(list)
+    idsIdentifiedMicroInv = set()
+    # Intra-synteny block microInv
+    for idsbb in (set(I1.keys()) & set(I2.keys())):
+        for idsba in (I1[idsbb] & I2[idsbb]):
+            # sbb is included in sba in both genomes
+            sba = id2sb(idsba)
+            sbb = id2sb(idsbb)
+            (c1a, c2a, _) = id2location(idsba)
+            (c1b, c2b, _) = id2location(idsbb)
+            assert c1a == c1b and c2a == c2b
+            if idsbb in idsPutativeMicroInversions:
+                if noOverlapSb(((c1a, c2a), sba), ((c1b, c2b), sbb)):
+                    if sba.dt == '/' and sbb.dt == '\\' or sba.dt == '\\' and sbb.dt == '/':
+                        (splitRanks_a, splitRanks_b) = splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb))
+                        if len(splitRanks_a[1:-1]) == 1 and len(splitRanks_b[1:-1]) == 0:
+                            # if sbb is nested in a gap of sba, with a gapMaxMicroInv
+                            sbb_l = min(sbb.l1)
+                            sbb_r = max(sbb.l1)
+                            sbb_b = min(sbb.l2)
+                            sbb_t = max(sbb.l2)
+                            sba_ll = min([(sbb_l - idx, idx) for idx in sba.l1 if idx < sbb_l])[1]
+                            sba_rr = min([(idx - sbb_r, idx) for idx in sba.l1 if sbb_r < idx])[1]
+                            sba_bb = min([(sbb_b - idx, idx) for idx in sba.l2 if idx < sbb_b])[1]
+                            sba_tt = min([(idx - sbb_t, idx) for idx in sba.l2 if sbb_t < idx])[1]
+                            assert all(sba_xx > 0 for sba_xx in {sba_rr, sba_tt}), "%s" % [sba_rr, sba_tt]
+                            assert all(sba_xx >= 0 for sba_xx in {sba_ll, sba_bb})
+                            distance1 = CD((sbb_l, sbb_b), (sba_ll, sba_bb))
+                            distance2 = CD((sbb_r, sbb_t), (sba_rr, sba_tt))
+                            distance = max(distance1, distance2)
+                            gap = distance - 1
+                            assert gap >= 0, gap
+                            # FIXME, gapMaxMicroInv=0 yields the same result as gapMaxMicroInv=None or -1 ...
+                            if gap <= gapMaxMicroInv:
+                                # its a micro-inversion perfectly nested
+                                # a is splited in one point
+                                idsIdentifiedMicroInv.add(idsbb)
+                                splitRanks_b = splitRanks_b[1:-1]
+                                assert len(splitRanks_b) == 0, "%s" % str((splitRanks_b, len(sbb.la), len(sbb.l1), len(sbb.l2)))
+                                id2splitRanks[idsba] = sorted(list(set(id2splitRanks[idsba] + splitRanks_a)))
+                                # id2splitRanks[idsbb] = sorted(list(set(id2splitRanks[idsbb] + splitRanks_b)))
+                                todo = todo | {idsba}
+    print >> sys.stderr, "%s diags identified as micro-inversions" % len(idsIdentifiedMicroInv)
 
-        sbsAndDiagsInPairCompWithIds = sbsInPairCompWithIds + putativeMicroInversionsInPairCompWithIds
-        assert len(sbsAndDiagsInPairCompWithIds.items2d()) == len(sbsInPairCompWithIds.items2d()) + len(putativeMicroInversionsInPairCompWithIds.items2d())
-        assert len(sbsAndDiagsInPairCompWithIds.orderedIds) == len(set(sbsAndDiagsInPairCompWithIds.orderedIds))
-        idsIdentifiedMicroInv = set()
+    # With 'todo' and (id of the splited sb, splitRanks)s, calculate the newSbs and removed sbs
+    # 4) splits sbs when a gap conatins a micro-inversion
+    removedSbIds = set()
+    newSbIds = set()
+    for idsb in todo:
+        (c1, c2, _) = id2location(idsb)
+        for newSb in splitSbBySplitRanks(id2sb(idsb), id2splitRanks[idsb]):
+            newSbId = sbsAndDiagsInPairCompWithIds.addToLocation((c1, c2), newSb)
+            newSbIds.add(newSbId)
+        removedSbIds = removedSbIds | {idsb}
+    sbsAndDiagsInPairCompWithIds.removeIds(removedSbIds)
+    assert len((idsSbs - removedSbIds) & newSbIds) == 0
+    assert len(idsIdentifiedMicroInv & idsSbs) == 0
+    assert len(set(sbsAndDiagsInPairCompWithIds.orderedIds) & removedSbIds) == 0
+    idsSbs = (idsSbs - removedSbIds) | newSbIds
 
-        (V, (sbsG1, sbsG2)) = buildSetOfVertices(sbsAndDiagsInPairCompWithIds)
-        (N1, O1, I1) = findOverlapsOnGenome(1, sbsAndDiagsInPairCompWithIds, sbsG1, overlapMax=0)
-        (N2, O2, I2) = findOverlapsOnGenome(2, sbsAndDiagsInPairCompWithIds, sbsG2, overlapMax=0)
-        # method "getItemById" of sbsInPairCompWithIds"
-        id2sb = sbsAndDiagsInPairCompWithIds.getItemById
-        id2location = sbsAndDiagsInPairCompWithIds.getItemLocationById
+    id2sb = sbsAndDiagsInPairCompWithIds.getItemById
+    id2location = sbsAndDiagsInPairCompWithIds.getItemLocationById
 
-        todo = set([])
-        id2splitRanks = collections.defaultdict(list)
+    # transform diags into sbs for identified microInv
+    for idsb in idsIdentifiedMicroInv:
+        diag = id2sb(idsb)
+        (c1, c2, idx) = id2location(idsb)
+        sbsAndDiagsInPairCompWithIds[c1][c2][idx] = SyntenyBlock(diag, 0)
+    idsSbs |= idsIdentifiedMicroInv
+    idsPutativeMicroInversions -= idsIdentifiedMicroInv
+    idsDiagsThatAreNotMicroInv = idsPutativeMicroInversions
 
-        # Intra-synteny block microInv
-        for idsbb in (set(I1.keys()) & set(I2.keys())):
-            for idsba in (I1[idsbb] & I2[idsbb]):
-                # sbb is included in sba in both genomes
-                sba = id2sb(idsba)
-                sbb = id2sb(idsbb)
-                (c1a, c2a, _) = id2location(idsba)
-                (c1b, c2b, _) = id2location(idsbb)
-                assert c1a == c1b and c2a == c2b
-                if idsbb in idsOfPutativeMicroInversions:
-                    if noOverlapSb(((c1a, c2a), sba), ((c1b, c2b), sbb)):
-                        if sba.dt == '/' and sbb.dt == '\\' or sba.dt == '\\' and sbb.dt == '/':
-                            (splitRanks_a, splitRanks_b) = splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb))
-                            if len(splitRanks_a[1:-1]) == 1 and len(splitRanks_b[1:-1]) == 0:
-                                # if sbb is nested in a gap of sba, with a gapMaxMicroInv
-                                sbb_l = min(sbb.l1)
-                                sbb_r = max(sbb.l1)
-                                sbb_b = min(sbb.l2)
-                                sbb_t = max(sbb.l2)
-                                sba_ll = min([(sbb_l - idx, idx) for idx in sba.l1 if idx < sbb_l])[1]
-                                sba_rr = min([(idx - sbb_r, idx) for idx in sba.l1 if sbb_r < idx])[1]
-                                sba_bb = min([(sbb_b - idx, idx) for idx in sba.l2 if idx < sbb_b])[1]
-                                sba_tt = min([(idx - sbb_t, idx) for idx in sba.l2 if sbb_t < idx])[1]
-                                assert all(sba_xx > 0 for sba_xx in {sba_rr, sba_tt}), "%s" % [sba_rr, sba_tt]
-                                assert all(sba_xx >= 0 for sba_xx in {sba_ll, sba_bb})
-                                distance1 = CD((sbb_l, sbb_b), (sba_ll, sba_bb))
-                                distance2 = CD((sbb_r, sbb_t), (sba_rr, sba_tt))
-                                distance = max(distance1, distance2)
-                                gap = distance - 1
-                                assert gap >= 0, gap
-                                # FIXME, gapMaxMicroInv=0 yields the same result as gapMaxMicroInv=None or -1 ...
-                                if gap <= gapMaxMicroInv:
-                                    # its a micro-inversion perfectly nested
-                                    # a is splited in one point
-                                    idsIdentifiedMicroInv.add(idsbb)
-                                    splitRanks_b = splitRanks_b[1:-1]
-                                    assert len(splitRanks_b) == 0, "%s" % str((splitRanks_b, len(sbb.la), len(sbb.l1), len(sbb.l2)))
-                                    id2splitRanks[idsba] = sorted(list(set(id2splitRanks[idsba] + splitRanks_a)))
-                                    #id2splitRanks[idsbb] = sorted(list(set(id2splitRanks[idsbb] + splitRanks_b)))
-                                    todo = todo | {idsba}
+    # TODO, translate into a simpler Dict2D
+    new_sbsInPairComp = myTools.Dict2d(list)
+    diagsThatAreNotSbsInPairComp = myTools.Dict2d(list)
+    for (idsb, (c1, c2), sb) in sbsAndDiagsInPairCompWithIds.iterByOrderedIds():
+        assert all(isinstance(idx, int) for idx in sb.l1)
+        assert all(isinstance(idx, int) for idx in sb.l2)
+        if idsb in idsSbs:
+            new_sbsInPairComp[c1][c2].append(sb)
+        else:
+            assert idsb in idsDiagsThatAreNotMicroInv
+            diagsThatAreNotSbsInPairComp[c1][c2].append(sb)
 
-        print >> sys.stderr, "%s diags identified as micro-inversions" % len(idsIdentifiedMicroInv)
+    return (new_sbsInPairComp, diagsThatAreNotSbsInPairComp)
 
-        # With 'todo' and (id of the splited sb, splitRanks)s, calculate the newSbs
-        # and removed sbs
+def fIdentifyInversionsAtSbsExtremities(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv=0):
+    # 1) Give unique id to each sb and diag
+    idsSbs = myTools.Dict2d(set)
+    idsOfPutativeMicroInversions = set()
+    sbsAndDiagsInPairCompWithIds = myTools.OrderedDict2dOfLists()
+    for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
+        new_sb = SyntenyBlock(sb)
+        id = sbsAndDiagsInPairCompWithIds.addToLocation((c1, c2), new_sb)
+        idsSbs[c1][c2].add(id)
+    assert id == sbsAndDiagsInPairCompWithIds.maxId
+    for ((c1, c2), diag) in putativeMicroInversionsInPairComp.iteritems2d():
+        id += 1
+        new_diag = Diagonal(diag)
+        sbsAndDiagsInPairCompWithIds.addToLocationWithId((c1, c2), new_diag, id)
+        idsOfPutativeMicroInversions.add(id)
+    assert len(set([id for (_, id) in idsSbs.iteritems2d()]) & idsOfPutativeMicroInversions) == 0
+    id2sb = sbsAndDiagsInPairCompWithIds.getItemById
+    id2location = sbsAndDiagsInPairCompWithIds.getItemLocationById
 
-        # debug assertions
-        assert len(sbsAndDiagsInPairCompWithIds.id2location.keys()) == len(sbsAndDiagsInPairCompWithIds.orderedIds)
-        assert set(sbsAndDiagsInPairCompWithIds.id2location.keys()) == set(sbsAndDiagsInPairCompWithIds.orderedIds)
+    # 3) identify micro-inversions at extremities of sbs
+    idsIdentifiedMicroInv = set()
+    for idsbb in idsOfPutativeMicroInversions:
+        (c1b, c2b, _) = id2location(idsbb)
+        for idsba in idsSbs[c1b][c2b]:
+            # sbb is included in sba in both genomes
+            sba = id2sb(idsba)
+            sbb = id2sb(idsbb)
+            (c1a, c2a, _) = id2location(idsba)
+            if (c1a, c2a) == (c1b, c2b):
+                if sba.dt == '/' and sbb.dt == '\\' or sba.dt == '\\' and sbb.dt == '/':
+                    if 1 <= distanceBetweenBoundingBoxesOfDiags(sbb, sba) <= gapMaxMicroInv + 1:
+                        idsIdentifiedMicroInv.add(idsbb)
 
-        removedSbIds = set()
-        newSbIds = set()
-        for idsb in todo:
-            (c1, c2, _) = id2location(idsb)
-            for newSb in splitSbBySplitRanks(id2sb(idsb), id2splitRanks[idsb]):
-                newSbId = sbsAndDiagsInPairCompWithIds.addToLocation((c1, c2), newSb)
-                newSbIds.add(newSbId)
-            removedSbIds = removedSbIds | {idsb}
-        sbsAndDiagsInPairCompWithIds.removeIds(removedSbIds)
+    # transform diags into sbs for identified microInv
+    for idsb in idsIdentifiedMicroInv:
+        diag = id2sb(idsb)
+        (c1, c2, idx) = id2location(idsb)
+        sbsAndDiagsInPairCompWithIds[c1][c2][idx] = SyntenyBlock(diag, 0)
+    idsSbs = set([id for (_, id) in idsSbs.iteritems2d()])
+    idsSbs |= idsIdentifiedMicroInv
+    idsOfPutativeMicroInversions -= idsIdentifiedMicroInv
+    idsDiagsThatAreNotSbs = idsOfPutativeMicroInversions
 
-        assert len(set(sbsAndDiagsInPairCompWithIds.orderedIds) & removedSbIds) == 0
+    # TODO, translate into a simpler Dict2D
+    new_sbsInPairComp = myTools.Dict2d(list)
+    diagsThatAreNotSbsInPairComp = myTools.Dict2d(list)
+    for (idsb, (c1, c2), sb) in sbsAndDiagsInPairCompWithIds.iterByOrderedIds():
+        assert all(isinstance(idx, int) for idx in sb.l1)
+        assert all(isinstance(idx, int) for idx in sb.l2)
+        if idsb in idsSbs:
+            new_sbsInPairComp[c1][c2].append(sb)
+        else:
+            assert idsb in idsDiagsThatAreNotSbs
+            diagsThatAreNotSbsInPairComp[c1][c2].append(sb)
 
-        assert len((idsOfSbs - removedSbIds) & newSbIds) == 0
-        assert len(idsIdentifiedMicroInv & newSbIds) == 0
-        assert len(idsIdentifiedMicroInv & idsOfSbs) == 0
+    return (new_sbsInPairComp, diagsThatAreNotSbsInPairComp)
 
-        # TODO, translate into a simpler Dict2D!!
-        new_sbsInPairComp = myTools.Dict2d(list)
-        for (idsb, (c1, c2), sb) in sbsAndDiagsInPairCompWithIds.iterByOrderedIds():
-            if idsb in idsOfSbs | newSbIds | idsIdentifiedMicroInv:
-                if idsb in idsIdentifiedMicroInv:
-                    sb = SyntenyBlock(sb, 0)
-                assert all(isinstance(idx, int) for idx in sb.l1)
-                assert all(isinstance(idx, int) for idx in sb.l2)
-                new_sbsInPairComp[c1][c2].append(sb)
 
-        diagsThatAreNotSbsInPairComp = myTools.Dict2d(list)
-        for (idsb, (c1, c2), sb) in sbsAndDiagsInPairCompWithIds.iterByOrderedIds():
-            if sb in idsOfPutativeMicroInversions - idsIdentifiedMicroInv:
-                assert all(isinstance(idx, int) for idx in sb.l1)
-                assert all(isinstance(idx, int) for idx in sb.l2)
-                diagsThatAreNotSbsInPairComp[c1][c2].append(sb)
-
-        # update the small overlap dict ??
-        #newO = {}
-        #for (idsba, idsbbs) in O.iteritems():
-        #    if idsba in noOrSmallOverlapIds:
-        #        newO[idsba] = set([idsbb for idsbb in idsbbs if idsbb in noOrSmallOverlapIds])
-        #O = newO
-
-        return (new_sbsInPairComp, diagsThatAreNotSbsInPairComp)
 
 def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      gapMax=None,
                                      distanceMetric='CD',
-                                     pThreshold=1.0,
+                                     distinguishMonoGenicDiags=True,
+                                     pThreshold=None,
                                      gapMaxMicroInv=0,
                                      identifyBreakpointsWithinGaps=True,
                                      overlapMax=None,
@@ -1893,7 +2033,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
     monogenicDiagsInPairComp = myTools.Dict2d(list)
     # FIXME, it might be interesting to add an option here
 
-    if True:
+    if distinguishMonoGenicDiags:
         print >> sys.stderr, "Nb diags before removing mono-ancGenic diags = %s" % len(diagsInPairComp.items2d())
         for c1 in diagsInPairComp.keys():
             for c2 in diagsInPairComp[c1].keys():
@@ -1915,7 +2055,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
 
     # setp 4 : statistical validation of diags (putative sbs) into sbs
     ###################################################################
-    if pThreshold == 1.0:
+    if pThreshold is None:
         for (c1, c2) in diagsInPairComp.keys2d():
             diagsInPairComp[c1][c2] = [SyntenyBlock(diag, None) for diag in diagsInPairComp[c1][c2]]
         sbsInPairCompStatVal = diagsInPairComp
@@ -1930,14 +2070,21 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                                                                 verbose=verbose)
     sbsInPairComp = sbsInPairCompStatVal
 
-
     # identify monogenic diags and diags previously rejected during the stat-validation that can be validated as
     # non-ambiguous micro-inversions
+    ############################################################################################################
     if gapMaxMicroInv is not None:
-        print >> sys.stderr, "Nb sbs before identifying micro inversions = %s" % len(sbsInPairComp.items2d())
+        print >> sys.stderr, "Nb sbs before identifying micro inversions within sbs gaps = %s" % len(sbsInPairComp.items2d())
         putativeMicroInversionsInPairComp = diagsInPairCompRejected + monogenicDiagsInPairComp
-        (sbsInPairComp, diagsThatAreNotSbsInPairComp) = fIdentifyMicroInversions(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv=gapMaxMicroInv)
-        print >> sys.stderr, "Nb sbs after identifying micro inversions = %s" % len(sbsInPairComp.items2d())
+        (sbsInPairComp, diagsNotSbsInPairComp) = fIdentifyMicroInversionsNestedInSbsGaps(sbsInPairComp,
+                                                                                         putativeMicroInversionsInPairComp,
+                                                                                         gapMaxMicroInv=gapMaxMicroInv)
+        print >> sys.stderr, "Nb sbs after identifying micro inversions within sbs gaps = %s" % len(sbsInPairComp.items2d())
+        print >> sys.stderr, "Nb sbs before identifying micro inversions at sbs extremities = %s" % len(sbsInPairComp.items2d())
+        (sbsInPairComp, diagsNotSbsInPairComp) = fIdentifyInversionsAtSbsExtremities(sbsInPairComp,
+                                                                                     diagsNotSbsInPairComp,
+                                                                                     gapMaxMicroInv=gapMaxMicroInv)
+        print >> sys.stderr, "Nb sbs after identifying micro inversions at sbs extremities = %s" % len(sbsInPairComp.items2d())
 
     cptLoopIter = 0
     # initialise la condition d'arrêt de la boucle
@@ -2022,7 +2169,13 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
     return sbsInPairComp
 
 
-def editGenomes(g1, g2, families, filterType, minChromLength, tandemGapMax, keepOriginal=False):
+def editGenomes(g1, g2, families,
+                filterType=FilterType.InBothGenomes,
+                labelWith='FamID',
+                tandemGapMax=0,
+                minChromLength=2,
+                keepOriginal=False):
+    assert labelWith in {'FamID', 'FamName'}
     nCini1 = len(g1.keys())
     nCini2 = len(g2.keys())
     nGini1 = sum([len(chrom1) for chrom1 in g1.values()])
@@ -2030,8 +2183,13 @@ def editGenomes(g1, g2, families, filterType, minChromLength, tandemGapMax, keep
     #step 1 :filter genomes and rewrite in tandem blocks if needed
     ##############################################################
     # rewrite genomes by family names (ie ancGene names)
-    g1_fID = myMapping.labelWithFamID(g1, families)
-    g2_fID = myMapping.labelWithFamID(g2, families)
+    if labelWith == 'FamID':
+        g1_fID = myMapping.labelWithFamID(g1, families)
+        g2_fID = myMapping.labelWithFamID(g2, families)
+    else:
+        assert labelWith == 'FamName'
+        g1_fID = myMapping.labelWithFamNames(g1, families)
+        g2_fID = myMapping.labelWithFamNames(g2, families)
     # genes that are not in ancGene have a aID=None
     nGiniInFam1 = len([fID for chrom1 in g1_fID.values() for (fID, _) in chrom1 if fID is not None])
     nGiniInFam2 = len([fID for chrom2 in g2_fID.values() for (fID, _) in chrom2 if fID is not None])
@@ -2111,7 +2269,8 @@ def extractSbsInPairCompGenomes(g1, g2, families,
                                 tandemGapMax=0,
                                 gapMax=None,
                                 distanceMetric='CD',
-                                pThreshold=1.0,
+                                distinguishMonoGenicDiags=True,
+                                pThreshold=None,
                                 gapMaxMicroInv=0,
                                 identifyBreakpointsWithinGaps=True,
                                 overlapMax=None,
@@ -2134,11 +2293,17 @@ def extractSbsInPairCompGenomes(g1, g2, families,
     else:
         raise TypeError('g1 and/or g2 must be either myGenomes.Genome or dict')
 
-    ((g1_tb, mtb2g1, (nCL1, nGL1)), (g2_tb, mtb2g2, (nCL2, nGL2))) = editGenomes(g1, g2, families, filterType, minChromLength, tandemGapMax)
+    ((g1_tb, mtb2g1, (nCL1, nGL1)), (g2_tb, mtb2g2, (nCL2, nGL2))) = editGenomes(g1, g2, families,
+                                                                                 filterType=filterType,
+                                                                                 labelWith='FamID',
+                                                                                 tandemGapMax=tandemGapMax,
+                                                                                 minChromLength=minChromLength,
+                                                                                 keepOriginal=False)
 
     sbsInPairComp = extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                                      gapMax=gapMax,
                                                      distanceMetric=distanceMetric,
+                                                     distinguishMonoGenicDiags=distinguishMonoGenicDiags,
                                                      pThreshold=pThreshold,
                                                      gapMaxMicroInv=gapMaxMicroInv,
                                                      identifyBreakpointsWithinGaps=identifyBreakpointsWithinGaps,

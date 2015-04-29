@@ -361,16 +361,15 @@ class Families(list):
                 # family name
                 fn = names[0]
                 # modern names
-                # FIXME: dns might be only a set
-                dns = names[1:]
+                # FIXME: dns cannot be a set, since the first element is the positional ortholog as much as possible
+                dns = set(names[1:])
                 self.append(Family(fn, dns))
-                for n in [fn] + dns:
-                    fID = self.fidMax
+                for n in {fn} | dns:
                     # Each (fID + 1) corresponds to the line number in the output file
                     # of families obtained with self.printIn(file)
                     # Be careful, a fID number is equal to the line number - 1
                     # (if line number begins from 1)
-                    self.g2fid[n] = fID
+                    self.g2fid[n] = self.fidMax
                 self.fidMax += 1
             file.close()
             assert self.fidMax == len(self)
@@ -380,10 +379,18 @@ class Families(list):
 
     def addFamily(self, family):
         assert isinstance(family, Family)
-        self.append(family)
-        for n in [family.fn] + family.dns:
-            self.g2fid[n] = self.fidMax
-        self.fidMax += 1
+        selfFamId = self.getFamID(family.fn, default=None)
+        if selfFamId is None:
+            self.append(family)
+            for n in {family.fn} | family.dns:
+                self.g2fid[n] = self.fidMax
+            self.fidMax += 1
+        else:
+            selfFam = self.getFamilyByID(selfFamId)
+            assert family.fn == selfFam.fn
+            self[selfFamId] = Family(selfFam.fn, selfFam.dns | family.dns)
+            for n in family.dns:
+                self.g2fid[n] = selfFamId
 
     # gene name is either a family name or homologs names
     def getFamID(self, name, default=None):
@@ -414,24 +421,38 @@ class Families(list):
 
     def printIn(self, stream):
         for (famID, family) in enumerate(self):
-            line = [str(family.fn)]
-            line.extend([str(name) for name in family.dns])
+            line = [str(family.fn)] + [str(name) for name in sorted(family.dns)]
             print >> stream, myFile.myTSV.printLine([" ".join(line)])
 
     def __repr__(self):
         res = []
         res.append('Family:')
         for family in self:
-            res.append(' '.join([family.fn] + family.dns))
+            res.append(' '.join([family.fn] + sorted(family.dns)))
         return '\n'.join(res)
 
     def __eq__(self, other):
-        return set((fn, dn) for (fn, dns) in self for dn in dns) == set((fn, dn) for (fn, dns) in other for dn in dns)
+        return set((fn, dns) for (fn, dns) in self) == set((fn, dns) for (fn, dns) in other)
 
     def __ne__(self, other):
         return not self == other
 
-def families_A0_A1_from_f_A0_D_and_f_A1_D(f_A0_D, f_A1_D):
+    def __or__(self, other):
+        """ self + other """
+        res = Families()
+        assert isinstance(other, Family)
+        for family in self:
+            res.addFamily(family)
+        for family in other:
+            self.addFamily(family)
+        return res
+
+    def __ior__(self, other):
+        """ self += other """
+        for family in other:
+            self.addFamily(family)
+
+def f_A0_A1_from_f_A0_Ds_and_f_A1_Ds(f_A0_D, f_A1_D):
     """
     Return a new Families with fn of A0 and dns of A1
 

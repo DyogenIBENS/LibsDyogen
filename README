@@ -2,6 +2,7 @@ Installation:
 -------------
 
 # Install cython
+# http://docs.cython.org/src/quickstart/install.html
 sudo apt-get install cython
 
 # Move to the root of LibsDyogen containing this file

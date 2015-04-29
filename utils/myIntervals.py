@@ -235,6 +235,7 @@ def compareGenomes(genome, refGenome, mode='adjacency', oriented=True, verbose=F
     print >> sys.stderr, "nb gene names = %s" % len(setGeneNames)
     print >> sys.stderr, "nb gene names in reference = %s" % len(setGeneNamesR)
     print >> sys.stderr, "nb of gene names in both = %s" % len(setGeneNamesR & setGeneNames)
+    # this one is empti for the uniquely Amniota_mm_gg simu, whereas it contains mainy values in the whole simualtion
     print >> sys.stderr, "gene names that are in setGeneNames - setGeneNamesR =", setGeneNames - setGeneNamesR
     print >> sys.stderr, "gene names that are in setGeneNamesR - setGeneNames =", setGeneNamesR - setGeneNames
 
@@ -254,17 +255,16 @@ def compareGenomes(genome, refGenome, mode='adjacency', oriented=True, verbose=F
     print >> sys.stderr, "nb of %s in ref = %s" % (itemType, len(refSetRes))
 
     # True positive adjs
-    Tp = len(setRes & refSetRes)
+    sTp = setRes & refSetRes
+    Tp = len(sTp)
     Tn = None
-    Fp = len(setRes - refSetRes)
-    Fn = len(refSetRes - setRes)
+    sFp = setRes - refSetRes
+    Fp = len(sFp)
+    sFn = refSetRes - setRes
+    Fn = len(sFn)
     assert len(refSetRes) == Tp + Fn
     sensitivity = float(Tp) / float(Tp + Fn)
     specificity = float(Tp) / float(Tp + Fp)
-
-    # to see more informations concerning the chroms where are the Fp
-    # distribLenSbsWithFn = computeDistribLenSbsWithFn(genome, refSetRes - setRes)
-    # distribLenSbsWithFnR = computeDistribLenSbsWithFn(refGenome, refSetRes - setRes)
 
     print >> sys.stderr, "Tp=%s" % Tp
     print >> sys.stderr, "Fp=%s" % Fp
@@ -272,24 +272,7 @@ def compareGenomes(genome, refGenome, mode='adjacency', oriented=True, verbose=F
     print >> sys.stderr, "sensitivity=%s" % sensitivity
     print >> sys.stderr, "specificity=%s" % specificity
 
-    return Efficiency(Tp, Tn, Fp, Fn, sensitivity, specificity)
-
-
-def computeDistribLenSbsWithFn(sbsGenome, sFn):
-    sbsGenome.computeDictG2P()
-    distribLenSbsWithFn = collections.defaultdict(int)
-    for (geneN, _) in sFn:
-        geneP = sbsGenome.getPosition(geneN, default=None)
-        if geneP:
-            lenSbFn = len(sbsGenome[geneP.c])
-            #print >> sys.stderr, "Fp: gene %s in chrR %s of len=%s at idx %s" % (geneN, geneP.c, lenSbFn, geneP.idx)
-            distribLenSbsWithFn[lenSbFn] += 1
-    sumLens = sum(distribLenSbsWithFn.values())
-    percentageLen1 = 100 * float(distribLenSbsWithFn[1]) / sumLens if sumLens != 0 else 'None'
-    print >> sys.stderr, "(%s%% of len1), distribLenSbsWithFn=%s" %\
-                         (percentageLen1,
-                          sorted([(l, nb) for (l, nb) in distribLenSbsWithFn.iteritems()], key=lambda x: x[0]))
-    return distribLenSbsWithFn
+    return (Efficiency(Tp, Tn, Fp, Fn, sensitivity, specificity), (sTp, sFp, sFn))
 
 # TODO
 # def adjacencyFromIntergene(intergene, genomeWithDict, default=None):
