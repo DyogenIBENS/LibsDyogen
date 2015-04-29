@@ -1748,7 +1748,8 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=False):
 
 # TODO: split this function in two modules:
 # 1) IdentifyMicroInversions nested in sbs gaps
-def fIdentifyMicroInversionsNestedInSbsGaps(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv=0):
+def fIdentifyMicroInversionsNestedInSbsGaps(sbsInPairComp, putativeMicroInversionsInPairComp,
+                                            gapMaxMicroInv=0, identifyMonoGenicInversion=True):
     # 1) Give unique id to each sb and diag
     idsSbs = set()
     idsPutativeMicroInversions = set()
@@ -1779,16 +1780,20 @@ def fIdentifyMicroInversionsNestedInSbsGaps(sbsInPairComp, putativeMicroInversio
     idsIdentifiedMicroInv = set()
     # Intra-synteny block microInv
     for idsbb in (set(I1.keys()) & set(I2.keys())):
+        sbb = id2sb(idsbb)
         for idsba in (I1[idsbb] & I2[idsbb]):
             # sbb is included in sba in both genomes
             sba = id2sb(idsba)
-            sbb = id2sb(idsbb)
             (c1a, c2a, _) = id2location(idsba)
             (c1b, c2b, _) = id2location(idsbb)
             assert c1a == c1b and c2a == c2b
             if idsbb in idsPutativeMicroInversions:
                 if noOverlapSb(((c1a, c2a), sba), ((c1b, c2b), sbb)):
                     if sba.dt == '/' and sbb.dt == '\\' or sba.dt == '\\' and sbb.dt == '/':
+                        if len(sbb.la) == 1:
+                            assert sbb.la[0][1] is not None, sbb.la[0][1]
+                            if not identifyMonoGenicInversion:
+                                continue
                         (splitRanks_a, splitRanks_b) = splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb))
                         if len(splitRanks_a[1:-1]) == 1 and len(splitRanks_b[1:-1]) == 0:
                             # if sbb is nested in a gap of sba, with a gapMaxMicroInv
@@ -1861,7 +1866,8 @@ def fIdentifyMicroInversionsNestedInSbsGaps(sbsInPairComp, putativeMicroInversio
 
     return (new_sbsInPairComp, diagsThatAreNotSbsInPairComp)
 
-def fIdentifyInversionsAtSbsExtremities(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv=0):
+def fIdentifyInversionsAtSbsExtremities(sbsInPairComp, putativeMicroInversionsInPairComp,
+                                        gapMaxMicroInv=0, identifyMonoGenicInversion=True):
     # 1) Give unique id to each sb and diag
     idsSbs = myTools.Dict2d(set)
     idsOfPutativeMicroInversions = set()
@@ -1883,15 +1889,19 @@ def fIdentifyInversionsAtSbsExtremities(sbsInPairComp, putativeMicroInversionsIn
     # 3) identify micro-inversions at extremities of sbs
     idsIdentifiedMicroInv = set()
     for idsbb in idsOfPutativeMicroInversions:
+        sbb = id2sb(idsbb)
         (c1b, c2b, _) = id2location(idsbb)
         for idsba in idsSbs[c1b][c2b]:
             # sbb is included in sba in both genomes
             sba = id2sb(idsba)
-            sbb = id2sb(idsbb)
             (c1a, c2a, _) = id2location(idsba)
             if (c1a, c2a) == (c1b, c2b):
                 if sba.dt == '/' and sbb.dt == '\\' or sba.dt == '\\' and sbb.dt == '/':
                     if 1 <= distanceBetweenBoundingBoxesOfDiags(sbb, sba) <= gapMaxMicroInv + 1:
+                        if len(sbb.la) == 1:
+                            assert sbb.la[0][1] is not None
+                            if not identifyMonoGenicInversion:
+                                continue
                         idsIdentifiedMicroInv.add(idsbb)
 
     # transform diags into sbs for identified microInv
@@ -1932,7 +1942,8 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      nbHpsRecommendedGap=2,
                                      targetProbaRecommendedGap=0.01,
                                      validateImpossToCalc_mThreshold=3,
-                                     multiProcess=False,
+                                     identifyMonoGenicInversion=False,
+                                     optimisation=None,
                                      verbose=False):
 
     # step 2 and 3 : build the MHP and extract strict and consistent diagonals
@@ -1940,41 +1951,16 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
     diagsInPairComp = myTools.Dict2d(list)
     N12s = myTools.Dict2d(int)
     N12_g = 0
-    if multiProcess and (len(g1_tb.keys()) > 1 or len(g2_tb.keys()) > 1):
-        tic = time.time()
-        # if the multiprocess option is True and if there is more than one pairwise comparison of chromosomes
-        pool = multiprocessing.Pool()
-        tasks = [(c1, c2, g1_tb[c1], g2_tb[c2], consistentSwDType) for (c1, c2) in itertools.product([c1 for c1 in g1_tb], [c2 for c2 in g2_tb])]
-        for ((c1, c2), listOfDiags, N12) in pool.map(extractDiagsInPairCompChrWrapper, tasks, chunksize=(len(tasks)/4)):
-            if len(listOfDiags) > 0:
-                diagsInPairComp[c1][c2] = listOfDiags
-            N12s[c1][c2] = N12
-            N12_g += N12
-        tac = time.time()
-        print >> sys.stderr, "Multiprocessing(extractDiagsInPairCompChr) was executed in %ss" % (tac - tic)
-
-        # second level of verbosity
-        verbose2 = False
-        (p_hpSign, p_hpSign_g, (sTBG1, sTBG1_g), (sTBG2, sTBG2_g)) =\
-            myProbas.statsHpSign(g1_tb, g2_tb, verbose=verbose2)
-        print >> sys.stderr, "genome1 tb orientation proba = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG1_g[+1]*100, sTBG1_g[-1]*100, sTBG1_g[None]*100)
-        print >> sys.stderr, "genome2 tb orientation proba = {+1=%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG2_g[+1]*100, sTBG2_g[-1]*100, sTBG2_g[None]*100)
-        print >> sys.stderr, "hp sign proba in the 'global' mhp = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%) (probabilities are also calculated for pairwise mhp)" % (p_hpSign_g[+1]*100, p_hpSign_g[-1]*100, p_hpSign_g[None]*100)
+    print >> sys.stderr, "synteny block extraction"
+    tic = time.time()
+    if optimisation == 'cython' and (len(g1_tb.keys()) > 1 or len(g2_tb.keys()) > 1):
+        (p_hpSign, p_hpSign_g, N12s, N12_g, diagsInPairComp) = \
+            extractDiags.extractDiagsInPairCompChr(g1_tb, g2_tb, consistentSwDType, distanceMetric)
     else:
-        print >> sys.stderr, "synteny block extraction"
-        cythonOptimisation = True
-        if cythonOptimisation:
-            tic = time.time()
-            (p_hpSign, p_hpSign_g, N12s, N12_g, diagsInPairComp) = \
-                extractDiags.extractDiagsInPairCompChr(g1_tb, g2_tb, consistentSwDType, distanceMetric)
-            tac = time.time()
-            print >> sys.stderr, "Cython(extractDiagsInPairCompChr) was executed in %ss" % (tac - tic)
-
-        else:
+        if optimisation is None or (len(g1_tb.keys()) == 1 or len(g2_tb.keys()) == 1):
             totalNbComps = len(g1_tb) * len(g2_tb)
             progressBar = myTools.ProgressBar(totalNbComps)
             currCompNb = 0
-            tic = time.time()
             for c1 in g1_tb.keys():
                 for c2 in g2_tb.keys():
                     (listOfDiags, N12) = extractDiagsInPairCompChr(g1_tb[c1], g2_tb[c2], consistentSwDType, verbose=verbose)
@@ -1984,16 +1970,30 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                     N12_g += N12
                     currCompNb += 1
                     progressBar.printProgressIn(sys.stderr, currCompNb)
+        elif optimisation == 'multiProcess':
+            # if the multiprocess option is True and if there is more than one pairwise comparison of chromosomes
+            pool = multiprocessing.Pool()
+            tasks = [(c1, c2, g1_tb[c1], g2_tb[c2], consistentSwDType) for (c1, c2) in itertools.product([c1 for c1 in g1_tb], [c2 for c2 in g2_tb])]
+            for ((c1, c2), listOfDiags, N12) in pool.map(extractDiagsInPairCompChrWrapper, tasks, chunksize=(len(tasks)/4)):
+                if len(listOfDiags) > 0:
+                    diagsInPairComp[c1][c2] = listOfDiags
+                N12s[c1][c2] = N12
+                N12_g += N12
             tac = time.time()
-            print >> sys.stderr, "extractDiagsInPairCompChr was executed in %ss" % (tac - tic)
+            print >> sys.stderr, "Multiprocessing(extractDiagsInPairCompChr) was executed in %ss" % (tac - tic)
+        else:
+            raise ValueError('optimisation should be in [\'cython\', \'multiprocess\', None]')
 
-            # second level of verbosity
-            verbose2 = False
-            (p_hpSign, p_hpSign_g, (sTBG1, sTBG1_g), (sTBG2, sTBG2_g)) =\
+        # second level of verbosity
+        verbose2 = False
+        (p_hpSign, p_hpSign_g, (sTBG1, sTBG1_g), (sTBG2, sTBG2_g)) =\
                 myProbas.statsHpSign(g1_tb, g2_tb, verbose=verbose2)
-            print >> sys.stderr, "genome1 tb orientation proba = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG1_g[+1]*100, sTBG1_g[-1]*100, sTBG1_g[None]*100)
-            print >> sys.stderr, "genome2 tb orientation proba = {+1=%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG2_g[+1]*100, sTBG2_g[-1]*100, sTBG2_g[None]*100)
-            print >> sys.stderr, "hp sign proba in the 'global' mhp = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%) (probabilities are also calculated for pairwise mhp)" % (p_hpSign_g[+1]*100, p_hpSign_g[-1]*100, p_hpSign_g[None]*100)
+        print >> sys.stderr, "genome1 tb orientation proba = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG1_g[+1]*100, sTBG1_g[-1]*100, sTBG1_g[None]*100)
+        print >> sys.stderr, "genome2 tb orientation proba = {+1=%.2f%%,-1:%.2f%%,None:%.2f%%} (stats are also calculated for each chromosome)" % (sTBG2_g[+1]*100, sTBG2_g[-1]*100, sTBG2_g[None]*100)
+        print >> sys.stderr, "hp sign proba in the 'global' mhp = {+1:%.2f%%,-1:%.2f%%,None:%.2f%%) (probabilities are also calculated for pairwise mhp)" % (p_hpSign_g[+1]*100, p_hpSign_g[-1]*100, p_hpSign_g[None]*100)
+
+    tac = time.time()
+    print >> sys.stderr, "%s(extractDiagsInPairCompChr) was executed in %ss" % (optimisation, (tac - tic))
 
     print >> sys.stderr, "Nb strict and consistent diags = %s" % len(diagsInPairComp.items2d())
     assert all([len(diagsInPairComp[k1Foo][k2Foo]) > 0 for (k1Foo, k2Foo) in diagsInPairComp.keys2d()])
@@ -2074,16 +2074,28 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
     # non-ambiguous micro-inversions
     ############################################################################################################
     if gapMaxMicroInv is not None:
+        # WARNING: the identification of "monogenic micro-inversion" may in fact hide a tandem duplication with a revert
+        # orientation followed by the deletion of the initial gene.
+        # Example:
+        # 1) initial genome: +A+B+C
+        # 2) tandem duplication: +A+B-B+C
+        # 3) gene deletion: A-B+C
+        # This looks like an inversion but it is not an inversion.
+        if identifyMonoGenicInversion:
+            print >> sys.stderr, 'WARNING: returned mono-genic micro-inversions may be a hidden tandem duplication, with a revert orientation, followed by the deletion of the initial gene.'
+
         print >> sys.stderr, "Nb sbs before identifying micro inversions within sbs gaps = %s" % len(sbsInPairComp.items2d())
         putativeMicroInversionsInPairComp = diagsInPairCompRejected + monogenicDiagsInPairComp
         (sbsInPairComp, diagsNotSbsInPairComp) = fIdentifyMicroInversionsNestedInSbsGaps(sbsInPairComp,
                                                                                          putativeMicroInversionsInPairComp,
-                                                                                         gapMaxMicroInv=gapMaxMicroInv)
+                                                                                         gapMaxMicroInv=gapMaxMicroInv,
+                                                                                         identifyMonoGenicInversion=identifyMonoGenicInversion)
         print >> sys.stderr, "Nb sbs after identifying micro inversions within sbs gaps = %s" % len(sbsInPairComp.items2d())
         print >> sys.stderr, "Nb sbs before identifying micro inversions at sbs extremities = %s" % len(sbsInPairComp.items2d())
         (sbsInPairComp, diagsNotSbsInPairComp) = fIdentifyInversionsAtSbsExtremities(sbsInPairComp,
                                                                                      diagsNotSbsInPairComp,
-                                                                                     gapMaxMicroInv=gapMaxMicroInv)
+                                                                                     gapMaxMicroInv=gapMaxMicroInv,
+                                                                                     identifyMonoGenicInversion=identifyMonoGenicInversion)
         print >> sys.stderr, "Nb sbs after identifying micro inversions at sbs extremities = %s" % len(sbsInPairComp.items2d())
 
     cptLoopIter = 0
@@ -2265,7 +2277,7 @@ def editGenomes(g1, g2, families,
 @myTools.tictac
 @myTools.verbose
 def extractSbsInPairCompGenomes(g1, g2, families,
-                                filterType='InBothSpecies',
+                                filterType=FilterType.InBothGenomes,
                                 tandemGapMax=0,
                                 gapMax=None,
                                 distanceMetric='CD',
@@ -2279,7 +2291,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
                                 nbHpsRecommendedGap=2,
                                 targetProbaRecommendedGap=0.01,
                                 validateImpossToCalc_mThreshold=3,
-                                multiProcess=False,
+                                optimisation=None,
                                 verbose=False):
     isinstance(g1, myLightGenomes.LightGenome)
     isinstance(g2, myLightGenomes.LightGenome)
@@ -2312,7 +2324,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
                                                      nbHpsRecommendedGap=nbHpsRecommendedGap,
                                                      targetProbaRecommendedGap=targetProbaRecommendedGap,
                                                      validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
-                                                     multiProcess=multiProcess,
+                                                     optimisation=optimisation,
                                                      verbose=verbose)
 
     # format output
