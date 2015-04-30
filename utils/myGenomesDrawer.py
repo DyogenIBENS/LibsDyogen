@@ -411,10 +411,14 @@ def drawLightGenome(genome,
 
         # symbolsInGenes : [ 4,5,1,1,6,2, ...]
         # number of genes in each TB of C
+        symbolsInGenes = []
         if tandemGapMax is None:
-            symbolsInGenes = ["%s" % g.n for (i_tb, g) in enumerate(genome_fam[chr])]
+            for (i_tb, g) in enumerate(genome_fam[chr]):
+                if g.n is not None:
+                    symbolsInGenes.append(g.n)
+                else:
+                    symbolsInGenes.append('')
         else:
-            symbolsInGenes = []
             for (i_tb, g) in enumerate(genome_fam[chr]):
                 tbSize = len(Ctb2Cfam[chr][i_tb])
                 symbolsInGenes.append("%s%s" % (tbSize, g.n))
@@ -729,6 +733,8 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                          outSyntenyBlocksFileName="./syntenyBlocksDrawer.txt",
                          outImageFileName="./homologyMatrix.svg",
                          verbose=True):
+    FilterType = list(myDiags.FilterType._keys)
+    filterType = myDiags.FilterType[FilterType.index(filterType)]
 
     # if True, this opens the output image in firefox at the end of the computation
     assert isinstance(genome1, myLightGenomes.LightGenome)
