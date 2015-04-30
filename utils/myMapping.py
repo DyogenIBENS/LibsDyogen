@@ -47,17 +47,22 @@ def labelWithFamID(genome, families=None):
     return newGenome
 
 # Rewrite genomes as a list of family names
-def labelWithFamNames(genome, families):
+def labelWithFamNames(genome, families, keepGnOfGenesNotInFamilies=False):
     assert isinstance(families, myLightGenomes.Families)
     assert isinstance(genome, myLightGenomes.LightGenome)
     assert type(genome.values()[0]) == list
     assert all(len(chrom) > 0 for chrom in genome.values()), " ".join(['%s:%s' % (c,len(chrom)) for c, chrom in genome.iteritems()])
     newGenome = myLightGenomes.LightGenome()
     for c in genome.keys():
-        #assert len(genome[c]) >=1
         for g in genome[c]:
             fn = families.getFamNameByName(g.n, default=None)
-            newGenome[c].append(OGene(fn, g.s))
+            if fn is None and keepGnOfGenesNotInFamilies is True:
+                newGenome[c].append(OGene(g.n, g.s))
+            else:
+                # either
+                # 1) fn is None and keepGnOfGenesNotInFamilies is False -> the new gene name is None
+                # 2) fn is not None -> gene is in family
+                newGenome[c].append(OGene(fn, g.s))
     return newGenome
 
 def labelWithOrthologNames(genome, families):

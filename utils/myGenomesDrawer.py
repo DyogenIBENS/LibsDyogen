@@ -284,18 +284,14 @@ def neighboursLevels(chromosome, i):
     return neighboursLevels
 
 
-def prepareChromosome(genesStrands, homologousTbs=None, tbsWithNoHomolog=None, genesRemovedDuringFiltering=None,
-                      noHomologGraysGenerator=None, homologsColorsGenerator=None, symbolsInGenes=None, lengthGene=1):
-
-    chromosomeItems = []
-
-    # homologousTbs = [homolog1[tb1=[gene1Idx, ...], tb2=[geneAIdx, ...]],
-    #                  homolog2[tb1'=[gene1'Idx, ...], tb2'=[geneA'Idx, ...]],
-    #                 ... ]
-    if not noHomologGraysGenerator:
-        noHomologGraysGenerator = levelIdxGenerator(farIdxs=None, grays=True)
-    if not homologsColorsGenerator:
-        homologsColorsGenerator = levelIdxGenerator(farIdxs=None)
+def prepareChromosome(genesStrands,
+                      familyName2Idxs=None,
+                      familyName2color=None,
+                      tbsWithNoHomolog=None,
+                      genesRemovedDuringFiltering=None,
+                      noHomologGraysGenerator=None,
+                      symbolsInGenes=None,
+                      lengthGene=1):
 
     def giveGreyLevelsTo(chromosome, tbsWithNoHomologyInWindow=None):
         if tbsWithNoHomologyInWindow:
@@ -306,6 +302,16 @@ def prepareChromosome(genesStrands, homologousTbs=None, tbsWithNoHomolog=None, g
                 for i in tb:
                     chromosome[i].SVGclass = "NoHomologyInWindow%s" % grey
         return chromosome
+
+    chromosomeItems = []
+
+    # homologousTbs = [homolog1[tb1=[gene1Idx, ...], tb2=[geneAIdx, ...]],
+    #                  homolog2[tb1'=[gene1'Idx, ...], tb2'=[geneA'Idx, ...]],
+    #                 ... ]
+    if not noHomologGraysGenerator:
+        noHomologGraysGenerator = levelIdxGenerator(farIdxs=None, grays=True)
+    if not familyName2color:
+        homologsColorsGenerator = levelIdxGenerator(farIdxs=None)
 
     # create chromosomes
     for (i, s) in enumerate(genesStrands):
@@ -323,98 +329,119 @@ def prepareChromosome(genesStrands, homologousTbs=None, tbsWithNoHomolog=None, g
         for i in genesRemovedDuringFiltering:
             chromosomeItems[i].SVGclass = "SpeciesSpecificGenes"
 
-    if homologousTbs:
-        for tbs in homologousTbs:
-            nLevels = reduce(lambda x, y: x | y, [neighboursLevels(chromosomeItems, i) for tb in tbs for i in tb])
-            color = homologsColorsGenerator.getLevel(differentFrom=nLevels)
-            for tb in tbs:
-                for i in tb:
-                    chromosomeItems[i].SVGclass = "HomologGroup%s" % color
+    if familyName2Idxs:
+        for (famName, idxGs) in familyName2Idxs.iteritems():
+            if familyName2color:
+                color = familyName2color[famName]
+            else:
+                nLevels = reduce(lambda x, y: x | y, [neighboursLevels(chromosomeItems, idxG) for idxG in idxGs])
+                color = homologsColorsGenerator.getLevel(differentFrom=nLevels)
+            for idxG in idxGs:
+                # for idxG in idxTb:
+                chromosomeItems[idxG].SVGclass = "HomologGroup%s" % color
     return chromosomeItems
 
-# TODO, draw in tbs option
-def drawChromFromLightGenome(genome, chr, families=None, tandemGapMax=None, lengthGene=1, homologsColorsGenerator=None):
+def drawLightGenome(genome,
+                    families=None,
+                    familyName2color=None,
+                    filterType='InFamilies',
+                    tandemGapMax=None,
+                    lengthGene=1,
+                    homologsColorsGenerator=None):
+    assert filterType in {None, 'InFamilies'}
     assert isinstance(genome, myLightGenomes.LightGenome)
     assert families is None or isinstance(families, myLightGenomes.Families)
 
-    # FIXME
-    newGenome = myLightGenomes.LightGenome()
-    newGenome[chr] = genome[chr]
-    genome = newGenome
-
-    genesStrands = [s for (_, s) in genome[chr]]
-
+    # rewrite with families
     if families:
-        genome_fam = myMapping.labelWithFamNames(genome, families)
-        (genome_fam_filt, Cf2Cfam, (nbChrLoss, nbGeneLoss)) = \
+        keepGnOfGenesNotInFamilies = True if filterType is None else False
+        genome_fam = myMapping.labelWithFamNames(genome, families,
+                                                 keepGnOfGenesNotInFamilies=keepGnOfGenesNotInFamilies)
+    else:
+        genome_fam = genome
+
+    if filterType == 'InFamilies':
+        # remove all genes that are not in families
+        (genome_famf, Cfamf2C, (nbChrLoss, nbGeneLoss)) = \
             myMapping.remapFilterGeneContent(genome_fam, removedNames={None}, mOld=None)
     else:
-        Cf2Cfam = {}
+        Cfamf2C = {}
         for c in genome.keys():
-            Cf2Cfam[c] = myMapping.Mapping([[i] for i,_ in enumerate(genome[c])])
-        genome_fam = genome
-    print >> sys.stderr, genome_fam
+            Cfamf2C[c] = myMapping.Mapping([[i] for i, _ in enumerate(genome[c])])
+        genome_famf = genome
+    print >> sys.stderr, genome_famf
 
+    # rewrite in tandem blocks
     if tandemGapMax:
-        (genome_tb, Ctb2Cf, nGTD) = myMapping.remapRewriteInTb(genome_fam_filt, tandemGapMax=tandemGapMax, mOld=None)
+        (genome_tb, Ctb2Cfamf, nGTD) = myMapping.remapRewriteInTb(genome_famf, tandemGapMax=tandemGapMax, mOld=None)
     else:
-        Ctb2Cf = {}
+        Ctb2Cfamf = {}
         for c in genome.keys():
-            Ctb2Cf[c] = myMapping.Mapping([[i] for i, _ in enumerate(genome_fam[c])])
-        genome_tb = genome_fam
-
+            Ctb2Cfamf[c] = myMapping.Mapping([[i] for i, _ in enumerate(genome_famf[c])])
+        genome_tb = genome_famf
     Ctb2Cfam = {}
-    for c in Ctb2Cf:
+    for c in Ctb2Cfamf:
         # see Mapping class addition
-        Ctb2Cfam[c] = Ctb2Cf[c] + Cf2Cfam[c]
+        Ctb2Cfam[c] = Ctb2Cfamf[c] + Cfamf2C[c]
 
-    ###
-    # Build genesRemovedDuringFilteringCX = [..., i, ...] the list of genes that
-    # have been removed during the filtering process
-    ###
-    genesRemovedDuringFiltering = [i1 for (i1, (anc, _)) in enumerate(genome_fam[chr]) if anc is None]
-
-    homologousTbs = []
+    if not homologsColorsGenerator:
+        homologsColorsGenerator = levelIdxGenerator(farIdxs=5)
+    tmp_familyName2color = {}
+    familyName2Idxs = collections.defaultdict(lambda: collections.defaultdict(list))
     genome_tb.computeDictG2Ps()
-    setOfPositionsOfTb = {}
-    for fam in genome_fam.getGeneNames(checkNoDuplicates=False):
-        famPositions = genome_tb.getPositions(fam, default=None)
-        if famPositions:
-            setOfPositionsOfTb[fam] = famPositions
-
-    for fam, famPositions in setOfPositionsOfTb.iteritems():
-        homologousTbs.append([])
+    for famName in sorted(genome_tb.getOwnedFamilyNames(families, asA=set)):
+        tmp_familyName2color[famName] = homologsColorsGenerator.getLevel()
+        famPositions = genome_tb.getPositions(famName, default=None)
         for tbPos in famPositions:
-            homologousTbs[-1].append([])
             for i in Ctb2Cfam[tbPos.c][tbPos.idx]:
-                homologousTbs[-1][-1].append(i)
+                familyName2Idxs[tbPos.c][famName].append(i)
+    if familyName2color:
+        assert set(tmp_familyName2color.keys()) <= set(familyName2color.keys())
+    else:
+        familyName2color = tmp_familyName2color
 
-    ###
-    # Build symbolsInGenes : [ 4,5,1,1,6,2, ...] number of genes in each TB of C
-    ###
-    symbolsInGenes = [g.n for (i_tb, g) in enumerate(genome_fam[chr])]
-    # add a line between genes
-    chromosomeItems = []
-    chromosomeItems.append(mySvgDrawer.Line(Point(0,0), Point(lengthGene * len(genome[chr]), 0)))
-    chromosomeItems.extend(prepareChromosome(genesStrands, homologousTbs=homologousTbs,
-                                             tbsWithNoHomolog=None,
-                                             genesRemovedDuringFiltering=genesRemovedDuringFiltering,
-                                             noHomologGraysGenerator=None,
-                                             homologsColorsGenerator=homologsColorsGenerator,
-                                             symbolsInGenes=symbolsInGenes,
-                                             lengthGene=lengthGene))
-    return chromosomeItems
+    genomeItems = collections.OrderedDict()
+    genome_tb.computeDictG2Ps()
+    for (chr, chrom) in genome.iteritems():
+        genesStrands = [s for (_, s) in chrom]
+
+        # genesRemovedDuringFilteringCX = [..., i, ...]
+        # the list of genes that have been removed during the filtering process
+        genesRemovedDuringFiltering = [i1 for (i1, (anc, _)) in enumerate(genome_fam[chr]) if anc is None]
+
+        # symbolsInGenes : [ 4,5,1,1,6,2, ...]
+        # number of genes in each TB of C
+        if tandemGapMax is None:
+            symbolsInGenes = ["%s" % g.n for (i_tb, g) in enumerate(genome_fam[chr])]
+        else:
+            symbolsInGenes = []
+            for (i_tb, g) in enumerate(genome_fam[chr]):
+                tbSize = len(Ctb2Cfam[chr][i_tb])
+                symbolsInGenes.append("%s%s" % (tbSize, g.n))
+
+        # add a line that goes through all genes of the chromosome
+        genomeItems[chr] = []
+        genomeItems[chr].append(mySvgDrawer.Line(Point(0, 0), Point(lengthGene * len(genome[chr]), 0)))
+        genomeItems[chr].extend(prepareChromosome(genesStrands,
+                                                  familyName2Idxs=familyName2Idxs[chr],
+                                                  familyName2color=familyName2color,
+                                                  tbsWithNoHomolog=None,
+                                                  genesRemovedDuringFiltering=genesRemovedDuringFiltering,
+                                                  noHomologGraysGenerator=None,
+                                                  symbolsInGenes=symbolsInGenes,
+                                                  lengthGene=lengthGene))
+    return genomeItems
 
 def drawChromosomes(genesStrandsC1, tbWithNoHomologyInWindowC1, genesRemovedDuringFilteringC1,
                     genesStrandsC2, tbWithNoHomologyInWindowC2, genesRemovedDuringFilteringC2,
                     homologyGroupsInWindow, closeColorsGenerator,
                     symbolsInGenes, sizeCase, height):
 
-    chromosome1 = prepareChromosome(genesStrandsC1, None,  tbWithNoHomologyInWindowC1, genesRemovedDuringFilteringC1,
+    chromosome1 = prepareChromosome(genesStrandsC1, None, None, tbWithNoHomologyInWindowC1, genesRemovedDuringFilteringC1,
                                     symbolsInGenes=symbolsInGenes[0] if symbolsInGenes else None,
                                     lengthGene=sizeCase)
 
-    chromosome2 = prepareChromosome(genesStrandsC2, None, tbWithNoHomologyInWindowC2, genesRemovedDuringFilteringC2,
+    chromosome2 = prepareChromosome(genesStrandsC2, None, None, tbWithNoHomologyInWindowC2, genesRemovedDuringFilteringC2,
                                     symbolsInGenes=symbolsInGenes[1] if symbolsInGenes else None,
                                     lengthGene=sizeCase)
 
