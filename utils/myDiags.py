@@ -1306,7 +1306,7 @@ def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
 def recommendedGap(nbHps, targetProba, N12, N1, N2, p_hpSign=None, maxGapThreshold=20, verbose=False):
     firstPrint=True
     tries = []
-    for g in range(0,maxGapThreshold+1):
+    for g in range(0, maxGapThreshold+1):
         L = (nbHps-1)*g+nbHps # lengths of the chromosomal windows
         pVal = myProbas.pValue(nbHps,g,L,L,N12,N1,N2,p_hpSign,verbose=verbose)
         if firstPrint == True:
@@ -1936,13 +1936,13 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      distinguishMonoGenicDiags=True,
                                      pThreshold=None,
                                      gapMaxMicroInv=0,
+                                     identifyMonoGenicInversion=False,
                                      identifyBreakpointsWithinGaps=True,
                                      overlapMax=None,
                                      consistentSwDType=True,
                                      nbHpsRecommendedGap=2,
                                      targetProbaRecommendedGap=0.01,
                                      validateImpossToCalc_mThreshold=3,
-                                     identifyMonoGenicInversion=False,
                                      optimisation=None,
                                      verbose=False):
 
@@ -2067,8 +2067,10 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                                                                 validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
                                                                                 # diagsInPairComp contains no monogenic diag
                                                                                 considerMonogenicSb=False,
-                                                                                verbose=verbose)
+                                                                                verbose=False)
     sbsInPairComp = sbsInPairCompStatVal
+    print >> sys.stderr, "Nb diags not val as sbs = %s" % len(diagsInPairCompRejected.items2d())
+    print >> sys.stderr, "Nb diags %s val as sbs = %s" % ('stat' if pThreshold else '', len(sbsInPairCompStatVal.items2d()))
 
     # identify monogenic diags and diags previously rejected during the stat-validation that can be validated as
     # non-ambiguous micro-inversions
@@ -2284,6 +2286,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
                                 distinguishMonoGenicDiags=True,
                                 pThreshold=None,
                                 gapMaxMicroInv=0,
+                                identifyMonoGenicInversion=False,
                                 identifyBreakpointsWithinGaps=True,
                                 overlapMax=None,
                                 consistentSwDType=True,
@@ -2317,6 +2320,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
                                                      distanceMetric=distanceMetric,
                                                      distinguishMonoGenicDiags=distinguishMonoGenicDiags,
                                                      pThreshold=pThreshold,
+                                                     identifyMonoGenicInversion=identifyMonoGenicInversion,
                                                      gapMaxMicroInv=gapMaxMicroInv,
                                                      identifyBreakpointsWithinGaps=identifyBreakpointsWithinGaps,
                                                      overlapMax=overlapMax,
