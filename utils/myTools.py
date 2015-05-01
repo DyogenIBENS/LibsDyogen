@@ -533,15 +533,16 @@ def checkArgs(args, options, info, showArgs=True, loadOnlyDefaultOptions=False):
 def printArguments(arguments, stream=open(os.devnull, 'w')):
     longestKey = 0
     longestValue = 0
+    rows, columns = getTerminalSize()
     for (key, value) in arguments.iteritems():
         longestKey = max(len(str(key)), longestKey)
         longestValue = max(len(str(value)), longestValue)
-    #rows, columns = getTerminalSize()
+    longestValue = min(longestValue, rows - longestKey - 8 - 1)
     lines = []
-    lines.append('Key '.ljust(longestKey + 1) + ' | ' + 'Values '.ljust(longestValue + 1) + ' |')
+    lines.append('| ' + 'Key'.ljust(longestKey) + ' | ' + 'Values'.ljust(longestValue) + ' |')
     for (key, value) in arguments.iteritems():
-        lines.append((str(key) + ' ').ljust(longestKey + 1) + ' | ' + str(value).ljust(longestValue + 1) + ' |')
-    longestLine = max([len(line) for line in lines])
+        lines.append('| ' + str(key).ljust(longestKey) + ' | ' + str(value).ljust(longestValue) + ' |')
+    longestLine = min(max([len(line) for line in lines]), rows)
     print >> stream, '-' * longestLine
     print >> stream, lines[0]
     print >> stream, '-' * longestLine
