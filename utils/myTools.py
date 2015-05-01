@@ -537,7 +537,7 @@ def printArguments(arguments, stream=open(os.devnull, 'w')):
     for (key, value) in arguments.iteritems():
         longestKey = max(len(str(key)), longestKey)
         longestValue = max(len(str(value)), longestValue)
-    longestValue = min(longestValue, rows - longestKey - 8 - 1)
+    longestValue = min(longestValue, rows - longestKey - 7)
     lines = []
     lines.append('| ' + 'Key'.ljust(longestKey) + ' | ' + 'Values'.ljust(longestValue) + ' |')
     for (key, value) in arguments.iteritems():

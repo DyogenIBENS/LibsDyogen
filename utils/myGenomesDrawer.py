@@ -708,9 +708,11 @@ def drawHomologyMatrix(((begC1, endC1), (begC2, endC2)), (genesStrandsC1, genesS
     #scene.display()
     return scene.strarray()
 
+FilterType = myDiags.FilterType
+
 def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                          convertGenicToTbCoordinates=False,
-                         filterType='InBothGenomes',
+                         filterType=FilterType.InBothGenomes,
                          minChromLength = 2,
                          tandemGapMax=0,
                          distanceMetric='CD',
@@ -734,8 +736,6 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                          outSyntenyBlocksFileName="./syntenyBlocksDrawer.txt",
                          outImageFileName="./homologyMatrix.svg",
                          verbose=True):
-    FilterType = list(myDiags.FilterType._keys)
-    filterType = myDiags.FilterType[FilterType.index(filterType)]
 
     # if True, this opens the output image in firefox at the end of the computation
     assert isinstance(genome1, myLightGenomes.LightGenome)
