@@ -23,8 +23,8 @@ class PhylogeneticTree:
         # object initialisations
         # self.parent = {..., son: parentItem, ...}
         self.parent = self.newCommonNamesMapperInstance()
-        # self.species = {..., nodeI: [nodes that are descendant from nodeI], ...}
-        # interior nodes are included in the list of descendants
+        # self.species = {..., nodeI: [extant nodes that are descendant from nodeI], ...}
+        # interior nodes are not included in the list of descendants
         self.species = self.newCommonNamesMapperInstance()
         # self.fileName = {..., node: "fileName", ...} with 'fileName' the name
         # given in genes or ancGenes files (eg Homo.sapiens for node 'Homo
@@ -39,6 +39,8 @@ class PhylogeneticTree:
         # self.dicParents = {..., node1: {..., node2: [list of nodes that are
         # descendants of the LCA(node1, node2)], ...}, ...}
         self.dicParents = self.newCommonNamesMapperInstance()
+        # self.allDescendants = {..., nodeI: [nodes that are descendant from nodeI], ...}
+        # interior nodes are included in the list of descendants
         self.allDescendants = self.newCommonNamesMapperInstance()
         self.tmpS = []
         self.tmpA = []

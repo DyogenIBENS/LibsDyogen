@@ -8,7 +8,6 @@
 # This file contains classes and methods for 1D management of chromosomes
 
 import myTools
-import myGenomes
 import myLightGenomes
 from myLightGenomes import OGene as OGene
 import collections
@@ -92,12 +91,6 @@ def labelWithOrthologNames(genome, families):
                 newGenome[c].append(OGene(None, g.s))
             else:
                 raise ValueError
-            # elif len(family.dns) == 1:
-            #     if (family.dns[0])[:2] in ['Hs', 'Gg', 'Md', 'Mm', 'Clf']:
-            #         # the family is the family of one extant species, i.e. just a one to one relationship ancName-modernName
-            #         newGenome[c].append(OGene(family.n, g.s))
-            #     elif 'Xaft' in family.dns[0]:
-            #         newGenome[c].append(OGene(family.n, g.s))
     return newGenome
 
 # Allow to change the 1D mapping
@@ -174,6 +167,9 @@ class Mapping(object):
 # while remapping and collapsing genes into blocks, find the best consensus
 # orientation for the block.
 def remap(genome, genomeMapping, assertCollapsedGenesHaveSameName=True):
+    """
+    This function conserves the genome
+    """
     if isinstance(genome, myLightGenomes.LightGenome):
         assert type(genomeMapping) == dict
         # if genome is a dict or a defaultdict
@@ -184,8 +180,7 @@ def remap(genome, genomeMapping, assertCollapsedGenesHaveSameName=True):
             assert chrMapping.__class__.__name__ == 'Mapping'
             for (newIdx, oldIdxs) in chrMapping:
                 if assertCollapsedGenesHaveSameName:
-                    # Assert that all the names of the collapsed old genes are the
-                    # same.
+                    # Assert that all the names of the collapsed old genes are the same.
                     assert len(set([genome[c][oldIdx].n for oldIdx in oldIdxs])) == 1,\
                         "At least one collapsed gene is not in the same family as one of its co-collapsed gene."
                 name = genome[c][oldIdxs[0]].n
@@ -193,54 +188,13 @@ def remap(genome, genomeMapping, assertCollapsedGenesHaveSameName=True):
                     s = genome[c][oldIdxs[0]].s
                 elif len(oldIdxs) >= 2:
                     firstOldS = genome[c][oldIdxs[0]].s
-                    # Set a None orientation if no consensus
-                    # idxsOfChainedTbs[0] = min(idxsOfChainedTbs)
-                    if (firstOldS == +1 or firstOldS == -1)\
-                            and all([genome[c][oldIdx].s == firstOldS
-                                     for oldIdx in oldIdxs]):
+                    if (firstOldS == +1 or firstOldS == -1) and \
+                            all([genome[c][oldIdx].s == firstOldS for oldIdx in oldIdxs]):
                         s = firstOldS
                     else:
+                        # Set a None orientation if no consensus
                         s = None
                 newGenome[c].append(OGene(name, s))
-    # Deprecated
-    # elif genome.__class__.__name__ == myGenomes.Genome:
-    #     assert set(genome.lstGenes.keys()) == set(genomeMapping.keys())
-    #     # FIXME no empty constructor
-    #     newGenome = myGenomes.Genome()
-    #     newGenome.lstGenes = collections.defaultdict(list)
-    #     for c in genomeMapping:
-    #         chrom = genome.lstGenes[c]
-    #         # chrom == genome.lstGenes[c]
-    #         chrMapping = genomeMapping[c]
-    #         assert chrMapping.__class__.__name__ == 'Mapping'
-    #         for (newIdx, oldIdxs) in chrMapping:
-    #             if assertCollapsedGenesHaveSameName:
-    #                 # Assert that all the names of the collapsed old genes are the
-    #                 # same.
-    #                 assert len(set([chrom[oldIdx].names[0] for oldIdx in oldIdxs])) == 1,\
-    #                     "At least one collapsed gene is not in the same family as one of its co-collapsed gene."
-    #             name = chrom[oldIdxs[0]].names[0]
-    #             if len(oldIdxs) == 1:
-    #                 s = chrom[oldIdxs[0]].strand
-    #             elif len(oldIdxs) >= 2:
-    #                 firstOldS = chrom[oldIdxs[0]].strand
-    #                 # Set a None orientation if no consensus
-    #                 # idxsOfChainedTbs[0] = min(idxsOfChainedTbs)
-    #                 if firstOldS == +1 or firstOldS == -1\
-    #                         and all([chrom[oldIdx].strand == firstOldS
-    #                                  for oldIdx in oldIdxs]):
-    #                     s = firstOldS
-    #                 else:
-    #                     s = None
-    #             #FIXME not sure for beg and end...
-    #             beg = chrom[oldIdxs[0]].beginning
-    #             end = chrom[oldIdxs[-1]].end
-    #             #FIXME fix the name list, it should maybe be update with all the names of the co-collapsed genes.
-    #             names = chrom[oldIdxs[0]].names
-    #             newGenome.lstGenes[c].append(myGenomes.Gene(c, beg, end, s, names))
-    #     newGenome.init()
-    #     #TODO
-    #     #elif type(genome) == list:
     else:
         raise TypeError('Not a known type of genome')
     return newGenome
@@ -305,11 +259,6 @@ def remapFilterGeneContent(genome, removedNames, mOld=None):
     assert type(removedNames) == set
     assert isinstance(genome, myLightGenomes.LightGenome)
     (mf2old, (nbChrLoss, nbGeneLoss)) = mapFilterGeneContent(genome, removedNames, mOld=mOld)
-    #DEBUG Loop assertion
-    #for (c, chrom) in genome.iteritems():
-    #    nbGenesInOldC = len(chrom)
-    #    maxIndexOldGenesInCMapping = max([max(oldIdxs) for oldIdxs in mfilt2old[c].new])
-    #    assert maxIndexOldGenesInCMapping < nbGenesInOldC
     newGenome = remap(genome, mf2old, assertCollapsedGenesHaveSameName=False)
     if mOld is not None:
         for c in mf2old:
@@ -379,20 +328,17 @@ def mapFilterGeneContent(genome, removedNames, mOld=None):
             mfilt2old[c] = Mapping(mfilt2old[c])
         else:
             nbChrLoss += 1
-    #TODO
-    #elif myGenomes
-    #elif list
     return (mfilt2old, (nbChrLoss, nbGeneLoss))
 
-# Inputs :
-#       genome_fID = [..., (fID,s), ...] with 'fID' the line number of the gene in the ancGene ans 's' the strand of the gene in the genome
-# Outputs :
-#       mtb2g : a mapping corresponding to the rewritting process
-#####################################################################################################################################
 # 'mOld' is an Old mapping. At the end of the construction of the new mapping this
 # old mapping can be used to tranfer the information of the old mapping to the
 # new mapping.
 def mapRewriteInTb(genome_fID, tandemGapMax=0):
+    """
+    :param genome_fID: [..., (fID,s), ...] with 'fID' the line number of the gene in the ancGene ans 's' the strand of the gene in the genome
+    :param tandemGapMax:
+    :return: mtb2g : a mapping corresponding to the rewritting process
+    """
     assert isinstance(genome_fID, myLightGenomes.LightGenome)
     # the rewritten genome
     # Need to keep dictionaries because there is often a gap in chromosome notations
@@ -406,7 +352,6 @@ def mapRewriteInTb(genome_fID, tandemGapMax=0):
     combinator = myTools.myCombinator()
     for c, chrom_tb in genome_fID.iteritems():
         tb2g[c] = []
-
         # print >> sys.stderr, "Length in tbs before tandem gap = %s" % len(chrom_tb)
         for (i, fID) in enumerate(chrom_tb):
             isAlone = True
