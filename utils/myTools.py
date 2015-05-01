@@ -526,19 +526,30 @@ def checkArgs(args, options, info, showArgs=True, loadOnlyDefaultOptions=False):
 
     valArg.update(valOpt)
     if showArgs:
-        print >> sys.stderr, "Arguments:", valArg
+        # print >> sys.stderr, "Arguments:", valArg
+        printArguments(valArg, stream=sys.stderr)
     return valArg
 
-# TODO
 def printArguments(arguments, stream=open(os.devnull, 'w')):
-    rows, columns = getTerminalSize()
-    print >> stream, '-' * rows
-    print >> stream, "{:<25} | {:<50}".format('key', 'value')
-    print >> stream, '-' * columns
+    longestKey = 0
+    longestValue = 0
     for (key, value) in arguments.iteritems():
-        print >> stream, "{:<25} = {:<50}".format(key, value)
+        longestKey = max(len(str(key)), longestKey)
+        longestValue = max(len(str(value)), longestValue)
+    #rows, columns = getTerminalSize()
+    lines = []
+    lines.append('Key '.ljust(longestKey + 1) + ' | ' + 'Values '.ljust(longestValue + 1) + ' |')
+    for (key, value) in arguments.iteritems():
+        lines.append((str(key) + ' ').ljust(longestKey + 1) + ' | ' + str(value).ljust(longestValue + 1) + ' |')
+    longestLine = max([len(line) for line in lines])
+    print >> stream, '-' * longestLine
+    print >> stream, lines[0]
+    print >> stream, '-' * longestLine
+    for line in lines[1:]:
+        print >> stream, line
+    print >> stream, '-' * longestLine
 
-# This class is usefull for recording many informations (either a list of items
+# This class is useful for recording many information (either a list of items
 # or a value) for each cell of a matrix of whole genome comparisons. See
 # myDiags.py for instance.
 class Dict2d(collections.defaultdict):
