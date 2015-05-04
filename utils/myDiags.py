@@ -1358,6 +1358,7 @@ def statisticalValidation(diagsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
                           NbOfHomologiesThreshold=50,
                           validateImpossToCalc_mThreshold=3,
                           considerMonogenicSb=False,
+                          validateSbsWithGapMaxZero=True,
                           verbose=False):
 
     def fNbDiags(diagsInPairCompX):
@@ -1388,6 +1389,8 @@ def statisticalValidation(diagsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
         # This is to avoid excessive time consuming computations
         if m == 1 and considerMonogenicSb:
             p = 1
+        elif m >= 2 and max_g == 0 and validateSbsWithGapMaxZero:
+            p = 0
         elif m > NbOfHomologiesThreshold:
             p = 0
         else:
@@ -2067,6 +2070,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                                                                 validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
                                                                                 # diagsInPairComp contains no monogenic diag
                                                                                 considerMonogenicSb=False,
+                                                                                validateSbsWithGapMaxZero=True,
                                                                                 verbose=False)
     sbsInPairComp = sbsInPairCompStatVal
     print >> sys.stderr, "Nb diags not val as sbs = %s" % len(diagsInPairCompRejected.items2d())
