@@ -533,7 +533,12 @@ def checkArgs(args, options, info, showArgs=True, loadOnlyDefaultOptions=False):
 def printArguments(arguments, stream=open(os.devnull, 'w')):
     longestKey = 0
     longestValue = 0
-    rows, columns = getTerminalSize()
+    try:
+        rows, columns = getTerminalSize()
+    except:
+        rows = 10
+        columns = 80
+
     for (key, value) in arguments.iteritems():
         longestKey = max(len(str(key)), longestKey)
         longestValue = max(len(str(value)), longestValue)
