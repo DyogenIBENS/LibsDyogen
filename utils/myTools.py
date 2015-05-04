@@ -536,7 +536,7 @@ def printArguments(arguments, stream=open(os.devnull, 'w')):
     try:
         rows, columns = getTerminalSize()
     except:
-        rows = 10
+        rows = 50
         columns = 80
 
     for (key, value) in arguments.iteritems():
