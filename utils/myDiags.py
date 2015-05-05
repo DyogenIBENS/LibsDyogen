@@ -50,11 +50,13 @@ import myMaths
 import myMapping
 import myLightGenomes
 
-import extractDiags
 import time
 import multiprocessing.dummy as multiprocessing  # for using threads
 import multiprocessing  # for using processes
 import enum
+
+if sys.platform != 'win32':
+    import extractDiags
 
 from utils.myLightGenomes import OGene
 

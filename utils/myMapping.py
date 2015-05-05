@@ -579,7 +579,7 @@ def getAncFamNames(genomeOrFamDesc, famAnc):
         geneNameList = [gene.n for genes in genomeOrFamDesc.itervalues() for gene in genes]
         out = [famAnc.getFamNameByName(gene, default=None) for gene in geneNameList]
     elif isinstance(genomeOrFamDesc, myLightGenomes.Families):
-        out = [famAnc.getFamNameByName(recFam.dns[0], default=None) for recFam in genomeOrFamDesc]
+        out = [famAnc.getFamNameByName(next(iter(recFam.dns)), default=None) for recFam in genomeOrFamDesc]
     else:
         raise ValueError('Function not implemented for type ' + str(type(genomeOrFamDesc)))
     return(out)
