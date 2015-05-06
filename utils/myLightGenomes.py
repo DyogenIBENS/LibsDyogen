@@ -163,8 +163,8 @@ class LightGenome(myTools.DefaultOrderedDict):
         try:
             # if this raise an error, g2p may need to be initialised
             return self.g2p.get(name, default)
-        except:
-            raise ValueError("self.g2p needs to be initialised")
+        except Exception as e:
+            raise ValueError("maybe self.g2p needs to be initialised, otherwise %s" % e.message)
 
     # in certain rare utilisations there might be several positions for the same gene name
     def computeDictG2Ps(self):

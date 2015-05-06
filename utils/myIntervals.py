@@ -179,8 +179,8 @@ def analyseGenomeIntoChromExtremities(genome, oriented=True):
             chromGeneExtrRight = geneExtremityFromGene(chrom[-1], +1)
         else:
             assert oriented == False
-            chromGeneExtrLeft = chrom[0]
-            chromGeneExtrRight = chrom[-1]
+            chromGeneExtrLeft = chrom[0].n
+            chromGeneExtrRight = chrom[-1].n
         res.update({chromGeneExtrLeft, chromGeneExtrRight})
     return res
 
