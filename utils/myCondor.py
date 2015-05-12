@@ -14,6 +14,8 @@
 #    publicly, you agree to allow others to view and fork your repositories."""
 # we forked its deposit https://github.com/DyogenIBENS/CondorViaPython
 
+# FIXME
+# FIND A SOLUTION THAT DOES NOT REQUIRE A NON-EMPTY LOG (ERR OR OUT) TO KNOW WHEN A JOB HAS FINISHED
 
 # It might be a good thing to do execute this two next lines if the ~/condor/ folder is full of old useless files
 # cd ~
@@ -343,7 +345,10 @@ def submit_COND_ManyJobs(COND):
         assert int(jobid1.split('.')[1]) == int(jobid2.split('.')[1]) - 1
     return listOfJobids
 
-
+# TAKE CARE TO ENSURE THAT THE EXECUTABLE RETURNS A NON-EMPTY LOGOUT AND/OR LOGERR.
+# THIS IS NEEDED TO KNOW WHEN THE SCRIPT HAS FINISHED
+# FIXME
+# FIND A SOLUTION THAT DOES NOT REQUIRE A NON-EMPTY LOG (ERR OR OUT) TO KNOW WHEN A JOB HAS FINISHED
 def submit_ManyJobs(executable,
                     listOfArguments,
                     universe="vanilla",
@@ -362,6 +367,10 @@ def submit_ManyJobs(executable,
                     log=LOG_FILE):
     """Starts a Condor job based on specified parameters. A job
     description is generated. Returns the cluster ID of the new job.
+
+    # FIXME
+    TAKE CARE TO ENSURE THAT THE EXECUTABLE RETURNS A NON-EMPTY LOGOUT AND/OR LOGERR.
+    THIS IS NEEDED TO KNOW WHEN THE SCRIPT HAS FINISHED
 
     examples of options:
     1) requirements:
@@ -446,14 +455,20 @@ def submit_ManyJobs(executable,
     COND = "\n".join(COND)
     return submit_COND_ManyJobs(COND)
 
+# FIXME
+# FIND A SOLUTION THAT DOES NOT REQUIRE A NON-EMPTY LOG (ERR OR OUT) TO KNOW WHEN A JOB HAS FINISHED
 def waitUntilLogOutExists(jobid, waitTime=2):
     outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
+    errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
     while True:
-        # if the file exists and is not empty
-        if os.path.isfile(outFileName) and os.stat(outFileName).st_size != 0:
+        # if one of the log (either stdout or stderr) exists and is non-empty
+        if (os.path.isfile(outFileName) and os.stat(outFileName).st_size != 0) or\
+            (os.path.isfile(errFileName) and os.stat(errFileName).st_size != 0):
             return jobid
         time.sleep(waitTime)
 
+# FIXME
+# FIND A SOLUTION THAT DOES NOT REQUIRE A NON-EMPTY LOG (ERR OR OUT) TO KNOW WHEN A JOB HAS FINISHED
 def getoutput_ManyJobs(listOfJobids):
     """Waits for a job to complete and then returns its standard output
     and standard error data if the files were given default names.
