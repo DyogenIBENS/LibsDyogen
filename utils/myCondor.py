@@ -14,6 +14,12 @@
 #    publicly, you agree to allow others to view and fork your repositories."""
 # we forked its deposit https://github.com/DyogenIBENS/CondorViaPython
 
+
+# It might be a good thing to do execute this two next lines if the ~/condor/ folder is full of old useless files
+# cd ~
+# rm -rf condor
+# mkdir condor
+
 """
 Abstracts access to a Condor cluster via its command-line tools.
 """
@@ -455,7 +461,7 @@ def getoutput_ManyJobs(listOfJobids):
     """
 
     pool = Pool()
-    for jobid in pool.imap_unordered(waitUntilLogOutExists, (jobid for jobid in listOfJobids)):
+    for jobid in pool.imap_unordered(waitUntilLogOutExists, tuple(jobid for jobid in listOfJobids)):
         print >> sys.stderr, 'return logs of job', jobid
         outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
         errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
