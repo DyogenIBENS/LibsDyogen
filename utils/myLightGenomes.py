@@ -8,6 +8,7 @@
 import sys
 import copy
 import collections
+import itertools
 import myFile
 import myGenomes
 import myTools
@@ -103,8 +104,16 @@ class LightGenome(myTools.DefaultOrderedDict):
             elif len(c) == 5:
                 print >> sys.stderr, "(c, beg, end, s, gName) -> (c, s, gName)",
                 # c, beg, end, s,  gName
-                reader = myFile.myTSV.readTabular(fileName, [str, int, int, int, str])
-                reader = ((c, strand, gName) for (c, beg, end, strand, gName) in reader)
+                tmpReader = myFile.myTSV.readTabular(fileName, [str, int, int, int, str])
+                # check, with the first line, if there are several gene names (the format genome of Matthieu contains several gene names)
+                (c, beg, end, strand, gNames) = tmpReader.next()
+                severalNames = True if len(gNames.split(' ')) > 0 else False
+                reader = itertools.chain([(c, beg, end, strand, gNames)], tmpReader)
+                if severalNames:
+                    # if gNames contains more than one gene name, only take the first gene name
+                    reader = ((c, strand, gNames.split(' ')[0]) for (c, beg, end, strand, gNames) in reader)
+                else:
+                    reader = ((c, strand, gName) for (c, beg, end, strand, gName) in reader)
             else:
                 raise ValueError("%s file is badly formatted" % fileName)
             print >> sys.stderr, "...",

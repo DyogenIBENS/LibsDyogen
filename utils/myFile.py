@@ -42,7 +42,6 @@ class myTSV:
     # read a tabular file, convert columns separated by delim depending on the type_list
     @staticmethod
     def readTabular(filename, type_list, delim = '\t'):
-
         f = openFile(filename, 'r')
         # list of each column type
         new_type_list = []

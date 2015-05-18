@@ -59,9 +59,6 @@ MAX_SIMULTANEOUS_JOBS = 100
 def quantityEatenByOneJob(maxSimultaneousJobs):
     return float(TOTAL_QUANTITY_AVAILABLE_BY_USER) / float(maxSimultaneousJobs)
 
-# TODO: write a method that send jobs via a synthetic COND file with the executable and all info on the top and the
-# varying parameters of the different jobs in the following lines
-
 # TODO: use inspection features of python to write a python function into a file
 # https://github.com/uqfoundation/dill
 # http://stackoverflow.com/questions/1562759/can-python-print-a-function-definition
@@ -393,6 +390,10 @@ def submit_ManyJobs(executable,
     This limit limit the saturation of cores and keep some cores free for other users.
     This option is especially important if jobs take a long time.
     """
+    warningMessage =  "Warning, due to an imperfection of the Condor API, the executable \"%s\" should yield a " % executable
+    warningMessage += "non-empty log (a non-empty logOut or/and a non-empty logErr). This is because the API checks "
+    warningMessage += "if logErr and/or logOut exists and are non-empty to know when a job is finished"
+    print >> sys.stderr, warningMessage
 
     if maxSimultaneousJobsInGroup is not None:
         qtEatenByOneJob = quantityEatenByOneJob(maxSimultaneousJobsInGroup)

@@ -2377,7 +2377,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
 # c1 and c2 the chromosomes of the pairwise comparison in which the synteny block has been found
 # la = [..., (aGName, strand, dist), ...]
 # l1 = [..., [g1, ...gN], ...] with [g1, ..., gN] the child tb of the corresponding aG
-def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True):
+def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True, stream=sys.stdout):
     print >> sys.stderr, "Print synteny blocks"
 
     def foo(genomeX, cX, lX, idxHp, reverseOrder=False):
@@ -2410,7 +2410,7 @@ def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True):
             (g1s, s1s) = foo(genome1, c1, sb.l1, idxHp)
             reverseOrderOnG2 = True if sb.dt in {'/' or None} else False
             (g2s, s2s) = foo(genome2, c2, sb.l2, idxHp, reverseOrder=reverseOrderOnG2)
-            print myFile.myTSV.printLine([idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s])
+            print >> stream, myFile.myTSV.printLine([idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s])
 
     print >> sys.stderr, "Distribution of the lengths of synteny blocks:", myMaths.myStats.syntheticTxtSummary(statsSbs)
 

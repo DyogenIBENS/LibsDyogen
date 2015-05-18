@@ -371,7 +371,7 @@ class myCombinator:
 __moduleoptions = []
 def addModuleOptions(namespace, options):
     for (name,typ,val) in options:
-        __moduleoptions.append( (namespace+":"+name,typ,val) )
+        __moduleoptions.append((namespace+":"+name, typ, val))
 
 
 # ask a list of file in arguments
