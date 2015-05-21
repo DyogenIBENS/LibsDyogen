@@ -1764,7 +1764,9 @@ def fIdentifyMicroInversionsNestedInSbsGaps(sbsInPairComp, putativeMicroInversio
         new_sb = SyntenyBlock(sb)
         id = sbsAndDiagsInPairCompWithIds.addToLocation((c1, c2), new_sb)
         idsSbs.add(id)
-    assert id == sbsAndDiagsInPairCompWithIds.maxId
+    assert id in [None,sbsAndDiagsInPairCompWithIds.maxId]
+    if id is None:
+        id = -1
     for ((c1, c2), diag) in putativeMicroInversionsInPairComp.iteritems2d():
         id += 1
         new_diag = Diagonal(diag)
@@ -1877,11 +1879,14 @@ def fIdentifyInversionsAtSbsExtremities(sbsInPairComp, putativeMicroInversionsIn
     idsSbs = myTools.Dict2d(set)
     idsOfPutativeMicroInversions = set()
     sbsAndDiagsInPairCompWithIds = myTools.OrderedDict2dOfLists()
+    id = None
     for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
         new_sb = SyntenyBlock(sb)
         id = sbsAndDiagsInPairCompWithIds.addToLocation((c1, c2), new_sb)
         idsSbs[c1][c2].add(id)
-    assert id == sbsAndDiagsInPairCompWithIds.maxId
+    assert id in [None,sbsAndDiagsInPairCompWithIds.maxId]
+    if id is None:
+        id = -1
     for ((c1, c2), diag) in putativeMicroInversionsInPairComp.iteritems2d():
         id += 1
         new_diag = Diagonal(diag)
@@ -1962,7 +1967,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
         (p_hpSign, p_hpSign_g, N12s, N12_g, diagsInPairComp) = \
             extractDiags.extractDiagsInPairCompChr(g1_tb, g2_tb, consistentSwDType, distanceMetric)
     else:
-        if optimisation is None or (len(g1_tb.keys()) == 1 or len(g2_tb.keys()) == 1):
+        if optimisation is None or (len(g1_tb.keys()) <= 1 and len(g2_tb.keys()) <= 1):
             totalNbComps = len(g1_tb) * len(g2_tb)
             progressBar = myTools.ProgressBar(totalNbComps)
             currCompNb = 0
@@ -2359,7 +2364,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
             l2.append([gIdxs for gIdxs in mtb2gc2.new[indx_tb_g2]])
 
             # FIXME la.append((ancGenes.lstGenes[None][aGene[0]].names[0], aGene[1], aGene[2]))
-            la.append((families.getFamNameByID(aGene[0]), aGene[1], aGene[2]))
+            la.append((aGene[0], aGene[1], aGene[2]))
 
         # modify the current object SyntenyBlock, within sbsInPairComp
         sb.l1 = l1
