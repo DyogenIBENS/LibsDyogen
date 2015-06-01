@@ -1764,7 +1764,7 @@ def fIdentifyMicroInversionsNestedInSbsGaps(sbsInPairComp, putativeMicroInversio
         new_sb = SyntenyBlock(sb)
         id = sbsAndDiagsInPairCompWithIds.addToLocation((c1, c2), new_sb)
         idsSbs.add(id)
-    assert id in [None,sbsAndDiagsInPairCompWithIds.maxId]
+    assert id in {None, sbsAndDiagsInPairCompWithIds.maxId}
     if id is None:
         id = -1
     for ((c1, c2), diag) in putativeMicroInversionsInPairComp.iteritems2d():
@@ -1884,7 +1884,7 @@ def fIdentifyInversionsAtSbsExtremities(sbsInPairComp, putativeMicroInversionsIn
         new_sb = SyntenyBlock(sb)
         id = sbsAndDiagsInPairCompWithIds.addToLocation((c1, c2), new_sb)
         idsSbs[c1][c2].add(id)
-    assert id in [None,sbsAndDiagsInPairCompWithIds.maxId]
+    assert id in {None, sbsAndDiagsInPairCompWithIds.maxId}
     if id is None:
         id = -1
     for ((c1, c2), diag) in putativeMicroInversionsInPairComp.iteritems2d():

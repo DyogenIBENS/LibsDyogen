@@ -367,10 +367,10 @@ class Genome:
         for c1 in chr1:
             res[c1] = []
             for (i1,g1) in enumerate(self.lstGenes[c1]):
-                tmp = genome2.getPosition(g1.names)
+                tmp = genome2.getPositions(g1.names)
                 if genesAnc != None:
-                    for (c,i) in genesAnc.getPosition(g1.names):
-                        tmp.update(genome2.getPosition(genesAnc.lstGenes[c][i].names))
+                    for (c,i) in genesAnc.getPositions(g1.names):
+                        tmp.update(genome2.getPositions(genesAnc.lstGenes[c][i].names))
 
                 # On ne garde que les chromosomes OK du genome 2
                 tmp = [(c,i) for (c,i) in tmp if c in chr2]

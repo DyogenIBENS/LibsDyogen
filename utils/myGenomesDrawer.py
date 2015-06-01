@@ -237,8 +237,8 @@ class levelIdxGenerator():
         else:
             assert farIdxs < self.lastLevelIdx
             self.availableLevels = []
-            tmp = range(0, farIdxs)
-            random.shuffle(tmp)
+            tmp = [(i / 2 if i%2 == 0 else farIdxs - i/2 - 1) for i in range(0, farIdxs)]
+            # random.shuffle(tmp)
             for i in tmp:
                 self.availableLevels += range(self.firstLevelIdx + i, self.lastLevelIdx + 1, farIdxs)
             print >> sys.stderr, self.availableLevels
@@ -674,7 +674,7 @@ def drawHomologyMatrix(((begC1, endC1), (begC2, endC2)), (genesStrandsC1, genesS
 
     listOfMatrixItems = drawMatrix(nx, ny, (begC1, endC1), (begC2, endC2), hpSigns, diagsIndices, sizeCase, width, height,
                                    diagColorGenerator=None, scaleFactorRectangles=scaleFactorRectangles)
-    listOfMatrixItems = mySvgDrawer.tanslateItems(listOfMatrixItems, 2 * sizeCase, - 2 * sizeCase)
+    listOfMatrixItems = mySvgDrawer.tanslateItems(listOfMatrixItems, Point(2 * sizeCase, - 2 * sizeCase))
 
     listOfItems = []
     if nx < 300 and ny < 300:
@@ -686,7 +686,7 @@ def drawHomologyMatrix(((begC1, endC1), (begC2, endC2)), (genesStrandsC1, genesS
                                                      # offset_matrix_x, offset_matrix_y,
                                                      height)
 
-        chromosome1 = mySvgDrawer.tanslateItems(chromosome1, 2 * sizeCase, height)
+        chromosome1 = mySvgDrawer.tanslateItems(chromosome1, Point(2 * sizeCase, height))
         for item in chromosome2:
             if isinstance(item, mySvgDrawer.Gene):
                 item.start = Point(0, height - item.start.x - 2 * sizeCase)
@@ -699,7 +699,7 @@ def drawHomologyMatrix(((begC1, endC1), (begC2, endC2)), (genesStrandsC1, genesS
         listOfItems = chromosome1 + chromosome2
 
     listOfItems += listOfMatrixItems
-    listOfItems = mySvgDrawer.tanslateItems(listOfItems, sizeCase, -sizeCase)
+    listOfItems = mySvgDrawer.tanslateItems(listOfItems, Point(sizeCase, -sizeCase))
 
     for item in listOfItems:
         scene.add(item)

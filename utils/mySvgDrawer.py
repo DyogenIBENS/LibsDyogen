@@ -347,7 +347,7 @@ class Gene:
                     size=self.width * 0.8, text_anchor="middle", fill=(0, 0, 0), stroke=None, fontWeight="800",
                     fontFamily="Arial", transform="").strarray()
 
-def tanslateItems(listOfItems, tx, ty):
+def tanslateItems(listOfItems, (tx, ty)):
     for item in listOfItems:
         if isinstance(item, Gene):
             item.start = Point(item.start.x + tx, item.start.y + ty)
@@ -367,6 +367,23 @@ def tanslateItems(listOfItems, tx, ty):
             item.center = Point(item.center.x + tx, item.center.y + ty)
         else:
             raise TypeError('Type is unknown')
+    return listOfItems
+
+def placeGenomesItems(genomesItems, origin=Point(0, 0), sizeGene=1):
+    listOfItems = []
+    translateValue = sizeGene
+    currPosition = origin
+    for (genomeName, genomeItems) in genomesItems.iteritems():
+        # add a sapece between each genome
+        currPosition = Point(currPosition.x, currPosition.y + translateValue)
+        # genome name
+        listOfItems.append(Text(currPosition, genomeName, size=sizeGene))
+        for (chr, chromosomeItems) in genomeItems.items():
+            # add a space between each chromosome
+            currPosition = Point(currPosition.x, currPosition.y + translateValue)
+            tanslateItems(chromosomeItems, currPosition)
+            for item in chromosomeItems:
+                listOfItems.append(item)
     return listOfItems
 
 #drawHomologyMatrix.css
