@@ -373,7 +373,7 @@ def loadTree(name):
         child = []
         while (ns.curr != None) and (ns.curr[0] == indent+1):
             length = float(nextLine()[2])
-            child.append( (recLoad(tree, indent+1), length) )
+            child.append((recLoad(tree, indent+1), length))
         if len(child) > 0:
             tree.data[currID] = child
 

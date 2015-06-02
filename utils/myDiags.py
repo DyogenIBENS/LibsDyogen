@@ -2364,7 +2364,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
             l2.append([gIdxs for gIdxs in mtb2gc2.new[indx_tb_g2]])
 
             # FIXME la.append((ancGenes.lstGenes[None][aGene[0]].names[0], aGene[1], aGene[2]))
-            la.append((aGene[0], aGene[1], aGene[2]))
+            la.append((families.getFamNameByID(aGene[0]), aGene[1], aGene[2]))
 
         # modify the current object SyntenyBlock, within sbsInPairComp
         sb.l1 = l1
