@@ -2041,7 +2041,6 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
     # (maybe followed by gaped tandem duplications)
     ############################################################################################
     monogenicDiagsInPairComp = myTools.Dict2d(list)
-    # FIXME, it might be interesting to add an option here
 
     if distinguishMonoGenicDiags:
         print >> sys.stderr, "Nb diags before removing mono-ancGenic diags = %s" % len(diagsInPairComp.items2d())

@@ -468,7 +468,9 @@ def drawChromosomes(genesStrandsC1, tbWithNoHomologyInWindowC1, genesRemovedDuri
     return (chromosome1, chromosome2)
 
 def drawMatrix(nx, ny, (begC1, endC1), (begC2, endC2), hpSigns, diagsIndices, sizeCell, width, height,
-               diagColorGenerator=None, scaleFactorRectangles=1.0):
+               diagColorGenerator=None,
+               drawAllInformations=False,
+               scaleFactorRectangles=1.0):
     print >> sys.stderr, scaleFactorRectangles
     assert isinstance(scaleFactorRectangles, float)
     sizeText = float(sizeCell*0.9)
@@ -562,7 +564,7 @@ def drawMatrix(nx, ny, (begC1, endC1), (begC2, endC2), hpSigns, diagsIndices, si
                 listOfMatrixItems.append(mySvgDrawer.Line(Point(0, cyy),
                                                           Point(nx * sizeCell, cyy), width=sizeCell*0.1))
 
-    if nx < 300 and ny < 300:
+    if (nx < 300 and ny < 300) or drawAllInformations:
         for i in range(nbLinesX):
             cxLine = i*sizeCell
             listOfMatrixItems.append(mySvgDrawer.Line(Point(cxLine, height),
@@ -621,7 +623,9 @@ def drawHomologyMatrix(((begC1, endC1), (begC2, endC2)), (genesStrandsC1, genesS
                        (genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
                        (tbWithNoHomologyInWindowC1, tbWithNoHomologyInWindowC2),
                        hpSigns, homologyGroupsInWindow, diagsIndices,
-                       outputFileName=None, maxWidth=100, maxHeight=100, symbolsInGenes=None, scaleFactorRectangles=1):
+                       outputFileName=None, maxWidth=100, maxHeight=100, symbolsInGenes=None,
+                       drawAllInformations=False,
+                       scaleFactorRectangles=1):
     # example
     # genesStrandsC1 = [1,-1, None, ...]
     # tbWithNoHomologyInWindowC1=[0,2,3,6,10]
@@ -673,7 +677,9 @@ def drawHomologyMatrix(((begC1, endC1), (begC2, endC2)), (genesStrandsC1, genesS
     offset_matrix_y = 2 * sizeCase
 
     listOfMatrixItems = drawMatrix(nx, ny, (begC1, endC1), (begC2, endC2), hpSigns, diagsIndices, sizeCase, width, height,
-                                   diagColorGenerator=None, scaleFactorRectangles=scaleFactorRectangles)
+                                   diagColorGenerator=None,
+                                   drawAllInformations=drawAllInformations,
+                                   scaleFactorRectangles=scaleFactorRectangles)
     listOfMatrixItems = mySvgDrawer.tanslateItems(listOfMatrixItems, Point(2 * sizeCase, - 2 * sizeCase))
 
     listOfItems = []
@@ -728,6 +734,7 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                          nbHpsRecommendedGap=2,
                          targetProbaRecommendedGap=0.01,
                          chromosomesRewrittenInTbs=False,
+                         drawAllInformations=False,
                          scaleFactorRectangles=2.0,
                          considerAllPairComps=True,
                          switchOnDirectView=False,
@@ -852,6 +859,7 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                                       outputFileName=outImageFileName,
                                       maxWidth=100,
                                       maxHeight=100,
+                                      drawAllInformations=drawAllInformations,
                                       scaleFactorRectangles=scaleFactorRectangles)
 
     else:
@@ -976,6 +984,7 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                                maxWidth=100,
                                maxHeight=100,
                                symbolsInGenes=(TbNumberOfGenesInEachTbC1, TbNumberOfGenesInEachTbC2),
+                               drawAllInformations=drawAllInformations,
                                scaleFactorRectangles=scaleFactorRectangles
                                )
 
