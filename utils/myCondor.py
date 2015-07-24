@@ -461,12 +461,17 @@ def submit_ManyJobs(executable,
 def waitUntilLogOutExists(jobid, waitTime=2):
     outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
     errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
+    maxWaitTime = 480 # wait max 8 minutes for job, then time out
     while True:
         # if one of the log (either stdout or stderr) exists and is non-empty
         if (os.path.isfile(outFileName) and os.stat(outFileName).st_size != 0) or\
             (os.path.isfile(errFileName) and os.stat(errFileName).st_size != 0):
             return jobid
         time.sleep(waitTime)
+        maxWaitTime -= waitTime
+        if maxWaitTime < 0:
+            # Case if process timed out
+            return jobid
 
 # FIXME
 # FIND A SOLUTION THAT DOES NOT REQUIRE A NON-EMPTY LOG (ERR OR OUT) TO KNOW WHEN A JOB HAS FINISHED
