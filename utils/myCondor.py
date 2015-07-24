@@ -458,20 +458,23 @@ def submit_ManyJobs(executable,
 
 # FIXME
 # FIND A SOLUTION THAT DOES NOT REQUIRE A NON-EMPTY LOG (ERR OR OUT) TO KNOW WHEN A JOB HAS FINISHED
-def waitUntilLogOutExists(jobid, waitTime=2):
+# wait max 8 minutes for job, then time out
+def waitUntilLogOutExists(jobid, waitTime=2, maxWaitTime=480):
     outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
     errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
-    maxWaitTime = 480 # wait max 8 minutes for job, then time out
     while True:
         # if one of the log (either stdout or stderr) exists and is non-empty
         if (os.path.isfile(outFileName) and os.stat(outFileName).st_size != 0) or\
             (os.path.isfile(errFileName) and os.stat(errFileName).st_size != 0):
-            return jobid
+            hasFinished = True
+            break
         time.sleep(waitTime)
         maxWaitTime -= waitTime
         if maxWaitTime < 0:
             # Case if process timed out
-            return jobid
+            hasFinished = False
+            break
+    return (jobid, hasFinished)
 
 # FIXME
 # FIND A SOLUTION THAT DOES NOT REQUIRE A NON-EMPTY LOG (ERR OR OUT) TO KNOW WHEN A JOB HAS FINISHED
@@ -482,11 +485,15 @@ def getoutput_ManyJobs(listOfJobids):
     """
 
     pool = Pool()
-    for jobid in pool.imap_unordered(waitUntilLogOutExists, tuple(jobid for jobid in listOfJobids)):
-        print >> sys.stderr, 'return logs of job', jobid
+    for (jobid, hasFinished) in pool.imap_unordered(waitUntilLogOutExists, tuple(jobid for jobid in listOfJobids)):
+        if hasFinished:
+            print >> sys.stderr, 'return logs of job', jobid
+        else:
+            print >> sys.stderr, 'job', jobid, 'has not finished, over max allowed running time'
         outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
         errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
         yield jobid, outFileName, errFileName
+
 
 def execBashCmdOnAllMachines(command, machines=MACHINES, mail=None, log=LOG_FILE):
     """
