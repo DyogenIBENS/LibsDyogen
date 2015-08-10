@@ -777,7 +777,7 @@ def buildConflictGraph(sbsInPairComp, overlapMax=0):
 
 # Edit sbs in order to have non-overlapping sbs
 @myTools.verbose
-def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbose=False):
+def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbose=False):
     # The general idea for construction non-overlapping sbs come from:
     # "Nonoverlapping local alignments" (Bafna 1996)
     # The problem of finding the best non-overlapping sbs is analog of
@@ -971,6 +971,12 @@ def filterOverlappingSbs(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, ve
     print >> sys.stderr, "Nb sbs removed during truncation = %s" % cptRemovedSbAfterTruncation
     # This print is already in the upstream function
     #print >> sys.stderr, "Nb non-overlapping sbs returned = %s" % nbSbsAfterOverlapFiltering
+
+    if __debug__:
+        # DEBUG, verify that the filtered sbs are not overlapping
+        (_, _, N, O, _, _) = buildConflictGraph(new_sbsInPairComp, overlapMax=0)
+        assert len(N) == 0, N
+        assert len(O) == 0, O
 
     return new_sbsInPairComp
 
@@ -1832,7 +1838,7 @@ def fIdentifyMicroInversionsNestedInSbsGaps(sbsInPairComp, putativeMicroInversio
     print >> sys.stderr, "%s diags identified as micro-inversions" % len(idsIdentifiedMicroInv)
 
     # With 'todo' and (id of the splited sb, splitRanks)s, calculate the newSbs and removed sbs
-    # 4) splits sbs when a gap conatins a micro-inversion
+    # 4) splits sbs when a gap contains a micro-inversion
     removedSbIds = set()
     newSbIds = set()
     for idsb in todo:
@@ -1938,7 +1944,181 @@ def fIdentifyInversionsAtSbsExtremities(sbsInPairComp, putativeMicroInversionsIn
 
     return (new_sbsInPairComp, diagsThatAreNotSbsInPairComp)
 
+def doDistinguishMonoGenicDiags(diagsInPairComp):
+    """
+    Filter diags of length 1 that might be due to annotation errors or dispersed duplications maybe followed by gaped
+    tandem duplications
+    :param diagsInPairComp:
+    :return:
+    """
+    monogenicDiagsInPairComp = myTools.Dict2d(list)
+    for c1 in diagsInPairComp.keys():
+        for c2 in diagsInPairComp[c1].keys():
+            lDiags = []
+            for diag in diagsInPairComp[c1][c2]:
+                (m, max_g, lw1, lw2, l1_min, l1_max, l2_min, l2_max) = diag.calculateCharacteristics()
+                # m==1 and (lw1 == 1 or lw2 == 1) corresponds to a dispersed duplication followed by gaped tandem duplications
+                if m > 1 and lw1 > 1 and lw2 > 1:
+                    lDiags.append(diag)
+                else:
+                    monogenicDiagsInPairComp[c1][c2].append(diag)
+            if len(lDiags) > 0:
+                diagsInPairComp[c1][c2] = lDiags
+            else:
+                del diagsInPairComp[c1][c2]
+        if len(diagsInPairComp[c1].keys()) == 0:
+            del diagsInPairComp[c1]
+    return (diagsInPairComp, monogenicDiagsInPairComp)
 
+@myTools.verbose
+def doIdentifyMicroInversions(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv, identifyMonoGenicInversion, verbose=False):
+    # WARNING: the identification of "monogenic micro-inversion" may in fact hide a tandem duplication with a revert
+    # orientation followed by the deletion of the initial gene.
+    # Example:
+    # 1) initial genome: +A+B+C
+    # 2) tandem duplication: +A+B-B+C
+    # 3) gene deletion: A-B+C
+    # This looks like an inversion but it is not an inversion.
+    if identifyMonoGenicInversion:
+        print >> sys.stderr, 'WARNING: returned mono-genic micro-inversions may be a hidden tandem duplication, with a ' \
+                             'revert orientation, followed by the deletion of the initial gene.'
+
+    print >> sys.stderr, "Nb sbs before identifying micro inversions within sbs gaps = %s" % len(sbsInPairComp.items2d())
+    (sbsInPairComp, diagsNotSbsInPairComp) = fIdentifyMicroInversionsNestedInSbsGaps(sbsInPairComp,
+                                                                                     putativeMicroInversionsInPairComp,
+                                                                                     gapMaxMicroInv=gapMaxMicroInv,
+                                                                                     identifyMonoGenicInversion=identifyMonoGenicInversion)
+    print >> sys.stderr, "Nb sbs after identifying micro inversions within sbs gaps = %s" % len(sbsInPairComp.items2d())
+    print >> sys.stderr, "Nb sbs before identifying micro inversions at sbs extremities = %s" % len(sbsInPairComp.items2d())
+    (sbsInPairComp, diagsNotSbsInPairComp) = fIdentifyInversionsAtSbsExtremities(sbsInPairComp,
+                                                                                 diagsNotSbsInPairComp,
+                                                                                 gapMaxMicroInv=gapMaxMicroInv,
+                                                                                 identifyMonoGenicInversion=identifyMonoGenicInversion)
+    print >> sys.stderr, "Nb sbs after identifying micro inversions at sbs extremities = %s" % len(sbsInPairComp.items2d())
+    return (sbsInPairComp, diagsNotSbsInPairComp)
+
+def loopIdentifyBreakpointsWithinGaps(sbsInPairComp):
+    # Do this task until no more change (stability!)
+    while True:
+        nbSbsOld = len(sbsInPairComp.items2d())
+        sbsInPairComp = fIdentifyBreakpointsWithinGaps(sbsInPairComp)
+        nbSbsNew = len(sbsInPairComp.items2d())
+        assert nbSbsNew >= nbSbsOld
+        if nbSbsNew == nbSbsOld:
+            break
+    return sbsInPairComp
+
+def doMergeAllDiags(diagsInPairComp, gapMax, g2_tb, distanceMetric):
+    for (c1, c2) in diagsInPairComp.keys2d():
+        listOfDiags = diagsInPairComp[c1][c2]
+        if len(listOfDiags) > 0:
+            diagsInPairComp[c1][c2] = mergeDiags(listOfDiags, gapMax, g2_tb[c2], distanceMetric, verbose=False)
+    return diagsInPairComp
+
+def loop_Ibwg_Om_Mnosbs(sbsInPairComp, identifyBreakpointsWithinGaps, overlapMax,
+                        gapMax, g2_tb, distanceMetric,
+                        loopIterMax=10, mergeAfterSolveOverlaps=True):
+    """
+    excecute loopIterMax times the pipeline Ibwg|Om|Mnosbs
+    with:
+    * Ibwg: Identify Breakpoints Within Gaps
+    * Om: Overlap Max, the operation that solves overlaps by truncating and removing overlaping sbs
+    * Mnosbs: Merge non-overlapping sbs
+    The whole process always finishes by Ibwg|Om without Mnosbs
+    """
+    cptLoopIter = 0
+    while cptLoopIter <= loopIterMax:
+        # identify breakpoints within gaps
+        if identifyBreakpointsWithinGaps:
+            if cptLoopIter == 0: print >> sys.stderr, "Nb sbs before identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
+            sbsInPairComp = loopIdentifyBreakpointsWithinGaps(sbsInPairComp)
+            if cptLoopIter == 0: print >> sys.stderr, "Nb sbs after identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
+
+        # solve overlaps (truncation and removal) + merge non-overlapping sbs
+        if overlapMax is not None:
+            # solve overlaps (truncation and removal)
+            if cptLoopIter == 0: print >> sys.stderr, "Nb sbs before solve overlaps = %s" % len(sbsInPairComp.items2d())
+            # TODO, compute the variation of the coverage before and after this step
+            sbsInPairComp = solveSbsOverlaps(sbsInPairComp, overlapMax=overlapMax, verbose=False)
+            if cptLoopIter == 0: print >> sys.stderr, "Nb sbs after solve overlaps = %s" % len(sbsInPairComp.items2d())
+
+            # merge non-overlapping sbs
+            if mergeAfterSolveOverlaps:
+                if cptLoopIter == 0: print >> sys.stderr, "Nb sbs before merging non-overlapping sbs = %s" % len(sbsInPairComp.items2d())
+                sbsInPairComp = doMergeAllDiags(sbsInPairComp, gapMax, g2_tb, distanceMetric)
+                if cptLoopIter == 0: print >> sys.stderr, "Nb sbs after merging non-overlapping sbs = %s" % len(sbsInPairComp.items2d())
+        cptLoopIter += 1
+
+    if cptLoopIter > 1:
+        # the first merge non-overlapping sbs was useful, thus other iterations of
+        # IdentifyBreakpointsWithinGaps|nonOverlappingSbs|mergeNonOverlappingSbs were performed.
+        print >> sys.stderr, "IdentifyBreakpointsWithinGaps|nonOverlappingSbs|mergeNonOverlappingSbs was repeated %s times" % (cptLoopIter - 1)
+
+    # Always finish by identifyBreakpointsWithinGaps followed by nonOverlappingSbs without any new merge
+    if identifyBreakpointsWithinGaps:
+        print >> sys.stderr, "Nb sbs before last identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
+        sbsInPairComp = loopIdentifyBreakpointsWithinGaps(sbsInPairComp)
+        print >> sys.stderr, "Nb sbs after last identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
+    if overlapMax is not None:
+        print >> sys.stderr, "Nb sbs before last solve overlaps = %s" % len(sbsInPairComp.items2d())
+        # TODO, compute the variation of the coverage before and after this step
+        print >> sys.stderr, "Nb sbs before last solve overlaps = %s" % len(sbsInPairComp.items2d())
+        sbsInPairComp = solveSbsOverlaps(sbsInPairComp, overlapMax=overlapMax, verbose=False)
+        print >> sys.stderr, "Nb sbs after last solve overlaps = %s" % len(sbsInPairComp.items2d())
+        # No merge non-overlapping sbs
+
+    return sbsInPairComp
+
+def postProcessDiags(diagsInPairComp, distinguishMonoGenicDiags,
+                     pThreshold,  g1_tb, g2_tb, N12s, p_hpSign, validateImpossToCalc_mThreshold,
+                     identifyMonoGenicInversion, gapMaxMicroInv, identifyBreakpointsWithinGaps, overlapMax,
+                     gapMax, distanceMetric):
+    # distinguish mono-genic diagonals
+    if distinguishMonoGenicDiags:
+        print >> sys.stderr, "Total nb diags = %s" % len(diagsInPairComp.items2d())
+        (diagsInPairComp, monogenicDiagsInPairComp) = doDistinguishMonoGenicDiags(diagsInPairComp)
+        print >> sys.stderr, "Nb non-monogenic diags = %s" % len(diagsInPairComp.items2d())
+        print >> sys.stderr, "Nb monogenic diags = %s" % len(monogenicDiagsInPairComp.items2d())
+
+    # statistical validation of diags (putative sbs) into sbs
+    typeOfDiags = ' non-monogenic' if distinguishMonoGenicDiags else ''
+    if pThreshold is None:
+        for (c1, c2) in diagsInPairComp.keys2d():
+            diagsInPairComp[c1][c2] = [SyntenyBlock(diag, None) for diag in diagsInPairComp[c1][c2]]
+        sbsInPairCompStatVal = diagsInPairComp
+        diagsInPairCompRejected = myTools.Dict2d(list)
+    else:
+        print >> sys.stderr, "Nb%s diags before statistical validation = %s" % (typeOfDiags, len(diagsInPairComp.items2d()))
+        (sbsInPairCompStatVal, diagsInPairCompRejected) = statisticalValidation(diagsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
+                                                                                pThreshold=pThreshold,
+                                                                                NbOfHomologiesThreshold=50,
+                                                                                validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
+                                                                                # diagsInPairComp contains no monogenic diag
+                                                                                considerMonogenicSb=False,
+                                                                                validateSbsWithGapMaxZero=True,
+                                                                                verbose=False)
+        print >> sys.stderr, "Nb%s diags not validated as sbs = %s" % (typeOfDiags, len(diagsInPairCompRejected.items2d()))
+        print >> sys.stderr, "Nb%s diags%s validated as sbs = %s" % (typeOfDiags, ' stat' if pThreshold else '', len(sbsInPairCompStatVal.items2d()))
+    sbsInPairComp = sbsInPairCompStatVal
+
+    # identify micro-inversions
+    assert not (identifyMonoGenicInversion and not distinguishMonoGenicDiags), "if 'identifyMonoGenicInversion' is set to True, 'distinguishMonoGenicDiags' should also be set to True"
+    if gapMaxMicroInv is not None:
+        if identifyMonoGenicInversion and distinguishMonoGenicDiags:
+            putativeMicroInversionsInPairComp = diagsInPairCompRejected + monogenicDiagsInPairComp
+            typeOfMicroInv = ''
+        else:
+            typeOfMicroInv = ' non-monogenic'
+            putativeMicroInversionsInPairComp = diagsInPairCompRejected
+        print >> sys.stderr, "Nb sbs before identifying%s micro-inversions = %s" % (typeOfMicroInv, len(sbsInPairComp.items2d()))
+        (sbsInPairComp, diagsNotSbsInPairComp) = doIdentifyMicroInversions(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv, identifyMonoGenicInversion, verbose=False)
+        print >> sys.stderr, "Nb sbs after identifying%s micro-inversions = %s" % (typeOfMicroInv, len(sbsInPairComp.items2d()))
+
+    sbsInPairComp = loop_Ibwg_Om_Mnosbs(sbsInPairComp, identifyBreakpointsWithinGaps, overlapMax,
+                                        gapMax, g2_tb, distanceMetric,
+                                        loopIterMax=10, mergeAfterSolveOverlaps=True)
+
+    return (sbsInPairComp, diagsInPairComp)
 
 def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      gapMax=None,
@@ -2031,165 +2211,13 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
     # merge strict and consistent diagonals into gaped consistent diagonals
     ########################################################################
     print >> sys.stderr, "Nb diags before merging diags = %s" % len(diagsInPairComp.items2d())
-    for (c1, c2) in diagsInPairComp.keys2d():
-        listOfDiags = diagsInPairComp[c1][c2]
-        if len(listOfDiags) > 0:
-            diagsInPairComp[c1][c2] = mergeDiags(listOfDiags, gapMax, g2_tb[c2], distanceMetric, verbose=False)
+    diagsInPairComp = doMergeAllDiags(diagsInPairComp, gapMax, g2_tb, distanceMetric)
     print >> sys.stderr, "Nb diags after merging diags = %s" % len(diagsInPairComp.items2d())
 
-    # Filter diags of length 1 that might be due to annotation errors or dispersed duplications
-    # (maybe followed by gaped tandem duplications)
-    ############################################################################################
-    monogenicDiagsInPairComp = myTools.Dict2d(list)
-
-    if distinguishMonoGenicDiags:
-        print >> sys.stderr, "Nb diags before removing mono-ancGenic diags = %s" % len(diagsInPairComp.items2d())
-        for c1 in diagsInPairComp.keys():
-            for c2 in diagsInPairComp[c1].keys():
-                lDiags = []
-                for diag in diagsInPairComp[c1][c2]:
-                    (m, max_g, lw1, lw2, l1_min, l1_max, l2_min, l2_max) = diag.calculateCharacteristics()
-                    # m==1 and (lw1 == 1 or lw2 == 1) corresponds to a dispersed duplication followed by gaped tandem duplications
-                    if m > 1 and lw1 > 1 and lw2 > 1:
-                        lDiags.append(diag)
-                    else:
-                        monogenicDiagsInPairComp[c1][c2].append(diag)
-                if len(lDiags) > 0:
-                    diagsInPairComp[c1][c2] = lDiags
-                else:
-                    del diagsInPairComp[c1][c2]
-            if len(diagsInPairComp[c1].keys()) == 0:
-                del diagsInPairComp[c1]
-        print >> sys.stderr, "Nb diags after removing mono-ancGenic diags = %s" % len(diagsInPairComp.items2d())
-
-    # setp 4 : statistical validation of diags (putative sbs) into sbs
-    ###################################################################
-    if pThreshold is None:
-        for (c1, c2) in diagsInPairComp.keys2d():
-            diagsInPairComp[c1][c2] = [SyntenyBlock(diag, None) for diag in diagsInPairComp[c1][c2]]
-        sbsInPairCompStatVal = diagsInPairComp
-        diagsInPairCompRejected = myTools.Dict2d(list)
-    else:
-        (sbsInPairCompStatVal, diagsInPairCompRejected) = statisticalValidation(diagsInPairComp, g1_tb, g2_tb, N12s, p_hpSign,
-                                                                                pThreshold=pThreshold,
-                                                                                NbOfHomologiesThreshold=50,
-                                                                                validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
-                                                                                # diagsInPairComp contains no monogenic diag
-                                                                                considerMonogenicSb=False,
-                                                                                validateSbsWithGapMaxZero=True,
-                                                                                verbose=False)
-    sbsInPairComp = sbsInPairCompStatVal
-    print >> sys.stderr, "Nb diags not val as sbs = %s" % len(diagsInPairCompRejected.items2d())
-    print >> sys.stderr, "Nb diags %s val as sbs = %s" % ('stat' if pThreshold else '', len(sbsInPairCompStatVal.items2d()))
-
-    # identify monogenic diags and diags previously rejected during the stat-validation that can be validated as
-    # non-ambiguous micro-inversions
-    ############################################################################################################
-    if gapMaxMicroInv is not None:
-        # WARNING: the identification of "monogenic micro-inversion" may in fact hide a tandem duplication with a revert
-        # orientation followed by the deletion of the initial gene.
-        # Example:
-        # 1) initial genome: +A+B+C
-        # 2) tandem duplication: +A+B-B+C
-        # 3) gene deletion: A-B+C
-        # This looks like an inversion but it is not an inversion.
-        if identifyMonoGenicInversion:
-            print >> sys.stderr, 'WARNING: returned mono-genic micro-inversions may be a hidden tandem duplication, with a revert orientation, followed by the deletion of the initial gene.'
-
-        print >> sys.stderr, "Nb sbs before identifying micro inversions within sbs gaps = %s" % len(sbsInPairComp.items2d())
-        putativeMicroInversionsInPairComp = diagsInPairCompRejected + monogenicDiagsInPairComp
-        (sbsInPairComp, diagsNotSbsInPairComp) = fIdentifyMicroInversionsNestedInSbsGaps(sbsInPairComp,
-                                                                                         putativeMicroInversionsInPairComp,
-                                                                                         gapMaxMicroInv=gapMaxMicroInv,
-                                                                                         identifyMonoGenicInversion=identifyMonoGenicInversion)
-        print >> sys.stderr, "Nb sbs after identifying micro inversions within sbs gaps = %s" % len(sbsInPairComp.items2d())
-        print >> sys.stderr, "Nb sbs before identifying micro inversions at sbs extremities = %s" % len(sbsInPairComp.items2d())
-        (sbsInPairComp, diagsNotSbsInPairComp) = fIdentifyInversionsAtSbsExtremities(sbsInPairComp,
-                                                                                     diagsNotSbsInPairComp,
-                                                                                     gapMaxMicroInv=gapMaxMicroInv,
-                                                                                     identifyMonoGenicInversion=identifyMonoGenicInversion)
-        print >> sys.stderr, "Nb sbs after identifying micro inversions at sbs extremities = %s" % len(sbsInPairComp.items2d())
-
-    cptLoopIter = 0
-    # initialise la condition d'arrêt de la boucle
-    atLeastOneNonOverlappingMerge = False
-    while True:
-
-        if identifyBreakpointsWithinGaps:
-            # Do this task until no more change (stability!)
-            if cptLoopIter == 0:
-                print >> sys.stderr, "Nb sbs before identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
-            while True:
-                nbSbsOld = len(sbsInPairComp.items2d())
-                sbsInPairComp = fIdentifyBreakpointsWithinGaps(sbsInPairComp)
-                nbSbsNew = len(sbsInPairComp.items2d())
-                if nbSbsNew == nbSbsOld:
-                    break
-            if cptLoopIter == 0:
-                print >> sys.stderr, "Nb sbs after identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
-
-        if overlapMax is not None:
-            if cptLoopIter == 0:
-                print >> sys.stderr, "Nb sbs before overlap-truncation-filtering = %s" % len(sbsInPairComp.items2d())
-            # TODO, compute the variation of the coverage before and after this step
-            sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=False)
-            # DEBUG, verify that the filtered sbs are not overlapping
-            if __debug__:
-                (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0)
-                assert len(N) == 0, N
-                assert len(O) == 0, O
-            if cptLoopIter == 0:
-                print >> sys.stderr, "Nb sbs after overlap-truncation-filtering = %s" % len(sbsInPairComp.items2d())
-
-            # mergeNonOverlappingSbs
-            for (c1, c2) in sbsInPairComp.keys2d():
-                # BM: Before Merge
-                nbSbsBM = len(sbsInPairComp.items2d())
-                sbsInPairComp[c1][c2] = mergeDiags(sbsInPairComp[c1][c2], gapMax, g2_tb[c2], distanceMetric=distanceMetric, verbose=False)
-                # AM: After Merge
-                nbSbsAM = len(sbsInPairComp.items2d())
-                assert nbSbsAM <= nbSbsBM
-                atLeastOneNonOverlappingMerge = atLeastOneNonOverlappingMerge or (True if nbSbsAM != nbSbsBM else False)
-            if cptLoopIter == 0:
-                print >> sys.stderr, "Nb sbs after merging non-overlapping sbs = %s" % len(sbsInPairComp.items2d())
-
-        cptLoopIter += 1
-
-        if atLeastOneNonOverlappingMerge and cptLoopIter <= 10:
-            continue
-        else:
-            if cptLoopIter > 1:
-                # the first merge non-overlapping sbs was usefull, thus other
-                # iterations of
-                # IdentifyBreakpointsWithinGaps|nonOverlappingSbs|mergeNonOverlappingSbs
-                # were performed.
-                print >> sys.stderr, "IdentifyBreakpointsWithinGaps|nonOverlappingSbs|mergeNonOverlappingSbs was repeated %s times" % (cptLoopIter - 1)
-
-                # Always finish by identifyBreakpointsWithinGaps followed by
-                # nonOverlappingSbs without a merge
-                if identifyBreakpointsWithinGaps:
-                    # Do this task until no more change (stability!)
-                    print >> sys.stderr, "Nb sbs before identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
-                    while True:
-                        nbSbsOld = len(sbsInPairComp.items2d())
-                        sbsInPairComp = fIdentifyBreakpointsWithinGaps(sbsInPairComp)
-                        nbSbsNew = len(sbsInPairComp.items2d())
-                        if nbSbsNew == nbSbsOld:
-                            break
-                    print >> sys.stderr, "Nb sbs after identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
-                if overlapMax is not None:
-                    print >> sys.stderr, "Nb sbs before overlap-truncation-filtering = %s" % len(sbsInPairComp.items2d())
-                    # TODO, compute the variation of the coverage before and after this step
-                    sbsInPairComp = filterOverlappingSbs(sbsInPairComp, overlapMax=overlapMax, verbose=False)
-                    # DEBUG, verify that the filtered sbs are not overlapping
-                    (_, _, N, O, _, _) = buildConflictGraph(sbsInPairComp, overlapMax=0)
-                    assert len(N) == 0
-                    assert len(O) == 0
-                    print >> sys.stderr, "Nb sbs after overlap-truncation-filtering = %s" % len(sbsInPairComp.items2d())
-                # No merge non-overlapping sbs
-            # leave the while loop
-            break
-
+    (sbsInPairComp, diagsInPairComp) = postProcessDiags(diagsInPairComp, distinguishMonoGenicDiags,
+                                                        pThreshold,  g1_tb, g2_tb, N12s, p_hpSign, validateImpossToCalc_mThreshold,
+                                                        identifyMonoGenicInversion, gapMaxMicroInv, identifyBreakpointsWithinGaps, overlapMax,
+                                                        gapMax, distanceMetric)
     return sbsInPairComp
 
 
