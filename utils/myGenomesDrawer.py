@@ -551,16 +551,20 @@ def drawMatrix(nx, ny, (begC1, endC1), (begC2, endC2), hpSigns, diagsIndices, si
                     # TODO FIXME, not visible for big chromosomes
                     #listOfMatrixItems.append(mySvgDrawer.Text((cxx, cyy), str(nj), text_anchor="middle", size=sizeTextTicks, transform="translate(%s) rotate(90,%s,%s)" % (sizeCell,cxx+sizeCell,cyy)))
                     listOfMatrixItems.append(mySvgDrawer.Text(Point(0, 0),  str(nj),
-                                                              text_anchor="middle", size=sizeTextTicks, transform="translate(%s,%s) rotate(-90)" % (cxText, cyy - 6*sizeCell)))
-                    # listOfMatrixItems.append(mySvgDrawer.Text(Point(cxText, cyText), str(nj),
-                    #                       text_anchor="middle", size=sizeTextTicks, transform="rotate(90,%s,%s)" % (cxText, cyText)))
+                                                              text_anchor="middle", size=sizeTextTicks, transform="translate(%s,%s) rotate(-90, %s, %s)" % (2*cxText, cyy, 3*sizeCell, -3*sizeCell)))
                     listOfMatrixItems.append(mySvgDrawer.Line(Point(0, cyy),
                                                               Point(width-sizeCell, cyy), width=sizeCell*0.1))
             else:
-                #listOfMatrixItems.append(mySvgDrawer.Text((cxx, cyy), str(nj), text_anchor="middle", size=sizeTextTicks, transform="translate(%s) rotate(90,%s,%s)" % (sizeCell,cxx+sizeCell,cyy)))
-                # FIXME: why - 6*sizeCell ?
+                # idea:
+                # listOfMatrixItems.append(mySvgDrawer.Text((cxx, cyy), str(nj), text_anchor="middle", size=sizeTextTicks, transform="translate(%s) rotate(90,%s,%s)" % (sizeCell,cxx+sizeCell,cyy)))
+
+                # The default center of rotation is at 3*sizeCase in x and -3*sizeCase in y
+                # "translate(2*cxText, cyy) rotate(-90, 3*sizeCell, -3*sizeCell)"
+                # means:
+                # 1st) rotate at -90 degrees with a center of rotation at (3*sizeCell, -3*sizeCell)
+                # 2nd) translate x+=2*cxText and y+= cyy
                 listOfMatrixItems.append(mySvgDrawer.Text(Point(0, 0),  str(nj),
-                                                          text_anchor="middle", size=sizeTextTicks, transform="translate(%s,%s) rotate(90)" % (cxText, cyy - 6*sizeCell)))
+                                                          text_anchor="middle", size=sizeTextTicks, transform="translate(%s,%s) rotate(-90, %s, %s)" % (2*cxText, cyy, 3*sizeCell, -3*sizeCell)))
                 listOfMatrixItems.append(mySvgDrawer.Line(Point(0, cyy),
                                                           Point(nx * sizeCell, cyy), width=sizeCell*0.1))
 
