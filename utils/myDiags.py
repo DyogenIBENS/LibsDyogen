@@ -775,6 +775,34 @@ def buildConflictGraph(sbsInPairComp, overlapMax=0):
     (N, O, I) = findOverlaps(sbsInPairCompWithIds, sbsG1, sbsG2, overlapMax=overlapMax)
     return (sbsInPairCompWithIds, V, N, O, I, (sbsG1, sbsG2))
 
+def isL2NestedInL1(L1, L2):
+    assert isinstance(L1, list)
+    assert isinstance(L2, list)
+    res = True if min(L1) <= min(L2) and max(L2) <= max(L1) else False
+    return res
+
+def isThereAnOverlap(L1, L2):
+    assert isinstance(L1, list)
+    assert isinstance(L2, list)
+    res = True if max(L1) >= min(L2) and min(L1) <= max(L2) else False
+    return res
+
+def statusOfSbbComparedToSbaProjected((ca, sba), (cb, sbb)):
+    res = 'noOverlap'
+    if ca == cb:
+        if isL2NestedInL1(sba.l1, sbb.l1):
+            res = 'nested'
+        elif isThereAnOverlap(sba.l1, sbb.l1):
+            res = 'overlapping'
+    return res
+
+def statusOfSbbComparedToSba(((c1a, c2a), sba), ((c1b, c2b), sbb)):
+    assert isinstance(sba, Diagonal)
+    assert isinstance(sbb, Diagonal)
+    resC1 = statusOfSbbComparedToSbaProjected((c1a, sba), (c1b, sbb))
+    resC2 = statusOfSbbComparedToSbaProjected((c2a, sba), (c2b, sbb))
+    return (resC1, resC2)
+
 # Edit sbs in order to have non-overlapping sbs
 @myTools.verbose
 def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbose=False):
@@ -824,8 +852,15 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
                 # SB Removed
                 sbr = id2sb(iD_removedSb)
                 (c1r, c2r, _) = id2location(iD_removedSb)
-                print >> sys.stderr, "sb (%s, %s) with %s tbs is removed because of unallowed overlap with sb (%s, %s) with %s tbs" %\
-                    (c1r, c2r, len(sbr.la), c1nr, c2nr, len(sbnr.la))
+                print >> sys.stderr, "sb (%s:%s-%s, %s:%s-%s) with %s tbs is removed because of unallowed overlap with sb (%s:%s-%s, %s:%s-%s) with %s tbs (idxs in tbs)" %\
+                    (c1r, sbr.minOnG(1), sbr.maxOnG(1), c2r, sbr.minOnG(2), sbr.maxOnG(2), len(sbr.la),
+                     c1nr, sbnr.minOnG(1), sbnr.maxOnG(1), c2nr, sbnr.minOnG(2), sbnr.maxOnG(2), len(sbnr.la))
+                if 'nested' in statusOfSbbComparedToSba(((c1nr, c2nr), sbnr), ((c1r, c2r), sbr)):
+                    # sbr is at least partially nested in sbnr
+                    print >> sys.stderr, "last overlap is probably a segmental duplication"
+                elif 'nested' in statusOfSbbComparedToSba(((c1r, c2r), sbr), ((c1nr, c2nr), sbnr)):
+                    # sbnr is at least partially nested in sbr
+                    print >> sys.stderr, "last overlap is probably a (strange) segmental duplication"
                 for iD_needUpdateSb in N[iD_removedSb]:
                     N[iD_needUpdateSb].remove(iD_removedSb)
                     if len(N[iD_needUpdateSb]) == 0:
@@ -875,7 +910,9 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
                             newla.append(sbt.la[i])
                     truncation = len(sbt.la) - len(newla)
                     if truncation > 0:
-                        print >> sys.stderr, "sb (%s, %s) with %s tbs truncated (-%s tbs) because of sb (%s, %s) with %s tbs" % (c1t, c2t, len(sbt.la), truncation, c1nt, c2nt, len(sbnt.la))
+                        print >> sys.stderr, "sb (%s:%s-%s, %s:%s-%s) with %s tbs truncated (-%s tbs) because of sb (%s:%s-%s, %s:%s-%s) with %s tbs (idxs in tbs)" %\
+                                             (c1t, sbt.minOnG(1), sbt.maxOnG(1), c2t, sbt.minOnG(2), sbt.maxOnG(2), len(sbt.la), truncation,
+                                              c1nt, sbnt.minOnG(1), sbnt.maxOnG(1), c2nt, sbnt.minOnG(2), sbnt.maxOnG(2), len(sbnt.la))
                     sbt.l1 = newl1
                     sbt.l2 = newl2
                     sbt.la = newla
@@ -891,7 +928,9 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
                             newla.append(sbt.la[i])
                     truncation = len(sbt.la) - len(newla)
                     if truncation > 0:
-                        print >> sys.stderr, "sb (%s, %s) with %s tbs truncated (-%s tbs) because of sb (%s, %s) with %s tbs" % (c1t, c2t, len(sbt.la), truncation, c1nt, c2nt, len(sbnt.la))
+                        print >> sys.stderr, "sb (%s:%s-%s, %s:%s-%s) with %s tbs truncated (-%s tbs) because of sb (%s:%s-%s, %s:%s-%s) with %s tbs (idxs in tbs)" %\
+                                             (c1t, sbt.minOnG(1), sbt.maxOnG(1), c2t, sbt.minOnG(2), sbt.maxOnG(2), len(sbt.la), truncation,
+                                              c1nt, sbnt.minOnG(1), sbnt.maxOnG(1), c2nt, sbnt.minOnG(2), sbnt.maxOnG(2), len(sbnt.la))
                     sbt.l1 = newl1
                     sbt.l2 = newl2
                     sbt.la = newla
@@ -901,6 +940,7 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
             sortedO.sort(key=lambda idsb: len(id2sb(idsb).la))
             setO = set(sortedO)
         return sbsInPairCompWithIds
+
     (sbsInPairCompWithIds, V, N, O, I, (sbsG1, sbsG2)) =\
         buildConflictGraph(sbsInPairComp, overlapMax=overlapMax)
     nbSbsBeforeOverlapFiltering = len(V)
@@ -2039,7 +2079,7 @@ def loop_Ibwg_Om_Mnosbs(sbsInPairComp, identifyBreakpointsWithinGaps, overlapMax
             # solve overlaps (truncation and removal)
             if cptLoopIter == 0: print >> sys.stderr, "Nb sbs before solve overlaps = %s" % len(sbsInPairComp.items2d())
             # TODO, compute the variation of the coverage before and after this step
-            sbsInPairComp = solveSbsOverlaps(sbsInPairComp, overlapMax=overlapMax, verbose=False)
+            sbsInPairComp = solveSbsOverlaps(sbsInPairComp, overlapMax=overlapMax, verbose=True)
             if cptLoopIter == 0: print >> sys.stderr, "Nb sbs after solve overlaps = %s" % len(sbsInPairComp.items2d())
 
             # merge non-overlapping sbs
@@ -2062,8 +2102,7 @@ def loop_Ibwg_Om_Mnosbs(sbsInPairComp, identifyBreakpointsWithinGaps, overlapMax
     if overlapMax is not None:
         print >> sys.stderr, "Nb sbs before last solve overlaps = %s" % len(sbsInPairComp.items2d())
         # TODO, compute the variation of the coverage before and after this step
-        print >> sys.stderr, "Nb sbs before last solve overlaps = %s" % len(sbsInPairComp.items2d())
-        sbsInPairComp = solveSbsOverlaps(sbsInPairComp, overlapMax=overlapMax, verbose=False)
+        sbsInPairComp = solveSbsOverlaps(sbsInPairComp, overlapMax=overlapMax, verbose=True)
         print >> sys.stderr, "Nb sbs after last solve overlaps = %s" % len(sbsInPairComp.items2d())
         # No merge non-overlapping sbs
 
