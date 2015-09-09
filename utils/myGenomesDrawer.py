@@ -17,6 +17,8 @@ import mySvgDrawer
 import myLightGenomes
 from mySvgDrawer import Point
 
+FilterType = myDiags.FilterType
+
 # parse the user input (text) for the chromosome range and asses if this query is consistent with the genome data
 # g2gtb is a dictionnary to convert indices from gene coordinates into tb coordinates
 def parseChrRange(text, genome, g2gtb=None):
@@ -117,38 +119,37 @@ def TbComputeHomologyInformations(chrom1_tb, chrom2_tb):
 
     return (MHP, (TbNoHomologiesInWindowC1, TbNoHomologiesInWindowC2), TbHomologyGroupsInWindow)
 
-
-def genesComputeHomologyInformations(chr1, chr2, chrom1, chrom2, families,
-                                     filterType,
-                                     minChromLength, tandemGapMax):
-    c1_fID = myMapping.labelWithFamID(chrom1, families)
-    c2_fID = myMapping.labelWithFamID(chrom2, families)
+def editGenomes(genome1, genome2, families, filterType, minChromLength, tandemGapMax):
+    g1_fID = myMapping.labelWithFamID(genome1, families)
+    g2_fID = myMapping.labelWithFamID(genome2, families)
 
     # Must be applied on the two genomes
-    if len((c1_fID.getGeneNames(checkNoDuplicates=False) & c2_fID.getGeneNames(checkNoDuplicates=False)) - {None}) == 0:
+    if len((g1_fID.getGeneNames(checkNoDuplicates=False) & g2_fID.getGeneNames(checkNoDuplicates=False)) - {None}) == 0:
         print >> sys.stderr, "Warning, no homologs"
-    ((c1_fID_filt, Cf2CfID1, (nCL1, nGL1)),
-     (c2_fID_filt, Cf2CfID2, (nCL2, nGL2))) = myDiags.filter2D(c1_fID, c2_fID,
+    ((g1_fID_filt, Gf2GfID1, (nCL1, nGL1)),
+     (g2_fID_filt, Gf2GfID2, (nCL2, nGL2))) = myDiags.filter2D(g1_fID, g2_fID,
                                                                filterType,
                                                                minChromLength,
                                                                keepOriginal=True)
-    (chrom1_tb, Ctb2CfID1, nGTD1) = myMapping.remapRewriteInTb(c1_fID_filt,
+    (g1_tb, Gtb2GfID1, nGTD1) = myMapping.remapRewriteInTb(g1_fID_filt,
                                                              tandemGapMax=tandemGapMax,
-                                                             mOld=Cf2CfID1)
-    (chrom2_tb, Ctb2CfID2, nGTD2) = myMapping.remapRewriteInTb(c2_fID_filt,
+                                                             mOld=Gf2GfID1)
+    (g2_tb, Gtb2GfID2, nGTD2) = myMapping.remapRewriteInTb(g2_fID_filt,
                                                              tandemGapMax=tandemGapMax,
-                                                             mOld=Cf2CfID2)
-    #Focus on the chromosome of the window
-    chrom1_ = chrom1[chr1]
-    chrom2_ = chrom2[chr2]
-    c1_fID = c1_fID[chr1]
-    c2_fID = c2_fID[chr2]
-    chrom1_tb = chrom1_tb[chr1] if chr1 in chrom1_tb else []
-    chrom2_tb = chrom2_tb[chr2] if chr2 in chrom2_tb else []
+                                                             mOld=Gf2GfID2)
+    return ((g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2))
 
-    print >> sys.stderr, Ctb2CfID1.keys()
-    Ctb2CfID1 = Ctb2CfID1[chr1]
-    Ctb2CfID2 = Ctb2CfID2[chr2]
+def computeHomologyInformations(chr1, chr2, (g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2)):
+    #Focus on the chromosome of the window
+    chrom1_ = genome1[chr1]
+    chrom2_ = genome2[chr2]
+    c1_fID = g1_fID[chr1]
+    c2_fID = g2_fID[chr2]
+    chrom1_tb = g1_tb[chr1] if chr1 in g1_tb else []
+    chrom2_tb = g2_tb[chr2] if chr2 in g2_tb else []
+
+    Ctb2CfID1 = Gtb2GfID1[chr1]
+    Ctb2CfID2 = Gtb2GfID2[chr2]
 
     # Build genesRemovedDuringFilteringCX = [..., i, ...] the list of genes that
     # have been removed during the filtering process
@@ -192,6 +193,21 @@ def genesComputeHomologyInformations(chr1, chr2, chrom1, chrom2, families,
             (genesNoHomologiesInWindowC1, genesNoHomologiesInWindowC2),
             genesHomologyGroupsInWindow)
 
+def editGenomesAndComputeHomologyInformations(chr1, chr2, genome1, genome2, families,
+                                     filterType, minChromLength, tandemGapMax):
+
+    ((g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2)) = editGenomes(genome1, genome2, families,
+                                                                           filterType, minChromLength, tandemGapMax)
+    ((genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
+     genesHomologiesHpSign,
+     (genesNoHomologiesInWindowC1, genesNoHomologiesInWindowC2),
+     genesHomologyGroupsInWindow) = computeHomologyInformations(chr1, chr2,
+                                                                (g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2))
+
+    return ((genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
+            genesHomologiesHpSign,
+            (genesNoHomologiesInWindowC1, genesNoHomologiesInWindowC2),
+            genesHomologyGroupsInWindow)
 
 # Generator of levels for colors or gray indices within a palette:
 # farIdxs may be an int. The more this int is high, the more neighbour color will be different
@@ -441,21 +457,26 @@ def drawChromosomes(genesStrandsC1, tbWithNoHomologyInWindowC1, genesRemovedDuri
     chromosome2.insert(0, mySvgDrawer.Line(Point(0, 0), Point(len(genesStrandsC2) * sizeCase, 0)))
     return (chromosome1, chromosome2)
 
-def drawMatrix(nx, ny, (begC1, endC1), (begC2, endC2), hpSigns, diagsIndices, sizeCell, width, height,
+def drawMatrix((begC1, endC1), (begC2, endC2), hpSigns, diagsIndices, sizeCell, width, height,
                diagColorGenerator=None,
                drawAllInformations=False,
+               drawlinesNumbersAndSigns=True,
                scaleFactorRectangles=1.0):
-    print >> sys.stderr, scaleFactorRectangles
-    assert isinstance(scaleFactorRectangles, float)
+    assert isinstance(scaleFactorRectangles, float) or isinstance(scaleFactorRectangles, int)
     sizeText = float(sizeCell*0.9)
     listOfMatrixItems = []
     if not diagColorGenerator:
         diagColorGenerator = levelIdxGenerator(farIdxs=True)
 
+    assert endC1 >= begC1
+    nx = endC1 - begC1 + 1
     # Nb of vertical lines (x varies) in the matrix
-    nbLinesX = nx+1
+    nbLinesX = nx + 1
+
+    assert endC2 >= begC2
+    ny = endC2 - begC2 + 1
     # Nb of horizontal lines (y varies) in the matrix
-    nbLinesY = ny+1
+    nbLinesY = ny + 1
 
     # draw Diagonals first because they are on the background
     print >> sys.stderr, "Nb of diagonals showed = ", len(diagsIndices)
@@ -491,87 +512,85 @@ def drawMatrix(nx, ny, (begC1, endC1), (begC2, endC2), hpSigns, diagsIndices, si
                                                        stroke='black', fill='none', strokeWidth=0.2*sizeCell*scaleFactorBoundingBoxDiags))
 
     # tick lines
-    widthTicks = min(float(width)/1000, float(height)/1000)
-    sizeTextTicks = widthTicks*10
-    for (i, ni) in enumerate(range(begC1, endC1)):
-        cx = i*sizeCell
-        if ni % 10 == 0:
-            # ticks
-            listOfMatrixItems.append(mySvgDrawer.Line(Point(sizeCell/2+cx, height + sizeCell/2),
-                                                      Point(sizeCell/2+cx, height), width=widthTicks))
-        if ni % 50 == 0:
-            cyText = height - max(sizeCell/2, sizeTextTicks/2)
-            cxx = cx + sizeCell/2
-            if nx > 750 or ny > 750:
-                if ni % 100 == 0:
-                    # TODO FIXME, too high for long chromosomes
+    if drawlinesNumbersAndSigns:
+        widthTicks = min(float(width)/1000, float(height)/1000)
+        sizeTextTicks = widthTicks*10
+        for (i, ni) in enumerate(range(begC1, endC1)):
+            cx = i*sizeCell
+            if ni % 10 == 0:
+                # ticks
+                listOfMatrixItems.append(mySvgDrawer.Line(Point(sizeCell/2+cx, height + sizeCell/2),
+                                                          Point(sizeCell/2+cx, height), width=widthTicks))
+            if ni % 50 == 0:
+                cyText = height - max(sizeCell/2, sizeTextTicks/2)
+                cxx = cx + sizeCell/2
+                if nx > 750 or ny > 750:
+                    if ni % 100 == 0:
+                        # TODO FIXME, too high for long chromosomes
+                        listOfMatrixItems.append(mySvgDrawer.Text(Point(cxx, cyText + sizeCell), str(ni), text_anchor="middle", size=sizeTextTicks))
+                        listOfMatrixItems.append(mySvgDrawer.Line(Point(cxx, ny * sizeCell), Point(cxx, sizeCell), width=sizeCell*0.1))
+                else:
                     listOfMatrixItems.append(mySvgDrawer.Text(Point(cxx, cyText + sizeCell), str(ni), text_anchor="middle", size=sizeTextTicks))
-                    listOfMatrixItems.append(mySvgDrawer.Line(Point(cxx, ny * sizeCell),
-                                                              Point(cxx, sizeCell), width=sizeCell*0.1))
-            else:
-                listOfMatrixItems.append(mySvgDrawer.Text(Point(cxx, cyText + sizeCell), str(ni), text_anchor="middle", size=sizeTextTicks))
-                listOfMatrixItems.append(mySvgDrawer.Line(Point(cxx, height),
-                                                          Point(cxx, height - ny * sizeCell), width=sizeCell*0.1))
+                    listOfMatrixItems.append(mySvgDrawer.Line(Point(cxx, height), Point(cxx, height - ny * sizeCell), width=sizeCell*0.1))
 
-    for (j, nj) in enumerate(range(begC2, endC2)):
-        cy = j*sizeCell
-        if nj % 10 == 0:
-            listOfMatrixItems.append(mySvgDrawer.Line(Point(sizeCell/2 - sizeCell, height - (sizeCell/2+cy)),
-                                                      Point(0, (height - (sizeCell/2+cy))), width=widthTicks))
-        if nj % 50 == 0:
-            cxText = - max(sizeCell/2, sizeTextTicks/2)
-            cyy = height - (sizeCell/2 + cy)
-            if nx > 750 or ny > 750:
-                if nj % 100 == 0:
-                    # TODO FIXME, not visible for big chromosomes
-                    listOfMatrixItems.append(mySvgDrawer.Text(Point(0, 0),  str(nj),
-                                                              text_anchor="middle", size=sizeTextTicks, transform="translate(%s,%s) rotate(-90, %s, %s)" % (2*cxText, cyy, 3*sizeCell, -3*sizeCell)))
-                    listOfMatrixItems.append(mySvgDrawer.Line(Point(0, cyy),
-                                                              Point(width-sizeCell, cyy), width=sizeCell*0.1))
-            else:
-                # idea:
-                # listOfMatrixItems.append(mySvgDrawer.Text((cxx, cyy), str(nj), text_anchor="middle", size=sizeTextTicks, transform="translate(%s) rotate(90,%s,%s)" % (sizeCell,cxx+sizeCell,cyy)))
+        for (j, nj) in enumerate(range(begC2, endC2)):
+            cy = j*sizeCell
+            if nj % 10 == 0:
+                listOfMatrixItems.append(mySvgDrawer.Line(Point(sizeCell/2 - sizeCell, height - (sizeCell/2+cy)),
+                                                          Point(0, (height - (sizeCell/2+cy))), width=widthTicks))
+            if nj % 50 == 0:
+                cxText = - max(sizeCell/2, sizeTextTicks/2)
+                cyy = height - (sizeCell/2 + cy)
+                if nx > 750 or ny > 750:
+                    if nj % 100 == 0:
+                        # TODO FIXME, not visible for big chromosomes
+                        # listOfMatrixItems.append(mySvgDrawer.Text(Point(0, 0),  str(nj),
+                        #                                           text_anchor="middle", size=sizeTextTicks, transform="translate(%s,%s) rotate(-90, %s, %s)" % (2*cxText, cyy, 3*sizeCell, -3*sizeCell)))
+                        listOfMatrixItems.append(mySvgDrawer.Text(Point(2*cxText, cyy),  str(nj), text_anchor="middle", size=sizeTextTicks))
+                        listOfMatrixItems.append(mySvgDrawer.Line(Point(0, cyy), Point(width-sizeCell, cyy), width=sizeCell*0.1))
+                else:
+                    # idea:
+                    # listOfMatrixItems.append(mySvgDrawer.Text((cxx, cyy), str(nj), text_anchor="middle", size=sizeTextTicks, transform="translate(%s) rotate(90,%s,%s)" % (sizeCell,cxx+sizeCell,cyy)))
+                    # The default center of rotation is at 3*sizeCase in x and -3*sizeCase in y
+                    # "translate(2*cxText, cyy) rotate(-90, 3*sizeCell, -3*sizeCell)"
+                    # means:
+                    # 1st) rotate at -90 degrees with a center of rotation at (3*sizeCell, -3*sizeCell)
+                    # 2nd) translate x+=2*cxText and y+= cyy
+                    # listOfMatrixItems.append(mySvgDrawer.Text(Point(0, 0),  str(nj),
+                    #                                           text_anchor="middle", size=sizeTextTicks, transform="translate(%s,%s) rotate(-90, %s, %s)" % (2*cxText, cyy, 3*sizeCell, -3*sizeCell)))
+                    listOfMatrixItems.append(mySvgDrawer.Text(Point(2*cxText, cyy),  str(nj), text_anchor="middle", size=sizeTextTicks))
+                    listOfMatrixItems.append(mySvgDrawer.Line(Point(0, cyy), Point(nx * sizeCell, cyy), width=sizeCell*0.1))
 
-                # The default center of rotation is at 3*sizeCase in x and -3*sizeCase in y
-                # "translate(2*cxText, cyy) rotate(-90, 3*sizeCell, -3*sizeCell)"
-                # means:
-                # 1st) rotate at -90 degrees with a center of rotation at (3*sizeCell, -3*sizeCell)
-                # 2nd) translate x+=2*cxText and y+= cyy
-                listOfMatrixItems.append(mySvgDrawer.Text(Point(0, 0),  str(nj),
-                                                          text_anchor="middle", size=sizeTextTicks, transform="translate(%s,%s) rotate(-90, %s, %s)" % (2*cxText, cyy, 3*sizeCell, -3*sizeCell)))
-                listOfMatrixItems.append(mySvgDrawer.Line(Point(0, cyy),
-                                                          Point(nx * sizeCell, cyy), width=sizeCell*0.1))
+        if (nx < 300 and ny < 300) or drawAllInformations:
+            for i in range(nbLinesX):
+                cxLine = i*sizeCell
+                listOfMatrixItems.append(mySvgDrawer.Line(Point(cxLine, height),
+                                                          Point(cxLine, height-((nbLinesY-1)*sizeCell)), width=sizeCell*0.01))
+            for j in range(nbLinesY):
+                cyLine = j*sizeCell
+                listOfMatrixItems.append(mySvgDrawer.Line(Point(0, height-(cyLine)),
+                                                          Point((nbLinesX-1)*sizeCell, height-(cyLine)), width=sizeCell*0.01))
 
-    if (nx < 300 and ny < 300) or drawAllInformations:
-        for i in range(nbLinesX):
-            cxLine = i*sizeCell
-            listOfMatrixItems.append(mySvgDrawer.Line(Point(cxLine, height),
-                                                      Point(cxLine, height-((nbLinesY-1)*sizeCell)), width=sizeCell*0.01))
-        for j in range(nbLinesY):
-            cyLine = j*sizeCell
-            listOfMatrixItems.append(mySvgDrawer.Line(Point(0, height-(cyLine)),
-                                                      Point((nbLinesX-1)*sizeCell, height-(cyLine)), width=sizeCell*0.01))
-
-        # fill homologies with +1, -1 or ? or 0
-        nonZeroValues = []
-        for i1 in hpSigns:
-            for i2 in hpSigns[i1]:
-                nonZeroValues.append((i1, i2))
-                s = hpSigns[i1][i2]
-                cx = i1*sizeCell + float(sizeCell)/2
-                cy = i2*sizeCell + float(sizeCell)/2
-                assert s == +1 or s == -1 or s is None, "s=%s" % s
-                assocValue = (("+" if s == +1 else "-") if s is not None else '?')
-                listOfMatrixItems.append(mySvgDrawer.Text(Point(cx, height-(cy+sizeText*0.16)),
-                                                          assocValue, text_anchor="middle", size=sizeText))
-        if nx < 20 and ny < 20:
-            for (i1, i2) in itertools.product(range(nx), range(ny)):
-                if (i1, i2) not in nonZeroValues:
+            # fill homologies with +1, -1 or ? or 0
+            nonZeroValues = []
+            for i1 in hpSigns:
+                for i2 in hpSigns[i1]:
+                    nonZeroValues.append((i1, i2))
+                    s = hpSigns[i1][i2]
                     cx = i1*sizeCell + float(sizeCell)/2
                     cy = i2*sizeCell + float(sizeCell)/2
+                    assert s == +1 or s == -1 or s is None, "s=%s" % s
+                    assocValue = (("+" if s == +1 else "-") if s is not None else '?')
                     listOfMatrixItems.append(mySvgDrawer.Text(Point(cx, height-(cy+sizeText*0.16)),
-                                                              "0", text_anchor="middle", size=sizeText,
-                                                              fill=(200, 200, 200), stroke=None))
+                                                              assocValue, text_anchor="middle", size=sizeText))
+            if nx < 20 and ny < 20:
+                for (i1, i2) in itertools.product(range(nx), range(ny)):
+                    if (i1, i2) not in nonZeroValues:
+                        cx = i1*sizeCell + float(sizeCell)/2
+                        cy = i2*sizeCell + float(sizeCell)/2
+                        listOfMatrixItems.append(mySvgDrawer.Text(Point(cx, height-(cy+sizeText*0.16)),
+                                                                  "0", text_anchor="middle", size=sizeText,
+                                                                  fill=(200, 200, 200), stroke=None))
     else:
         # represent homologies with a black rectangle
         for i1 in hpSigns:
@@ -588,6 +607,7 @@ def drawMatrix(nx, ny, (begC1, endC1), (begC2, endC2), hpSigns, diagsIndices, si
     return listOfMatrixItems
 
 
+
 # draw either the mh or the mhp, if draw mode is 'writeinTB'
 # inputs :
 #       genesStrandsCX = [+1, -1, ...] of length = to nX
@@ -598,82 +618,405 @@ def drawMatrix(nx, ny, (begC1, endC1), (begC2, endC2), hpSigns, diagsIndices, si
 #              with tb_CX_X : [..., i, ...] list of indices of genes in the tb
 #       diagIndices = [..., [...,(i16,j16),...], ...] list of diagonals with diagonals = list of all the points of the diagonal
 # output :
-#       string with the svg drawing of the mhp (or the mh)
+#       the svg drawing of the mhp (or the mh)
+def prepareHomologyMatrix(((begC1, endC1), (begC2, endC2)), (genesStrandsC1, genesStrandsC2),
+                       (genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
+                       (tbWithNoHomologyInWindowC1, tbWithNoHomologyInWindowC2),
+                       hpSigns, homologyGroupsInWindow, diagsIndices,
+                       maxWidth=100, maxHeight=100, symbolsInGenes=None,
+                       drawAllInformations=False,
+                       doDrawChromosomes=True,
+                       drawlinesNumbersAndSigns=True,
+                       scaleFactorRectangles=1):
+        # example
+        # genesStrandsC1 = [1,-1, None, ...]
+        # tbWithNoHomologyInWindowC1=[0,2,3,6,10]
+        # tbWithNoHomologyInWindowC2=[0,7]
+        # homologyGroupsInWindow=[([1],[5]),([4],[4]),([5],[3]),([9],[1]),([7],[6]),([8],[2])]
+        # diagsIndices=[[(4,4),(5,3),(8,2),(9,1)]]
+        # genesRemovedDuringFilteringC1=[]
+        # genesRemovedDuringFilteringC2=[]
+        # symbolsInGenes=[[1,1,1,1,1,1,1,2,2,1,1],[1,1,2,1,1,1,2,1]]
+        # hpSigns a collections.defaultdict() with hpSigns[i1][i2]=aV
+        assert isinstance(genesStrandsC1, list) and isinstance(genesStrandsC2, list)
+        assert isinstance(genesRemovedDuringFilteringC1, list) and isinstance(genesRemovedDuringFilteringC2, list)
+        assert isinstance(tbWithNoHomologyInWindowC1, list) and isinstance(tbWithNoHomologyInWindowC2, list)
+        assert isinstance(homologyGroupsInWindow, list)
+        assert isinstance(hpSigns, dict)
+        assert isinstance(diagsIndices, list)
+        # For the print on screen
+        begC1 = begC1 + 1
+        begC2 = begC2 + 1
+        endC1 = endC1 + 1
+        endC2 = endC2 + 1
+        # nx = number of genes on the first genome
+        # ny = number of genes on the second genome
+        nx = len(genesStrandsC1)
+        assert nx == endC1 - begC1 + 1
+        ny = len(genesStrandsC2)
+        assert ny == endC2 - begC2 + 1
+
+        # the size of the components of the matrix is chosen using the smallest and more restricting dimension
+        # (contains more genes comparing to its size)
+        sizeCase = float(min(float(maxWidth) / (nx + 3), float(maxHeight) / (ny + 3)))  # +3 for margins
+
+        width = (nx+3) * sizeCase
+        height = (ny+3) * sizeCase
+        print >> sys.stderr, "width=", width
+        print >> sys.stderr, "height=", height
+
+        closeColorsGenerator = levelIdxGenerator()
+
+        listOfMatrixItems = drawMatrix((begC1, endC1), (begC2, endC2), hpSigns, diagsIndices, sizeCase, width, height,
+                                       diagColorGenerator=None,
+                                       drawAllInformations=drawAllInformations,
+                                       drawlinesNumbersAndSigns=drawlinesNumbersAndSigns,
+                                       scaleFactorRectangles=scaleFactorRectangles)
+        listOfMatrixItems = mySvgDrawer.tanslateItems(listOfMatrixItems, Point(2 * sizeCase, - 2 * sizeCase))
+
+        listOfItems = []
+        if doDrawChromosomes and nx < 300 and ny < 300:
+            (chromosome1, chromosome2) = drawChromosomes(genesStrandsC1, tbWithNoHomologyInWindowC1, genesRemovedDuringFilteringC1,
+                                                         genesStrandsC2, tbWithNoHomologyInWindowC2, genesRemovedDuringFilteringC2,
+                                                         homologyGroupsInWindow, closeColorsGenerator,
+                                                         symbolsInGenes, sizeCase,
+                                                         )
+
+            chromosome1 = mySvgDrawer.tanslateItems(chromosome1, Point(2 * sizeCase, height))
+            for item in chromosome2:
+                if isinstance(item, mySvgDrawer.Gene):
+                    item.start = Point(0, height - item.start.x - 2 * sizeCase)
+                    item.end = Point(0, height - item.end.x - 2 * sizeCase)
+                elif isinstance(item, mySvgDrawer.Line):
+                    item.start = Point(0, height - item.start.x - 2 * sizeCase)
+                    item.end = Point(0, height - item.end.x - 2 * sizeCase)
+                else:
+                    raise TypeError
+            listOfItems = chromosome1 + chromosome2
+
+        listOfItems += listOfMatrixItems
+        listOfItems = mySvgDrawer.tanslateItems(listOfItems, Point(sizeCase, -sizeCase))
+
+        return listOfItems
+
 def drawHomologyMatrix(((begC1, endC1), (begC2, endC2)), (genesStrandsC1, genesStrandsC2),
                        (genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
                        (tbWithNoHomologyInWindowC1, tbWithNoHomologyInWindowC2),
                        hpSigns, homologyGroupsInWindow, diagsIndices,
-                       outputFileName=None, maxWidth=100, maxHeight=100, symbolsInGenes=None,
+                       outputFileName=None, maxWidth=100, maxHeight=100,
+                       symbolsInGenes=None,
                        drawAllInformations=False,
+                       doDrawChromosomes=True,
                        scaleFactorRectangles=1):
-    # example
-    # genesStrandsC1 = [1,-1, None, ...]
-    # tbWithNoHomologyInWindowC1=[0,2,3,6,10]
-    # tbWithNoHomologyInWindowC2=[0,7]
-    # homologyGroupsInWindow=[([1],[5]),([4],[4]),([5],[3]),([9],[1]),([7],[6]),([8],[2])]
-    # diagsIndices=[[(4,4),(5,3),(8,2),(9,1)]]
-    # genesRemovedDuringFilteringC1=[]
-    # genesRemovedDuringFilteringC2=[]
-    # symbolsInGenes=[[1,1,1,1,1,1,1,2,2,1,1],[1,1,2,1,1,1,2,1]]
-    # hpSigns a collections.defaultdict() with hpSigns[i1][i2]=aV
-    assert isinstance(genesStrandsC1, list) and isinstance(genesStrandsC2, list)
-    assert isinstance(genesRemovedDuringFilteringC1, list) and isinstance(genesRemovedDuringFilteringC2, list)
-    assert isinstance(tbWithNoHomologyInWindowC1, list) and isinstance(tbWithNoHomologyInWindowC2, list)
-    assert isinstance(homologyGroupsInWindow, list)
-    assert isinstance(hpSigns, dict)
-    assert isinstance(diagsIndices, list)
-    # For the print on screen
-    begC1 = begC1 + 1
-    begC2 = begC2 + 1
-    endC1 = endC1 + 1
-    endC2 = endC2 + 1
-    # nx = number of genes on the first genome
-    # ny = number of genes on the second genome
-    nx = len(genesStrandsC1)
-    ny = len(genesStrandsC2)
 
-    # the size of the components of the matrix is chosen using the smallest and more restricting dimension
-    # (contains more genes comparing to its size)
-    sizeCase = float(min(float(maxWidth) / (nx + 3), float(maxHeight) / (ny + 3)))  # +3 for margins
+    scene = mySvgDrawer.Scene(name='homology_matrix', width=maxWidth, height=maxHeight)
 
-    width = float(nx+3) * sizeCase
-    height = float(ny+3) * sizeCase
+    listOfItems = prepareHomologyMatrix(((begC1, endC1), (begC2, endC2)), (genesStrandsC1, genesStrandsC2),
+                       (genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
+                       (tbWithNoHomologyInWindowC1, tbWithNoHomologyInWindowC2),
+                       hpSigns, homologyGroupsInWindow, diagsIndices,
+                       maxWidth=maxWidth, maxHeight=maxHeight,
+                       symbolsInGenes=symbolsInGenes,
+                       drawAllInformations=drawAllInformations,
+                       doDrawChromosomes=doDrawChromosomes,
+                       scaleFactorRectangles=scaleFactorRectangles)
+
+    for item in listOfItems:
+        scene.add(item)
+    if outputFileName is not None:
+        scene.write_svg(filename=str(outputFileName))
+    #scene.display()
+    return listOfItems
+
+def writeSVGFileForPairwiseCompOfGenomes(genomeName1,
+                                         genomeName2,
+                                         HMs,
+                                         chromosomesRewrittenInTbs,
+                                         filterType,
+                                         tandemGapMax,
+                                         gapMax,
+                                         distanceMetric,
+                                         gapMaxMicroInv,
+                                         identifyBreakpointsWithinGaps,
+                                         overlapMax,
+                                         nbSbs,
+                                         outImageFileName,
+                                         switchOnDirectView):
+    # KEEP
+    # copy the css style sheet
+    # dirNameImage = os.path.dirname(outImageFileName)
+    # dirNameImage = dirNameImage if dirNameImage != "" else "."
+    # print >> sys.stderr, "cp %s/styleForHomologyMatrixWithSBs.css %s/" % (os.path.dirname(os.path.realpath(sys.argv[0])), dirNameImage)
+    # os.system("cp %s/styleForHomologyMatrixWithSBs.css %s/" % (os.path.dirname(os.path.realpath(sys.argv[0])), dirNameImage))
+
+    # Header of the SVG file
+    height = 100
+    width = 100
+    var = ['<?xml version="1.0" encoding="utf-8" standalone="no"?>\n',
+           # KEEP
+           # Warning : requests the css file
+           #'<?xml-stylesheet type="text/css" href="styleForHomologyMatrixWithSBs.css" ?>\n',
+           '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n',
+           "<svg height=\"100%%\" version=\"1.1\" viewBox=\"0 0 %s %s\" width=\"100%%\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n" % (width, height),
+           '<defs>\n',
+              '<style type="text/css">\n',
+                 '*{stroke-linecap:square;stroke-linejoin:round;}\n',
+              '</style>\n',
+           '</defs>\n'
+           '<g style="fill-opacity:1.0; stroke:black; stroke-width:1;">\n']
+
+    # Title
+    title = \
+        "%s, f=%s, tgm=%s tbs, gm=%s%s, gmmi=%s, ibwg=%s, om=%s, %s sbs" % \
+        ('MHPs' if chromosomesRewrittenInTbs else 'MHs',
+         filterType,
+         tandemGapMax,
+         gapMax,
+         distanceMetric,
+         gapMaxMicroInv,
+         identifyBreakpointsWithinGaps,
+         overlapMax,
+         nbSbs)
+    var += ['<svg x="5" y="0" viewBox="5 0 95 5" width="95" height="5">\n',
+            ''.join(mySvgDrawer.Text(mySvgDrawer.Point(float(5 + 95)/2.0, 5.0/2.0), title,
+                                     text_anchor='middle', fontWeight=300, size=2).strarray()),
+            '</svg>\n']
+
+    # Add legends (genomes names and ranges)
+    var += [
+        # X-axis genome1
+        '<svg x="5" y="95" viewBox="0 0 95 5" width="95" height="5">\n',
+        ''.join(mySvgDrawer.Text(mySvgDrawer.Point(float(5 + 95)/2, 5.0/2.0),
+                                 str(genomeName1),
+                                 text_anchor='middle', fontWeight=300, size=2).strarray()),
+        '</svg>\n',
+        # Y-axis genome2
+        '<svg x="0" y="0" viewBox="0 0 5 95" width="5" height="95">\n',
+        ''.join(mySvgDrawer.Text(mySvgDrawer.Point(5.0/2.0, float(5 + 95)/2.0),
+                                 str(genomeName2),
+                                 text_anchor='middle', size=2, fontWeight=300,
+                                 transform='rotate(-90, %s, %s)' % (5.0/2.0, float(5 + 95)/2.0)).strarray()),
+        '</svg>\n'
+    ]
+
+    # Add the matrix of homologies (packs)
+    # little transformation : viewBox = "the part of the forthcoming images that we want to see", width and height = the
+    # width and height of the image that will be printed on the screen. This instructions takes a viewBox of the
+    # forthcoming images and display it in a image of the specified width and height
+    var += ['<svg preserveAspectRatio="xMidYMid meet" x="5" y="5" viewBox="0 0 100 100" width="90" height="90" >\n']
+    for line in HMs.strarray():
+        # or line.find("<svg")>=0 or line.find("</svg")>=0:
+        if line.find("<?xml") >= 0 or line.find("<!DOCTYPE") >= 0:
+            continue
+        else:
+            var += line
+    var += ["</svg>\n"]
+    var += ["</g>\n", "</svg>\n"]
+
+    file = open(outImageFileName, 'w')
+    file.writelines(var)
+    file.close()
+    if switchOnDirectView:
+        os.system("%s %s" % ('firefox', outImageFileName))
+
+
+def writeSVGFileForPairwiseCompOfChrs(genomeName1, chr1, range1,
+                                      genomeName2, chr2, range2,
+                                      HM,
+                                      chromosomesRewrittenInTbs,
+                                      filterType,
+                                      tandemGapMax,
+                                      gapMax,
+                                      distanceMetric,
+                                      gapMaxMicroInv,
+                                      identifyBreakpointsWithinGaps,
+                                      overlapMax,
+                                      nbSbs,
+                                      outImageFileName,
+                                      switchOnDirectView):
+
+    # KEEP
+    # copy the css style sheet
+    # dirNameImage = os.path.dirname(outImageFileName)
+    # dirNameImage = dirNameImage if dirNameImage != "" else "."
+    # print >> sys.stderr, "cp %s/styleForHomologyMatrixWithSBs.css %s/" % (os.path.dirname(os.path.realpath(sys.argv[0])), dirNameImage)
+    # os.system("cp %s/styleForHomologyMatrixWithSBs.css %s/" % (os.path.dirname(os.path.realpath(sys.argv[0])), dirNameImage))
+
+    # Header of the SVG file
+    height = 100
+    width = 100
+    var = ['<?xml version="1.0" encoding="utf-8" standalone="no"?>\n',
+           # KEEP
+           # Warning : requests the css file
+           #'<?xml-stylesheet type="text/css" href="styleForHomologyMatrixWithSBs.css" ?>\n',
+           '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n',
+           "<svg height=\"100%%\" version=\"1.1\" viewBox=\"0 0 %s %s\" width=\"100%%\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n" % (width, height),
+           '<defs>\n',
+              '<style type="text/css">\n',
+                 '*{stroke-linecap:square;stroke-linejoin:round;}\n',
+              '</style>\n',
+           '</defs>\n'
+           '<g style="fill-opacity:1.0; stroke:black; stroke-width:1;">\n']
+
+    # Title
+    title = \
+        "%s, f=%s, tgm=%s tbs, gm=%s%s, gmmi=%s, ibwg=%s, om=%s, %s sbs" % \
+        ('MHP' if chromosomesRewrittenInTbs else 'MH',
+         filterType,
+         tandemGapMax,
+         gapMax,
+         distanceMetric,
+         gapMaxMicroInv,
+         identifyBreakpointsWithinGaps,
+         overlapMax,
+         nbSbs)
+    var += ['<svg x="5" y="0" viewBox="5 0 95 5" width="95" height="5">\n',
+            ''.join(mySvgDrawer.Text(mySvgDrawer.Point(float(5 + 95)/2.0, 5.0/2.0), title,
+                                     text_anchor='middle', fontWeight=300, size=2).strarray()),
+            '</svg>\n']
+
+    # Add legends (genomes names and ranges)
+    var += [
+        # X-axis genome1
+        '<svg x="5" y="95" viewBox="0 0 95 5" width="95" height="5">\n',
+        ''.join(mySvgDrawer.Text(mySvgDrawer.Point(float(5 + 95)/2, 5.0/2.0),
+                                 str(genomeName1) + " chr" + str(chr1) + ":" + str(range1[0]+1) + "-" + str(range1[1]),
+                                 text_anchor='middle', fontWeight=300, size=2).strarray()),
+        '</svg>\n',
+        # Y-axis genome2
+        '<svg x="0" y="0" viewBox="0 0 5 95" width="5" height="95">\n',
+        ''.join(mySvgDrawer.Text(mySvgDrawer.Point(5.0/2.0, float(5 + 95)/2.0),
+                                 str(genomeName2) + " chr" + str(chr2) + ":" + str(range2[0]+1) + "-" + str(range2[1]),
+                                 text_anchor='middle', size=2, fontWeight=300,
+                                 transform='rotate(-90, %s, %s)' % (5.0/2.0, float(5 + 95)/2.0)).strarray()),
+        '</svg>\n'
+    ]
+
+    # Add the matrix of homologies (packs)
+    # little transformation : viewBox = "the part of the forthcoming images that we want to see", width and height = the
+    # width and height of the image that will be printed on the screen. This instructions takes a viewBox of the
+    # forthcoming images and display it in a image of the specified width and height
+    var += ['<svg preserveAspectRatio="xMidYMid meet" x="5" y="5" viewBox="0 0 100 100" width="90" height="90" >\n']
+    for line in HM.strarray():
+        # or line.find("<svg")>=0 or line.find("</svg")>=0:
+        if line.find("<?xml") >= 0 or line.find("<!DOCTYPE") >= 0:
+            continue
+        else:
+            var += line
+    var += ["</svg>\n"]
+    var += ["</g>\n", "</svg>\n"]
+
+    file = open(outImageFileName, 'w')
+    file.writelines(var)
+    file.close()
+    if switchOnDirectView:
+        os.system("%s %s" % ('firefox', outImageFileName))
+
+
+def wholeGenomeHomologyMatrices(genome1, genome2, families, inSbsInPairComp=None, maxWidth=100, maxHeight=100,
+                                filterType=FilterType.InBothGenomes,
+                                minChromLength=0,
+                                tandemGapMax=0,
+                                outputFileName='toto.svg',
+                                scaleFactorRectangles=4.0):
+
+    assert isinstance(genome1, myLightGenomes.LightGenome)
+    assert isinstance(genome2, myLightGenomes.LightGenome)
+    assert isinstance(families, myLightGenomes.Families)
+    assert inSbsInPairComp is None or isinstance(inSbsInPairComp, myTools.Dict2d)
+
+    if inSbsInPairComp is not None:
+        sbsInPairComp = inSbsInPairComp
+    else:
+        sbsInPairComp = myTools.Dict2d(list)
+
+
+    cx = len(genome1.keys())
+    # whole number of genes on the x-axis genome (genome1)
+    wnx = sum([len(chrom) for chrom in genome1.values()])
+
+    cy = len(genome2.keys())
+    # whole number of genes on the y-axis genome (genome2)
+    wny = sum([len(chrom) for chrom in genome2.values()])
+
+    drawChromosomes = True if max(wny, wnx) <= 300 else False
+
+    # the size of the components of the matrices is chosen using the smallest and more restricting dimension
+    # the smallest dimension is the one that contains more genes and chromosome borders compared to its size
+    sizeCase = float(min(float(maxWidth) / (wnx + cx), float(maxHeight) / (wny + cy)))
+
+    width = (wnx + cx) * sizeCase
+    height = (wny + cy) * sizeCase
     print >> sys.stderr, "width=", width
     print >> sys.stderr, "height=", height
 
     scene = mySvgDrawer.Scene(name='homology_matrix', width=width, height=height)
 
-    closeColorsGenerator = levelIdxGenerator()
+    # sort chromosome by decreasing lengths
+    sortedChrs1 = [c for (c, nbGenes) in sorted(genome1.iteritems(), key=lambda x: len(x[1]), reverse=True)]
+    sortedChrs2 = [c for (c, nbGenes) in sorted(genome2.iteritems(), key=lambda x: len(x[1]), reverse=True)]
 
-    listOfMatrixItems = drawMatrix(nx, ny, (begC1, endC1), (begC2, endC2), hpSigns, diagsIndices, sizeCase, width, height,
-                                   diagColorGenerator=None,
-                                   drawAllInformations=drawAllInformations,
-                                   scaleFactorRectangles=scaleFactorRectangles)
-    listOfMatrixItems = mySvgDrawer.tanslateItems(listOfMatrixItems, Point(2 * sizeCase, - 2 * sizeCase))
-
+    # for each pairwise comparison prepare the homology matrix
+    cumulatedX = 0
+    cumulatedY = 0
     listOfItems = []
-    if nx < 300 and ny < 300:
-        (chromosome1, chromosome2) = drawChromosomes(genesStrandsC1, tbWithNoHomologyInWindowC1, genesRemovedDuringFilteringC1,
-                                                     genesStrandsC2, tbWithNoHomologyInWindowC2, genesRemovedDuringFilteringC2,
-                                                     homologyGroupsInWindow, closeColorsGenerator,
-                                                     symbolsInGenes, sizeCase,
-                                                     )
+    progressBar = myTools.ProgressBar(len(sortedChrs1) * len(sortedChrs2))
+    ((g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2)) = editGenomes(genome1, genome2, families,
+                                                                           filterType, minChromLength, tandemGapMax)
+    for (i1, c1) in enumerate(sortedChrs1):
+        nx = len(genome1[c1])
+        begC1 = 0
+        endC1 = nx - 1
+        # vertical line separating chromosome comparisons on the x-axis
+        listOfItems.append(mySvgDrawer.Line(Point(cumulatedX,      0),
+                                            Point(cumulatedX, height), width=float(width)/2000))
+        for (i2, c2) in enumerate(sortedChrs2):
+            ny = len(genome2[c2])
+            # vertical line separating chromosome comparisons on the y-axis
+            listOfItems.append(mySvgDrawer.Line(Point(0,     cumulatedY),
+                                                Point(width, cumulatedY), width=float(width)/2000))
+            begC2 = 0
+            endC2 = ny - 1
 
-        chromosome1 = mySvgDrawer.tanslateItems(chromosome1, Point(2 * sizeCase, height))
-        for item in chromosome2:
-            if isinstance(item, mySvgDrawer.Gene):
-                item.start = Point(0, height - item.start.x - 2 * sizeCase)
-                item.end = Point(0, height - item.end.x - 2 * sizeCase)
-            elif isinstance(item, mySvgDrawer.Line):
-                item.start = Point(0, height - item.start.x - 2 * sizeCase)
-                item.end = Point(0, height - item.end.x - 2 * sizeCase)
-            else:
-                raise TypeError
-        listOfItems = chromosome1 + chromosome2
+            genesDiagIndices = []
+            for sb in sbsInPairComp[c1][c2]:
+                genesDiagIndices.append([])
+                for idxHp, aG in enumerate(sb.la):
+                    for (gi1, gi2) in itertools.product(sb.l1[idxHp], sb.l2[idxHp]):
+                        genesDiagIndices[-1].append((gi1, gi2))
 
-    listOfItems += listOfMatrixItems
-    listOfItems = mySvgDrawer.tanslateItems(listOfItems, Point(sizeCase, -sizeCase))
+            # Build Genes Strands
+            genesStrandsC1 = [s for (_, s) in genome1[c1]]
+            genesStrandsC2 = [s for (_, s) in genome2[c2]]
 
+            ((genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2), genesHomologiesHpSign,
+             (genesNoHomologiesInWindowC1, genesNoHomologiesInWindowC2), genesHomologyGroupsInWindow) = \
+                computeHomologyInformations(c1, c2, (g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2))
+
+            listOfMatrixItems = prepareHomologyMatrix(((begC1, endC1), (begC2, endC2)), (genesStrandsC1, genesStrandsC2),
+                       (genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
+                       (genesNoHomologiesInWindowC1, genesNoHomologiesInWindowC2),
+                       genesHomologiesHpSign, genesHomologyGroupsInWindow, genesDiagIndices,
+                       maxWidth=(nx * sizeCase), maxHeight=(ny * sizeCase), symbolsInGenes=None,
+                       drawAllInformations=False,
+                       doDrawChromosomes=drawChromosomes,
+                       drawlinesNumbersAndSigns=drawChromosomes,
+                       scaleFactorRectangles=scaleFactorRectangles)
+            print >> sys.stderr, 'len(listOfMatrixItems)=', len(listOfMatrixItems)
+
+            listOfMatrixItems = mySvgDrawer.tanslateItems(listOfMatrixItems, Point(cumulatedX, cumulatedY))
+            cumulatedY += ny * sizeCase + sizeCase
+            listOfItems += listOfMatrixItems
+            print >> sys.stderr, 'len(listOfItems)=', len(listOfItems)
+            progressBar.printProgressIn(sys.stderr, i1 + i2)
+        # last line for the y axis
+        listOfItems.append(mySvgDrawer.Line(Point(0,     cumulatedY),
+                                            Point(width, cumulatedY), width=float(width)/2000))
+        cumulatedY = 0
+        cumulatedX += nx * sizeCase + sizeCase
+    # last line for the x axis
+    listOfItems.append(mySvgDrawer.Line(Point(cumulatedX,      0),
+                                        Point(cumulatedX, height), width=float(width)/2000))
     for item in listOfItems:
         scene.add(item)
     if outputFileName is not None:
@@ -681,7 +1024,60 @@ def drawHomologyMatrix(((begC1, endC1), (begC2, endC2)), (genesStrandsC1, genesS
     #scene.display()
     return scene
 
-FilterType = myDiags.FilterType
+def homologyMatrixViewer(genome1, genome2, families,
+                         convertGenicToTbCoordinates=False,
+                         filterType=FilterType.InBothGenomes,
+                         minChromLength = 2,
+                         tandemGapMax=0,
+                         distanceMetric='CD',
+                         gapMax=None,
+                         distinguishMonoGenicDiags=True,
+                         pThreshold=None,
+                         gapMaxMicroInv=0,
+                         identifyMonoGenicInversion=False,
+                         identifyBreakpointsWithinGaps=True,
+                         overlapMax=None,
+                         consistentSwDType=True,
+                         validateImpossToCalc_mThreshold=3,
+                         nbHpsRecommendedGap=2,
+                         targetProbaRecommendedGap=0.01,
+                         chromosomesRewrittenInTbs=False,
+                         drawAllInformations=False,
+                         scaleFactorRectangles=2.0,
+                         considerAllPairComps=True,
+                         switchOnDirectView=False,
+                         optimisation=None,
+                         inSbsInPairComp=None,
+                         outSyntenyBlocksFileName="./syntenyBlocksDrawer.txt",
+                         outImageFileName="./homologyMatrix.svg",
+                         verbose=True):
+
+    HMs = wholeGenomeHomologyMatrices(genome1, genome2, families, inSbsInPairComp=inSbsInPairComp,
+                                      maxWidth=100, maxHeight=100,
+                                      filterType=FilterType.InBothGenomes,
+                                      minChromLength=0,
+                                      tandemGapMax=0,
+                                      outputFileName='toto.svg')
+    if inSbsInPairComp is not None:
+        nbSbs = len(list(inSbsInPairComp.iteritems2d))
+    else:
+        nbSbs = 'None'
+
+    writeSVGFileForPairwiseCompOfGenomes(genome1.name,
+                                         genome2.name,
+                                         HMs,
+                                         chromosomesRewrittenInTbs,
+                                         filterType,
+                                         tandemGapMax,
+                                         gapMax,
+                                         distanceMetric,
+                                         gapMaxMicroInv,
+                                         identifyBreakpointsWithinGaps,
+                                         overlapMax,
+                                         nbSbs,
+                                         outImageFileName,
+                                         switchOnDirectView)
+
 
 def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                          convertGenicToTbCoordinates=False,
@@ -797,15 +1193,13 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                     assert range2[0] <= gi2 <= range2[1]
                     genesDiagIndices[-1].append((gi1 - range1[0], gi2 - range2[0]))
 
-        ###
         # Build Genes Strands
-        ###
         genesStrandsC1 = [s for (_, s) in chrom1[chr1]]
         genesStrandsC2 = [s for (_, s) in chrom2[chr2]]
 
         ((genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2), genesHomologiesHpSign,
          (genesNoHomologiesInWindowC1, genesNoHomologiesInWindowC2), genesHomologyGroupsInWindow) = \
-        genesComputeHomologyInformations(chr1, chr2, chrom1, chrom2,
+        editGenomesAndComputeHomologyInformations(chr1, chr2, chrom1, chrom2,
                                          families,
                                          filterType,
                                          minChromLength,
@@ -943,13 +1337,6 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                                scaleFactorRectangles=scaleFactorRectangles
                                )
 
-    # KEEP
-    # copy the css style sheet
-    # dirNameImage = os.path.dirname(outImageFileName)
-    # dirNameImage = dirNameImage if dirNameImage != "" else "."
-    # print >> sys.stderr, "cp %s/styleForHomologyMatrixWithSBs.css %s/" % (os.path.dirname(os.path.realpath(sys.argv[0])), dirNameImage)
-    # os.system("cp %s/styleForHomologyMatrixWithSBs.css %s/" % (os.path.dirname(os.path.realpath(sys.argv[0])), dirNameImage))
-
     # write a simple file with all diagonals into output file
     with open(outSyntenyBlocksFileName, 'w') as f:
         print >> f, "Mode : %s" % 'Genic scale' if chromosomesRewrittenInTbs is False else 'Tandem Blocks scale'
@@ -970,75 +1357,21 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
             # indices of genes start at 1 to be coherent with the output image
             print >> f, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (chr1, minl1 + 1, maxl1 + 1, chr2, minl2 + 1, maxl2 + 1, len(sb.la), sb.pVal)
 
-    # Header of the SVG file
-    height = 100
-    width = 100
-    var = ['<?xml version="1.0" encoding="utf-8" standalone="no"?>\n',
-           # KEEP
-           # Warning : requests the css file
-           #'<?xml-stylesheet type="text/css" href="styleForHomologyMatrixWithSBs.css" ?>\n',
-           '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n',
-           "<svg height=\"100%%\" version=\"1.1\" viewBox=\"0 0 %s %s\" width=\"100%%\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n" % (width, height),
-           '<defs>\n',
-              '<style type="text/css">\n',
-                 '*{stroke-linecap:square;stroke-linejoin:round;}\n',
-              '</style>\n',
-           '</defs>\n'
-           '<g style="fill-opacity:1.0; stroke:black; stroke-width:1;">\n']
-
-    # Title
-    title = \
-        "%s, f=%s, tgm=%s tbs, gm=%s%s, gmmi=%s, ibwg=%s, om=%s, %s sbs" % \
-        ('MHP' if chromosomesRewrittenInTbs else 'MH',
-         filterType,
-         tandemGapMax,
-         gapMax,
-         distanceMetric,
-         gapMaxMicroInv,
-         identifyBreakpointsWithinGaps,
-         overlapMax,
-         len(list(sbsInPairComp.iteritems2d())))
-    var += ['<svg x="5" y="0" viewBox="5 0 95 5" width="95" height="5">\n',
-            ''.join(mySvgDrawer.Text(mySvgDrawer.Point(float(5 + 95)/2.0, 5.0/2.0), title,
-                                     text_anchor='middle', fontWeight=300, size=2).strarray()),
-            '</svg>\n']
-
-    # Add legends (genomes names and ranges)
-    var += [
-        # X-axis genome1
-        '<svg x="5" y="95" viewBox="0 0 95 5" width="95" height="5">\n',
-        ''.join(mySvgDrawer.Text(mySvgDrawer.Point(float(5 + 95)/2, 5.0/2.0),
-                                 str(genome1.name) + " chr" + str(chr1) + ":" + str(range1[0]+1) + "-" + str(range1[1]),
-                                 text_anchor='middle', fontWeight=300, size=2).strarray()),
-        '</svg>\n',
-        # Y-axis genome2
-        '<svg x="0" y="0" viewBox="0 0 5 95" width="5" height="95">\n',
-        ''.join(mySvgDrawer.Text(mySvgDrawer.Point(5.0/2.0, float(5 + 95)/2.0),
-                                 str(genome2.name) + " chr" + str(chr2) + ":" + str(range2[0]+1) + "-" + str(range2[1]),
-                                 text_anchor='middle', size=2, fontWeight=300,
-                                 transform='rotate(-90, %s, %s)' % (5.0/2.0, float(5 + 95)/2.0)).strarray()),
-        '</svg>\n'
-    ]
-
-    # Add the matrix of homologies (packs)
-    # little transformation : viewBox = "the part of the forthcoming images that we want to see", width and height = the
-    # width and height of the image that will be printed on the screen. This instructions takes a viewBox of the
-    # forthcoming images and display it in a image of the specified width and height
-    var += ['<svg preserveAspectRatio="xMidYMid meet" x="5" y="5" viewBox="0 0 100 100" width="90" height="90" >\n']
-    for line in HM.strarray():
-        # or line.find("<svg")>=0 or line.find("</svg")>=0:
-        if line.find("<?xml") >= 0 or line.find("<!DOCTYPE") >= 0:
-            continue
-        else:
-            var += line
-    var += ["</svg>\n"]
-    var += ["</g>\n", "</svg>\n"]
-
-    file = open(outImageFileName, 'w')
-    file.writelines(var)
-    file.close()
-    if switchOnDirectView:
-        os.system("%s %s" % ('firefox', outImageFileName))
+    nbSbs = len(list(sbsInPairComp.iteritems2d()))
+    writeSVGFileForPairwiseCompOfChrs(genome1.name, chr1, range1,
+                                      genome2.name, chr2, range2,
+                                      HM,
+                                      chromosomesRewrittenInTbs,
+                                      filterType,
+                                      tandemGapMax,
+                                      gapMax,
+                                      distanceMetric,
+                                      gapMaxMicroInv,
+                                      identifyBreakpointsWithinGaps,
+                                      overlapMax,
+                                      nbSbs,
+                                      outImageFileName,
+                                      switchOnDirectView)
 
 
 
@@ -1134,3 +1467,16 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
         else:
             return (chrom1, chrom2, range1, range2)
 
+if __name__ == '__main__':
+    # genome1 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Homo.sapiens.light2.list.bz2')
+    # genome2 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Mus.musculus.light.list.bz2')
+    families = myLightGenomes.Families('/home/jlucas/Libs/PhylDiag/data/ancGenes.Amniota.list.bz2')
+    genome1 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Homo.sapiens.list.bz2')
+    genome2 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Mus.musculus.list.bz2')
+    #families = myLightGenomes.Families('/home/jlucas/Libs/PhylDiag/data/ancGenes.Euarchontoglires.list.bz2')
+    wholeGenomeHomologyMatrices(genome1, genome2, families, inSbsInPairComp=None, maxWidth=100, maxHeight=100,
+                                filterType=FilterType.None,
+                                minChromLength=0,
+                                tandemGapMax=0,
+                                outputFileName='toto.svg',
+                                scaleFactorRectangles=10)
