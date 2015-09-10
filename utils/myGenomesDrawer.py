@@ -139,10 +139,10 @@ def editGenomes(genome1, genome2, families, filterType, minChromLength, tandemGa
                                                              mOld=Gf2GfID2)
     return ((g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2))
 
-def computeHomologyInformations(chr1, chr2, (g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2)):
+def computeHomologyInformations(chr1, chr2, (g1, g1_tb, g1_fID, Gtb2GfID1), (g2, g2_tb, g2_fID, Gtb2GfID2)):
     #Focus on the chromosome of the window
-    chrom1_ = genome1[chr1]
-    chrom2_ = genome2[chr2]
+    chrom1_ = g1[chr1]
+    chrom2_ = g2[chr2]
     c1_fID = g1_fID[chr1]
     c2_fID = g2_fID[chr2]
     chrom1_tb = g1_tb[chr1] if chr1 in g1_tb else []
@@ -202,7 +202,8 @@ def editGenomesAndComputeHomologyInformations(chr1, chr2, genome1, genome2, fami
      genesHomologiesHpSign,
      (genesNoHomologiesInWindowC1, genesNoHomologiesInWindowC2),
      genesHomologyGroupsInWindow) = computeHomologyInformations(chr1, chr2,
-                                                                (g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2))
+                                                                (genome1, g1_tb, g1_fID, Gtb2GfID1),
+                                                                (genome2, g2_tb, g2_fID, Gtb2GfID2))
 
     return ((genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
             genesHomologiesHpSign,
@@ -913,12 +914,14 @@ def writeSVGFileForPairwiseCompOfChrs(genomeName1, chr1, range1,
         os.system("%s %s" % ('firefox', outImageFileName))
 
 
-def wholeGenomeHomologyMatrices(genome1, genome2, families, inSbsInPairComp=None, maxWidth=100, maxHeight=100,
+def wholeGenomeHomologyMatrices(genome1, genome2, families,
+                                inSbsInPairComp=None,
                                 filterType=FilterType.InBothGenomes,
                                 minChromLength=0,
                                 tandemGapMax=0,
                                 outputFileName='toto.svg',
-                                scaleFactorRectangles=4.0):
+                                scaleFactorRectangles=4.0,
+                                maxWidth=100, maxHeight=100):
 
     assert isinstance(genome1, myLightGenomes.LightGenome)
     assert isinstance(genome2, myLightGenomes.LightGenome)
@@ -943,10 +946,15 @@ def wholeGenomeHomologyMatrices(genome1, genome2, families, inSbsInPairComp=None
 
     # the size of the components of the matrices is chosen using the smallest and more restricting dimension
     # the smallest dimension is the one that contains more genes and chromosome borders compared to its size
-    sizeCase = float(min(float(maxWidth) / (wnx + cx), float(maxHeight) / (wny + cy)))
 
-    width = (wnx + cx) * sizeCase
-    height = (wny + cy) * sizeCase
+    # room for chromosome names
+    lchrNames = min(float(maxWidth)/50, float(maxHeight)/50)
+    # wnx units for homologies
+    # cx+1 for boundaries between chromosomes
+    # same for wny and and cy+1
+    sizeCase = min(float(maxWidth - lchrNames) / (wnx + (cx+1)), float(maxHeight - lchrNames) / (wny + (cy+1)))
+    width  = (wnx + (cx + 1)) * sizeCase + lchrNames
+    height = (wny + (cy + 1)) * sizeCase + lchrNames
     print >> sys.stderr, "width=", width
     print >> sys.stderr, "height=", height
 
@@ -963,18 +971,24 @@ def wholeGenomeHomologyMatrices(genome1, genome2, families, inSbsInPairComp=None
     progressBar = myTools.ProgressBar(len(sortedChrs1) * len(sortedChrs2))
     ((g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2)) = editGenomes(genome1, genome2, families,
                                                                            filterType, minChromLength, tandemGapMax)
+    listOfChrNames = []
     for (i1, c1) in enumerate(sortedChrs1):
+        # vertical line separating chromosome comparisons on the x-axis
+        listOfItems.append(mySvgDrawer.Line(Point(cumulatedX,                           0),
+                                            Point(cumulatedX, (wny + (cy + 1)) * sizeCase), width=float(width)/2000))
         nx = len(genome1[c1])
+        listOfChrNames.append(mySvgDrawer.Text(Point(cumulatedX + float(nx * sizeCase)/2 + lchrNames, float(lchrNames)/2),
+                                               c1, size=float(lchrNames)/3, text_anchor='middle'))
         begC1 = 0
         endC1 = nx - 1
-        # vertical line separating chromosome comparisons on the x-axis
-        listOfItems.append(mySvgDrawer.Line(Point(cumulatedX,      0),
-                                            Point(cumulatedX, height), width=float(width)/2000))
         for (i2, c2) in enumerate(sortedChrs2):
-            ny = len(genome2[c2])
             # vertical line separating chromosome comparisons on the y-axis
-            listOfItems.append(mySvgDrawer.Line(Point(0,     cumulatedY),
-                                                Point(width, cumulatedY), width=float(width)/2000))
+            listOfItems.append(mySvgDrawer.Line(Point(0,                           cumulatedY),
+                                                Point((wnx + (cx + 1)) * sizeCase, cumulatedY), width=float(width)/2000))
+            ny = len(genome2[c2])
+            if i1 == 0:
+                listOfChrNames.append(mySvgDrawer.Text(Point(float(lchrNames)/2, cumulatedY + float(ny * sizeCase)/2 + lchrNames),
+                                                       c2, size=float(lchrNames)/3, text_anchor='middle'))
             begC2 = 0
             endC2 = ny - 1
 
@@ -991,7 +1005,9 @@ def wholeGenomeHomologyMatrices(genome1, genome2, families, inSbsInPairComp=None
 
             ((genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2), genesHomologiesHpSign,
              (genesNoHomologiesInWindowC1, genesNoHomologiesInWindowC2), genesHomologyGroupsInWindow) = \
-                computeHomologyInformations(c1, c2, (g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2))
+                computeHomologyInformations(c1, c2,
+                                            (genome1, g1_tb, g1_fID, Gtb2GfID1),
+                                            (genome2, g2_tb, g2_fID, Gtb2GfID2))
 
             listOfMatrixItems = prepareHomologyMatrix(((begC1, endC1), (begC2, endC2)), (genesStrandsC1, genesStrandsC2),
                        (genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
@@ -1003,20 +1019,23 @@ def wholeGenomeHomologyMatrices(genome1, genome2, families, inSbsInPairComp=None
                        drawlinesNumbersAndSigns=drawChromosomes,
                        scaleFactorRectangles=scaleFactorRectangles)
             print >> sys.stderr, 'len(listOfMatrixItems)=', len(listOfMatrixItems)
-
             listOfMatrixItems = mySvgDrawer.tanslateItems(listOfMatrixItems, Point(cumulatedX, cumulatedY))
             cumulatedY += ny * sizeCase + sizeCase
             listOfItems += listOfMatrixItems
             print >> sys.stderr, 'len(listOfItems)=', len(listOfItems)
             progressBar.printProgressIn(sys.stderr, i1 + i2)
         # last line for the y axis
-        listOfItems.append(mySvgDrawer.Line(Point(0,     cumulatedY),
-                                            Point(width, cumulatedY), width=float(width)/2000))
+        listOfItems.append(mySvgDrawer.Line(Point(0,                           cumulatedY),
+                                            Point((wnx + (cx + 1)) * sizeCase, cumulatedY), width=float(width)/2000))
         cumulatedY = 0
         cumulatedX += nx * sizeCase + sizeCase
     # last line for the x axis
-    listOfItems.append(mySvgDrawer.Line(Point(cumulatedX,      0),
-                                        Point(cumulatedX, height), width=float(width)/2000))
+    listOfItems.append(mySvgDrawer.Line(Point(cumulatedX,                           0),
+                                        Point(cumulatedX, (wny + (cy + 1)) * sizeCase), width=float(width)/2000))
+    # add chromosome names
+    #listOfChrNames = mySvgDrawer.tanslateItems(listOfChrNames, Point(float(lchrNames)/2, float(lchrNames)/2))
+    listOfItems = mySvgDrawer.tanslateItems(listOfItems, Point(lchrNames, lchrNames))
+    listOfItems += listOfChrNames
     for item in listOfItems:
         scene.add(item)
     if outputFileName is not None:
@@ -1471,9 +1490,18 @@ if __name__ == '__main__':
     # genome1 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Homo.sapiens.light2.list.bz2')
     # genome2 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Mus.musculus.light.list.bz2')
     families = myLightGenomes.Families('/home/jlucas/Libs/PhylDiag/data/ancGenes.Amniota.list.bz2')
+    #genome1 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Homo.sapiens.list.bz2')
     genome1 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Homo.sapiens.list.bz2')
-    genome2 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Mus.musculus.list.bz2')
+    genome2 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Gallus.gallus.list.bz2')
+    #genome2 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Mus.musculus.list.bz2')
+    genome1.removeUnofficialChromosomes()
+    genome2.removeUnofficialChromosomes()
     #families = myLightGenomes.Families('/home/jlucas/Libs/PhylDiag/data/ancGenes.Euarchontoglires.list.bz2')
+
+    #FIXME :
+    # allow fiterType InBothGenomes
+    # allow representing diagonals
+    # write chromosomes names
     wholeGenomeHomologyMatrices(genome1, genome2, families, inSbsInPairComp=None, maxWidth=100, maxHeight=100,
                                 filterType=FilterType.None,
                                 minChromLength=0,

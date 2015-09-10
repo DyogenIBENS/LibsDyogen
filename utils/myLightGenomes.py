@@ -12,6 +12,7 @@ import itertools
 import myFile
 import myGenomes
 import myTools
+import enum
 
 # TODO : unoriented genes
 # TODO : unoriented adjacencies
@@ -61,6 +62,47 @@ def newChromName(genome):
         chosenChromName = str(maxChromName + 1)
     return chosenChromName
 
+ContigType = enum.Enum('Chromosome', 'Mitochondrial', 'Scaffold', 'None', 'Random')
+
+# return the type of contig depending on its name
+def contigType(chrName):
+    if chrName == 'KI270711.1':
+        pass
+    if chrName in [None, "Un_random", "UNKN", "Un"]:
+        # chromosome named "Un" in Monodelphis.domestica corresponds to a scaffold that concatenates all unassembled
+        # fragments
+        return ContigType.None
+    try:
+        x = int(chrName)
+        if x < 100:
+            return ContigType.Chromosome
+        else:
+            return ContigType.Scaffold
+    except:
+        chrNameLow = chrName.lower()
+        if "rand" in chrNameLow:
+            # FIXME : what is a random contig ? It seems that a random contig is always associated to a chromosome number.
+            # Thus we know that this random chromosome is on a specific chromosome number but we do not know where.
+            return ContigType.Random
+        # mitochondrion in Drosophila melanogaster
+        for x in ['mt', 'mitochondrion']:
+            if x in chrNameLow:
+                return ContigType.Mitochondrial
+        # ki in Homo.sapiens data81
+        # jh in mus.musculus, Canis.lupus.familiaris
+        # aaex in Canis.lupus.familiaris
+        # aadn in Gallus.gallus
+        keys = ["cont", "scaff", "ultra", "reftig", "_", "un", "gl", "ki", "jh", "aaex", "aadn"]
+        for x in keys:
+            if x in chrNameLow:
+                return ContigType.Scaffold
+        if (chrName in ["U", "E64", "2-micron"]) or chrName.endswith("Het"):
+            return ContigType.Scaffold
+        else:
+            # sex chromosomes of the chicken as (Z, W) or sex chromosomes of the human (X, Y)
+            return ContigType.Chromosome
+
+
 # It might be more interesting for certain applications to only use a classical
 # collections.defaultdict instead of the less specialised class
 # myTools.DefaultOrderedDict.
@@ -72,6 +114,8 @@ class LightGenome(myTools.DefaultOrderedDict):
 
     def __init__(self, *args, **kwargs):
         self.name = None
+        # this dict contains the sets chromosomes per type of contig (cf class ContigType)
+        self.chrSet = collections.defaultdict(set)
         # kwargs.get('name', default=None)
         myTools.DefaultOrderedDict.__init__(self, default_factory=list)
         self.withDict = kwargs.get("withDict", False)
@@ -128,6 +172,7 @@ class LightGenome(myTools.DefaultOrderedDict):
             idx = -1
             c_old = None
             for (c, strand, gName) in reader:
+                self.chrSet[contigType(c)].add(c)
                 idx = (idx + 1) if c == c_old else 0
                 self[c].append(OGene(gName, strand))
                 if self.withDict:
@@ -138,6 +183,7 @@ class LightGenome(myTools.DefaultOrderedDict):
         elif isinstance(arg, myGenomes.Genome):
             genome = arg
             self.name = genome.name
+            self.chrSet = arg.chrSet
             for c in genome.lstGenes.keys():
                 for (idx, g) in enumerate(genome.lstGenes[c]):
                     self[str(c)].append(OGene(g.names[0], g.strand))
@@ -145,6 +191,7 @@ class LightGenome(myTools.DefaultOrderedDict):
                         self.g2p[g.names[0]] = GeneP(str(c), idx)
         elif isinstance(arg, LightGenome):
             self.name = arg.name
+            self.chrSet = arg.chrSet
             self.withDict = arg.withDict
             for c in arg:
                 self[c] = [OGene(gene.n, gene.s) for gene in arg[c]]
@@ -319,8 +366,10 @@ class LightGenome(myTools.DefaultOrderedDict):
     def removeChrsStrictlySmallerThan(self, minChrLen):
         sCs = self.keys()
         nbRemovedChrs = 0
+        nbRemovedGenes = 0
         for c in sCs:
             if len(self[c]) < minChrLen:
+                nbRemovedGenes += len(self[c])
                 if self.withDict:
                     for gene in self[c]:
                         del self.g2p[gene.n]
@@ -330,7 +379,25 @@ class LightGenome(myTools.DefaultOrderedDict):
                             pass
                 del self[c]
                 nbRemovedChrs += 1
-        return nbRemovedChrs
+        return (nbRemovedChrs, nbRemovedGenes)
+
+    def removeUnofficialChromosomes(self):
+        sCs = self.keys()
+        nbRemovedChrs = 0
+        nbRemovedGenes = 0
+        for c in sCs:
+            if c not in self.chrSet[ContigType.Chromosome]:
+                nbRemovedGenes += len(self[c])
+                if self.withDict:
+                    for gene in self[c]:
+                        del self.g2p[gene.n]
+                        try:
+                            del self.g2ps[gene.n]
+                        except:
+                            pass
+                del self[c]
+                nbRemovedChrs += 1
+        return (nbRemovedChrs, nbRemovedGenes)
 
     def sort(self):
         """ Sort sbs by decreasing sizes """
@@ -488,3 +555,15 @@ def f_A0_A1_from_f_A0_Ds_and_f_A1_Ds(f_A0_D, f_A1_D):
     for (gn_A0, gns_A1) in tmp.iteritems():
         f_A0_A1.addFamily(Family(gn_A0, sorted(list(gns_A1))))
     return f_A0_A1
+
+# if __name__ == '__main__':
+#     genome = LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Homo.sapiens.list.bz2')
+#     genome = LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Mus.musculus.list.bz2')
+#     genome = LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Monodelphis.domestica.list.bz2')
+#     genome = LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Canis.lupus.familiaris.list.bz2')
+#     genome = LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Gallus.gallus.list.bz2')
+#     genome = LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Drosophila.melanogaster.list.bz2')
+#     genome = LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Drosophila.melanogaster.list.bz2')
+#     print >> sys.stderr, genome.chrSet
+#     genome.removeUnofficialChromosomes()
+#     print >> sys.stderr, genome.keys()
