@@ -108,7 +108,7 @@ def multiprocessTasks(function, tasks, **kwargs):
     # TASKS = [ARGS-TAKS1, ARGS-TASK2, ...]
     # e.g. TASKS = [(c1, c2, g1[c1], g2[c2]) for (c1, c2) in itertools.product([c1 for c1 in g1], [c2 for c2 in g2])]
     TASKS = tasks
-    # e.g. KWARGS = {'gapMax':gapMax, 'distanceMetric':distanceMetric, 'consistentSwDType':consistentSwDType, 'verbose':False}
+    # e.g. KWARGS = {'gapMax':gapMax, 'distanceMetric':distanceMetric, 'sameStrand':sameStrand, 'verbose':False}
     KWARGS = kwargs
 
     # Create queues

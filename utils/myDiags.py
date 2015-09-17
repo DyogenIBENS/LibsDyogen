@@ -62,6 +62,43 @@ from utils.myLightGenomes import OGene
 
 FilterType = enum.Enum('InFamilies', 'InBothGenomes', 'None')
 
+defaultArgsPhylDiag = \
+    [("filterType", str, 'InBothGenomes'),
+     ("tandemGapMax", int, 0),
+     ("gapMax", str, 'None'),
+     ("distinguishMonoGenicDiags", bool, True),
+     ('distanceMetric', str, 'CD'),
+     ('pThreshold', str, 'None'),
+     ('gapMaxMicroInv', str, '1'),
+     ('identifyMonoGenicInversion', bool, True),
+     ('identifyBreakpointsWithinGaps', bool, True),
+     ('overlapMax', str, 'None'),
+     ("minChromLength", int, 2),
+     ("sameStrand", bool, True),
+     ('nbHpsRecommendedGap', int, 2), ('targetProbaRecommendedGap', float, 0.01),
+     ('validateImpossToCalc_mThreshold', int, 3),
+     # The multiprocess does not seem to work well for most of the data. It work well only for some data
+     # with ~ 800 contigs
+     ('optimisation', str, 'cython'),
+     ('verbose', bool, False)]
+
+defaultKwargsPhylDiagDict = dict((n, (t, v)) for (n, t, v) in defaultArgsPhylDiag)
+def defaultKwargsPhylDiag(arguments=None):
+    res = dict((n, t(v)) for (n, t, v) in defaultArgsPhylDiag)
+    if arguments is None:
+        return res
+    else:
+        for (argN, tpe) in [('gapMax', int), ('overlapMax', int), ('gapMaxMicroInv', int), ('pThreshold', float)]:
+            if arguments[argN] == 'None':
+                res[argN] = None
+            else:
+                try:
+                    res[argN] = tpe(arguments[argN])
+                except:
+                    raise TypeError('%s is either an int or None' % argN)
+        res['filterType'] = FilterType[list(FilterType._keys).index(arguments["filterType"])]
+    return res
+
 # TODO, write a diagonal class that is made for tbs containing genes
 class Diagonal():
     def __init__(self, *args):
@@ -533,7 +570,7 @@ def mergeDiags(listOfDiags, gapMax, gc2, distanceMetric = 'CD', verbose = False)
                 diagToFuse = fusionableDiags.pop(0) # Pop the first element of the list
                 # Lists are fused
                 if diagToFuse.dt != None and diagA.dt != None:
-                    if  diagToFuse.dt == diagA.dt:
+                    if diagToFuse.dt == diagA.dt:
                         dt_res = diagToFuse.dt
                     else:
                         # opposed diagTypes
@@ -546,6 +583,12 @@ def mergeDiags(listOfDiags, gapMax, gc2, distanceMetric = 'CD', verbose = False)
                     # dt == None and diagA.dt == None:
                     # If the two diagonals are singletons
                     dt_res = '/' if diagA.end()[1] < diagToFuse.beg()[1] else '\\'
+                # if len(diagA.la) > 1 and len(diagB.la) > 1:
+                #     print >> sys.stderr, "---"
+                #     print >> sys.stderr, "diagA : %s-%s %s-%s" % (diagA.minOnG(1), diagA.maxOnG(1), diagA.minOnG(2), diagA.maxOnG(2))
+                #     print >> sys.stderr, "diagB : %s-%s %s-%s" % (diagToFuse.minOnG(1), diagToFuse.maxOnG(1), diagToFuse.minOnG(2), diagToFuse.maxOnG(2))
+                #     print >> sys.stderr, "ROI : %s-%s %s-%s" % (min(diagA.minOnG(1), diagToFuse.minOnG(1)), max(diagA.maxOnG(1), diagToFuse.maxOnG(1)),                                        min(diagA.minOnG(2), diagToFuse.minOnG(2)), max(diag.maxOnG(2), diagToFuse.maxOnG(2)))
+                #     pass
                 diagA.l1.extend(diagToFuse.l1)
                 diagA.l2.extend(diagToFuse.l2)
                 # Compute the new dist with currGap
@@ -805,7 +848,7 @@ def statusOfSbbComparedToSba(((c1a, c2a), sba), ((c1b, c2b), sbb)):
 
 # Edit sbs in order to have non-overlapping sbs
 @myTools.verbose
-def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbose=False):
+def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=False, verbose=False):
     # The general idea for construction non-overlapping sbs come from:
     # "Nonoverlapping local alignments" (Bafna 1996)
     # The problem of finding the best non-overlapping sbs is analog of
@@ -839,6 +882,7 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
         sortedV = sorted([int(v) for v in V], key=lambda iDsb: len(id2sb(iDsb).la))
         noOrSmallOverlapIds = set([])
         removedSbsBecauseOfOverlap = set([])
+        nbRemovedHps = 0
         while len(sortedV) > 0:
             iD_selectedSb = sortedV.pop()
             # SB Not Removed
@@ -855,6 +899,7 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
                 print >> sys.stderr, "sb (%s:%s-%s, %s:%s-%s) with %s tbs is removed because of unallowed overlap with sb (%s:%s-%s, %s:%s-%s) with %s tbs (idxs in tbs)" %\
                     (c1r, sbr.minOnG(1), sbr.maxOnG(1), c2r, sbr.minOnG(2), sbr.maxOnG(2), len(sbr.la),
                      c1nr, sbnr.minOnG(1), sbnr.maxOnG(1), c2nr, sbnr.minOnG(2), sbnr.maxOnG(2), len(sbnr.la))
+                nbRemovedHps += len(sbr.la)
                 if 'nested' in statusOfSbbComparedToSba(((c1nr, c2nr), sbnr), ((c1r, c2r), sbr)):
                     # sbr is at least partially nested in sbnr
                     print >> sys.stderr, "last overlap is probably a segmental duplication"
@@ -878,7 +923,7 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
         # on page 9 of "Nonoverlapping local alignments" (Bafna 1996)
 
         # return the set of ids of sbs that are kept
-        return noOrSmallOverlapIds
+        return (noOrSmallOverlapIds, nbRemovedHps)
 
     @myTools.verbose
     def truncateSbsWithSmallOverlap(sbsInPairCompWithIds, O, verbose=False):
@@ -889,6 +934,7 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
         sortedO.sort(key=lambda idsb: len(id2sb(idsb).la))
         # set of 0X keys
         setO = set(O.keys())
+        nbRemovedHps = 0
         while len(setO) > 0:
             # iDsbNotTruncated
             idsbnt = sortedO.pop()
@@ -909,10 +955,15 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
                             newl2.append(sbt.l2[i])
                             newla.append(sbt.la[i])
                     truncation = len(sbt.la) - len(newla)
-                    if truncation > 0:
-                        print >> sys.stderr, "sb (%s:%s-%s, %s:%s-%s) with %s tbs truncated (-%s tbs) because of sb (%s:%s-%s, %s:%s-%s) with %s tbs (idxs in tbs)" %\
-                                             (c1t, sbt.minOnG(1), sbt.maxOnG(1), c2t, sbt.minOnG(2), sbt.maxOnG(2), len(sbt.la), truncation,
-                                              c1nt, sbnt.minOnG(1), sbnt.maxOnG(1), c2nt, sbnt.minOnG(2), sbnt.maxOnG(2), len(sbnt.la))
+                    nbRemovedHps += truncation
+                    # if truncation > 1 and len(newla) > 1:
+                    #     print >> sys.stderr, "sb (%s:%s-%s, %s:%s-%s) with %s tbs truncated (-%s tbs) because of sb (%s:%s-%s, %s:%s-%s) with %s tbs (idxs in tbs)" %\
+                    #                          (c1t, sbt.minOnG(1), sbt.maxOnG(1), c2t, sbt.minOnG(2), sbt.maxOnG(2), len(sbt.la), truncation,
+                    #                           c1nt, sbnt.minOnG(1), sbnt.maxOnG(1), c2nt, sbnt.minOnG(2), sbnt.maxOnG(2), len(sbnt.la))
+                    #     if c1t == c1nt and c2t == c2nt:
+                    #         print >> sys.stderr, "ROI: %s:%s-%s %s:%s-%s" % (c1t, min(sbt.minOnG(1), sbnt.minOnG(1)), max(sbt.maxOnG(1), sbnt.maxOnG(1)),
+                    #                                                          c2t, min(sbt.minOnG(2), sbnt.minOnG(2)), max(sbt.maxOnG(2), sbnt.maxOnG(2)))
+                    #         pass
                     sbt.l1 = newl1
                     sbt.l2 = newl2
                     sbt.la = newla
@@ -927,6 +978,7 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
                             newl2.append(i2)
                             newla.append(sbt.la[i])
                     truncation = len(sbt.la) - len(newla)
+                    nbRemovedHps += truncation
                     if truncation > 0:
                         print >> sys.stderr, "sb (%s:%s-%s, %s:%s-%s) with %s tbs truncated (-%s tbs) because of sb (%s:%s-%s, %s:%s-%s) with %s tbs (idxs in tbs)" %\
                                              (c1t, sbt.minOnG(1), sbt.maxOnG(1), c2t, sbt.minOnG(2), sbt.maxOnG(2), len(sbt.la), truncation,
@@ -939,12 +991,12 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
             # Need to re-sort since the length of the sb has changed
             sortedO.sort(key=lambda idsb: len(id2sb(idsb).la))
             setO = set(sortedO)
-        return sbsInPairCompWithIds
+        return (sbsInPairCompWithIds, nbRemovedHps)
 
     (sbsInPairCompWithIds, V, N, O, I, (sbsG1, sbsG2)) =\
         buildConflictGraph(sbsInPairComp, overlapMax=overlapMax)
     nbSbsBeforeOverlapFiltering = len(V)
-    noOrSmallOverlapIds = solveConflictGraph(sbsInPairCompWithIds, V, N, verbose=verbose)
+    (noOrSmallOverlapIds, nbRemovedHpsBecauseOfNotAllowedOverlap) = solveConflictGraph(sbsInPairCompWithIds, V, N, verbose=verbose)
     # DEBUG assertion
     assert noOrSmallOverlapIds.issubset(V)
 
@@ -963,20 +1015,25 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
             newO[idsba] = set([idsbb for idsbb in idsbbs if idsbb in noOrSmallOverlapIds])
     O = newO
 
+    nbRemovedHpsAfterTruncation = 0
     if overlapMax > 0:
         # Need to edit sbs to truncate sbs that have an allowed overlap
         #new_sbsInPairCompWithIds = truncateSbsWithSmallOverlap(new_sbsInPairCompWithIds, O, verbose=verbose)
-        sbsInPairCompWithIds = truncateSbsWithSmallOverlap(sbsInPairCompWithIds, O, verbose=verbose)
+        (sbsInPairCompWithIds, nbRemovedHpsAfterTruncation) = truncateSbsWithSmallOverlap(sbsInPairCompWithIds, O, verbose=verbose)
 
     removedIdBecauseEmptySb = set([])
     cptRemovedSbAfterTruncation = 0
     for (idsb, (c1, c2), sb) in sbsInPairCompWithIds.iterByOrderedIds():
-        if len(sb.la) == 0 or (len(sb.la) == 1 and removeSingleHpSbs):
-            #        # Remove all sbs too small, (they are small because of the preceding
-    #        # truncation)
-    #        assert overlapMax > 0
+        # Remove all sbs too small, (they are small because of the preceding truncation)
+        # assert overlapMax > 0
+        if len(sb.la) == 0:
             removedIdBecauseEmptySb.add(idsb)
             print >> sys.stderr, "Removed sb (%s,%s) because of truncation (less than 1tb in the sb after truncation)" % (c1, c2)
+            cptRemovedSbAfterTruncation += 1
+        elif len(sb.la) == 1 and removeSingleHpSbs:
+            removedIdBecauseEmptySb.add(idsb)
+            print >> sys.stderr, "Removed sb (%s,%s) because of truncation (1tb in the sb after truncation and removeSingleHpSbs==True)" % (c1, c2)
+            nbRemovedHpsAfterTruncation += 1
             cptRemovedSbAfterTruncation += 1
 
     sbsInPairCompWithIds.removeIds(removedIdBecauseEmptySb)
@@ -998,17 +1055,21 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
 
     # This print is already in the upstream function
     #print >> sys.stderr, "Nb sbs before overlap-filtering = %s" % nbSbsBeforeOverlapFiltering
-
-    assert cptRemovedSbBecauseOfNotAllowedOverlap == nbSbsBeforeOverlapFiltering - len(noOrSmallOverlapIds)
+    assert cptRemovedSbBecauseOfNotAllowedOverlap == nbSbsBeforeOverlapFiltering - len(noOrSmallOverlapIds), \
+        "%s = %s - %s" % (cptRemovedSbBecauseOfNotAllowedOverlap, nbSbsBeforeOverlapFiltering, len(noOrSmallOverlapIds))
     nbSbsAfterOverlapFiltering = len(list(new_sbsInPairComp.iteritems2d()))
     # Total nb of hps removed
     nbHpsBeforeOverlapFiltering = sum([len(sb.la) for (_, sb) in sbsInPairComp.iteritems2d()])
     nbHpsAfterOverlapFiltering = sum([len(sb.la) for (_, sb) in new_sbsInPairComp.iteritems2d()])
+    assert nbHpsAfterOverlapFiltering == nbHpsBeforeOverlapFiltering - (nbRemovedHpsBecauseOfNotAllowedOverlap + nbRemovedHpsAfterTruncation),\
+        "%s = %s - (%s + %s)" % (nbHpsAfterOverlapFiltering, nbHpsBeforeOverlapFiltering, nbRemovedHpsBecauseOfNotAllowedOverlap, nbRemovedHpsAfterTruncation)
     print >> sys.stderr, "Nb hps before overlap-filtering = %s" % nbHpsBeforeOverlapFiltering
-    print >> sys.stderr, "Nb hps after overlap-filtering = %s" % nbHpsAfterOverlapFiltering
+    print >> sys.stderr, "Nb hps after overlap-filtering = %s (%%%.2f)" % (nbHpsAfterOverlapFiltering, float(nbHpsAfterOverlapFiltering) / float(nbHpsBeforeOverlapFiltering))
+    print >> sys.stderr, "Nb hps removed because of not allowed overlap = %s (%%%.2f)" % (nbRemovedHpsBecauseOfNotAllowedOverlap, float(nbRemovedHpsBecauseOfNotAllowedOverlap)/ float(nbHpsBeforeOverlapFiltering))
+    print >> sys.stderr, "Nb hps removed because of truncation = %s (%%%.2f)" % (nbRemovedHpsAfterTruncation, float(nbRemovedHpsAfterTruncation)/ float(nbHpsBeforeOverlapFiltering))
     assert nbSbsAfterOverlapFiltering == nbSbsBeforeOverlapFiltering - (cptRemovedSbAfterTruncation + cptRemovedSbBecauseOfNotAllowedOverlap)
-    print >> sys.stderr, "Nb sbs removed because of not allowed overlap = %s" % cptRemovedSbBecauseOfNotAllowedOverlap
-    print >> sys.stderr, "Nb sbs removed during truncation = %s" % cptRemovedSbAfterTruncation
+    print >> sys.stderr, "Nb sbs removed because of not allowed overlap = %s (%%%.2f)" % (cptRemovedSbBecauseOfNotAllowedOverlap, float(cptRemovedSbBecauseOfNotAllowedOverlap) / float(nbSbsBeforeOverlapFiltering))
+    print >> sys.stderr, "Nb sbs removed during truncation = %s (%%%.2f)" % (cptRemovedSbAfterTruncation, float(cptRemovedSbAfterTruncation) / float(nbSbsBeforeOverlapFiltering))
     # This print is already in the upstream function
     #print >> sys.stderr, "Nb non-overlapping sbs returned = %s" % nbSbsAfterOverlapFiltering
 
@@ -1018,7 +1079,7 @@ def solveSbsOverlaps(sbsInPairComp, overlapMax=0, removeSingleHpSbs=True, verbos
         assert len(N) == 0, N
         assert len(O) == 0, O
 
-    return new_sbsInPairComp
+    return (new_sbsInPairComp)
 
 
 def strandProduct(sa, sb):
@@ -1167,29 +1228,29 @@ def homologyMatrix(gc1, gc2):
 #               either a bottom-left to top-right (slash : '/') diagonal
 #               or top-left to bottom right (backslash : '\') diagonal
 ################################################################################################
-def findDiagType(i1, i2, M, consistentSwDType):
-    if M[i1][i2] != None and consistentSwDType:
+def findDiagType(i1, i2, M, sameStrand):
+    if M[i1][i2] != None and sameStrand:
         diagType = '/' if M[i1][i2] == +1 else '\\'
     else:
-        if i1+1 in M and i2+1 in M[i1+1] and ((M[i1+1][i2+1] in [1,None]) if consistentSwDType else True):
+        if i1+1 in M and i2+1 in M[i1+1] and ((M[i1+1][i2+1] in [1,None]) if sameStrand else True):
             diagType = '/'
-        elif i1+1 in M and i2-1 in M[i1+1] and ((M[i1+1][i2-1] in [-1,None]) if consistentSwDType else True):
+        elif i1+1 in M and i2-1 in M[i1+1] and ((M[i1+1][i2-1] in [-1,None]) if sameStrand else True):
             diagType = '\\'
         else:
             diagType = None
     return diagType
 
 
-def extractDiagsInPairCompChrWrapper((c1, c2, gc1, gc2, consistentSwDType)):
+def extractDiagsInPairCompChrWrapper((c1, c2, gc1, gc2, sameStrand)):
     # print >> sys.stderr, "(PPID = %s, PID = %s) start to extract diagonals on G1[%s]_vs_G2[%s]" %\
     #     (os.getppid(), os.getpid(), c1, c2)
-    (listOfDiags, nbHomologies) = extractDiagsInPairCompChr(gc1, gc2, consistentSwDType, verbose=False)
+    (listOfDiags, nbHomologies) = extractDiagsInPairCompChr(gc1, gc2, sameStrand, verbose=False)
     return ((c1, c2), listOfDiags, nbHomologies)
 
 # Extract diags in a pairwise comparison of two chromosomes
 ############################################################
 @myTools.verbose
-def extractDiagsInPairCompChr(gc1, gc2, consistentSwDType=True, verbose=False):
+def extractDiagsInPairCompChr(gc1, gc2, sameStrand=True, verbose=False):
     listOfDiags = []
     (M, locG2) = homologyMatrix(gc1, gc2)
     nbHomologies = sum([len(M[i]) for i in M])
@@ -1218,7 +1279,7 @@ def extractDiagsInPairCompChr(gc1, gc2, consistentSwDType=True, verbose=False):
                     f = gc1[i1][0]
                     if len(la) == 0:
                         # first hp of a diagonal, the diagonalType is searched
-                        diagType = findDiagType(i1, i2, M, consistentSwDType)
+                        diagType = findDiagType(i1, i2, M, sameStrand)
 
                     # A hp has a unique associated gene family (often a unique ancestral gene)
                     # orientation of tbs on gc1 are used as a reference, if the orientation of a tb on gc1 is unknown, it is possible to infer the ancestral orientation by using the diagType and the orientation of the homologous tb on gc2
@@ -1239,15 +1300,15 @@ def extractDiagsInPairCompChr(gc1, gc2, consistentSwDType=True, verbose=False):
                     if len(M[i1].keys()) == 0:
                         del M[i1]
                     #diagType == None if sameStrand == False and len(la) == 1, first element of a diagonal which we donnot take care of gene orientation
-                    #if (diagType == "/" or diagType == None) and i1+1 in M and i2+1 in M[i1+1] and ((M[i1+1][i2+1] in [+1,None]) if consistentSwDType else True):
-                    if diagType == "/" and i1+1 in M and i2+1 in M[i1+1] and ((M[i1+1][i2+1] in [+1,None]) if consistentSwDType else True):
+                    #if (diagType == "/" or diagType == None) and i1+1 in M and i2+1 in M[i1+1] and ((M[i1+1][i2+1] in [+1,None]) if sameStrand else True):
+                    if diagType == "/" and i1+1 in M and i2+1 in M[i1+1] and ((M[i1+1][i2+1] in [+1,None]) if sameStrand else True):
                         i1 = i1 + 1
                         i2 = i2 + 1
                         #assert i2-l2[-1] == +1
                         #assert i1-l1[-1] == +1
                         #assert i2 in M[i1]
 
-                    elif diagType=="\\" and i1+1 in M and i2-1 in M[i1+1] and ((M[i1+1][i2-1] in [-1,None]) if consistentSwDType else True):
+                    elif diagType=="\\" and i1+1 in M and i2-1 in M[i1+1] and ((M[i1+1][i2-1] in [-1,None]) if sameStrand else True):
                         i1 = i1 + 1
                         i2 = i2 - 1
                         #assert i2-l2[-1] == -1
@@ -2052,7 +2113,7 @@ def doMergeAllDiags(diagsInPairComp, gapMax, g2_tb, distanceMetric):
     for (c1, c2) in diagsInPairComp.keys2d():
         listOfDiags = diagsInPairComp[c1][c2]
         if len(listOfDiags) > 0:
-            diagsInPairComp[c1][c2] = mergeDiags(listOfDiags, gapMax, g2_tb[c2], distanceMetric, verbose=False)
+            diagsInPairComp[c1][c2] = mergeDiags(listOfDiags, gapMax, g2_tb[c2], distanceMetric, verbose=True)
     return diagsInPairComp
 
 def loop_Ibwg_Om_Mnosbs(sbsInPairComp, identifyBreakpointsWithinGaps, overlapMax,
@@ -2079,7 +2140,7 @@ def loop_Ibwg_Om_Mnosbs(sbsInPairComp, identifyBreakpointsWithinGaps, overlapMax
             # solve overlaps (truncation and removal)
             if cptLoopIter == 0: print >> sys.stderr, "Nb sbs before solve overlaps = %s" % len(sbsInPairComp.items2d())
             # TODO, compute the variation of the coverage before and after this step
-            sbsInPairComp = solveSbsOverlaps(sbsInPairComp, overlapMax=overlapMax, verbose=True)
+            sbsInPairComp= solveSbsOverlaps(sbsInPairComp, overlapMax=overlapMax, verbose=(True if cptLoopIter == 0 else False))
             if cptLoopIter == 0: print >> sys.stderr, "Nb sbs after solve overlaps = %s" % len(sbsInPairComp.items2d())
 
             # merge non-overlapping sbs
@@ -2118,6 +2179,7 @@ def postProcessDiags(diagsInPairComp, distinguishMonoGenicDiags,
         (diagsInPairComp, monogenicDiagsInPairComp) = doDistinguishMonoGenicDiags(diagsInPairComp)
         print >> sys.stderr, "Nb non-monogenic diags = %s" % len(diagsInPairComp.items2d())
         print >> sys.stderr, "Nb monogenic diags = %s" % len(monogenicDiagsInPairComp.items2d())
+        assert all([len(sb.la) > 1 for (_, sb) in diagsInPairComp.iteritems2d()])
 
     # statistical validation of diags (putative sbs) into sbs
     typeOfDiags = ' non-monogenic' if distinguishMonoGenicDiags else ''
@@ -2149,14 +2211,16 @@ def postProcessDiags(diagsInPairComp, distinguishMonoGenicDiags,
         else:
             typeOfMicroInv = ' non-monogenic'
             putativeMicroInversionsInPairComp = diagsInPairCompRejected
+            assert not distinguishMonoGenicDiags or all([len(sb.la) > 1 for (_, sb) in putativeMicroInversionsInPairComp.iteritems2d()])
         print >> sys.stderr, "Nb sbs before identifying%s micro-inversions = %s" % (typeOfMicroInv, len(sbsInPairComp.items2d()))
-        (sbsInPairComp, diagsNotSbsInPairComp) = doIdentifyMicroInversions(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv, identifyMonoGenicInversion, verbose=False)
+        (sbsInPairComp, diagsNotSbsInPairComp) = doIdentifyMicroInversions(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv, identifyMonoGenicInversion, verbose=True)
+        # remark, doIdentifyMicroInversions may yield mono-genic sbs even if identifyMonoGenicInversion because of the identifyBreakpointsWithinGaps that may split a sb in two sub-sbs with one of them of one gene.
         print >> sys.stderr, "Nb sbs after identifying%s micro-inversions = %s" % (typeOfMicroInv, len(sbsInPairComp.items2d()))
 
+    totalNbOfHps = sum([len(sb.la) for (_, sb) in sbsInPairComp.iteritems2d()])
     sbsInPairComp = loop_Ibwg_Om_Mnosbs(sbsInPairComp, identifyBreakpointsWithinGaps, overlapMax,
                                         gapMax, g2_tb, distanceMetric,
                                         loopIterMax=10, mergeAfterSolveOverlaps=True)
-
     return (sbsInPairComp, diagsInPairComp)
 
 def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
@@ -2168,7 +2232,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      identifyMonoGenicInversion=False,
                                      identifyBreakpointsWithinGaps=True,
                                      overlapMax=None,
-                                     consistentSwDType=True,
+                                     sameStrand=True,
                                      nbHpsRecommendedGap=2,
                                      targetProbaRecommendedGap=0.01,
                                      validateImpossToCalc_mThreshold=3,
@@ -2184,7 +2248,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
     tic = time.time()
     if optimisation == 'cython' and (len(g1_tb.keys()) > 1 or len(g2_tb.keys()) > 1):
         (p_hpSign, p_hpSign_g, N12s, N12_g, diagsInPairComp) = \
-            extractDiags.extractDiagsInPairCompChr(g1_tb, g2_tb, consistentSwDType, distanceMetric)
+            extractDiags.extractDiagsInPairCompChr(g1_tb, g2_tb, sameStrand, distanceMetric)
     else:
         if optimisation is None or (len(g1_tb.keys()) <= 1 and len(g2_tb.keys()) <= 1):
             totalNbComps = len(g1_tb) * len(g2_tb)
@@ -2192,7 +2256,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
             currCompNb = 0
             for c1 in g1_tb.keys():
                 for c2 in g2_tb.keys():
-                    (listOfDiags, N12) = extractDiagsInPairCompChr(g1_tb[c1], g2_tb[c2], consistentSwDType, verbose=verbose)
+                    (listOfDiags, N12) = extractDiagsInPairCompChr(g1_tb[c1], g2_tb[c2], sameStrand, verbose=verbose)
                     if len(listOfDiags) > 0:
                         diagsInPairComp[c1][c2] = listOfDiags
                     N12s[c1][c2] = N12
@@ -2202,7 +2266,7 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
         elif optimisation == 'multiProcess':
             # if the multiprocess option is True and if there is more than one pairwise comparison of chromosomes
             pool = multiprocessing.Pool()
-            tasks = [(c1, c2, g1_tb[c1], g2_tb[c2], consistentSwDType) for (c1, c2) in itertools.product([c1 for c1 in g1_tb], [c2 for c2 in g2_tb])]
+            tasks = [(c1, c2, g1_tb[c1], g2_tb[c2], sameStrand) for (c1, c2) in itertools.product([c1 for c1 in g1_tb], [c2 for c2 in g2_tb])]
             for ((c1, c2), listOfDiags, N12) in pool.map(extractDiagsInPairCompChrWrapper, tasks, chunksize=(len(tasks)/4)):
                 if len(listOfDiags) > 0:
                     diagsInPairComp[c1][c2] = listOfDiags
@@ -2333,7 +2397,7 @@ def editGenomes(g1, g2, families,
 # Inputs:
 #       g1, g2 : myGenomes.Genome (or dict : {...c:[..., (g,s), ...]}) of the two compared species
 #       ancGenes : myGenomes.Genome define the homology relationships (usually the ancGenes of the LCA of the two compared species)
-#       consistentSwDType :     True  => gene transcription orientations must be consistent with diagonal types ('/' or '\')
+#       sameStrand :     True  => gene transcription orientations must be consistent with diagonal types ('/' or '\')
 #                               False => Do not take care of gene orientation
 #       gapMax : distance (in tandemblocks) allowed between two diagonals to be merged together. This allows to go over wrong  annotations. But it can also introduce some Fp
 #       minChromLength is the minimal length of the chromosome to be considered
@@ -2363,10 +2427,10 @@ def extractSbsInPairCompGenomes(g1, g2, families,
                                 distinguishMonoGenicDiags=True,
                                 pThreshold=None,
                                 gapMaxMicroInv=0,
-                                identifyMonoGenicInversion=False,
+                                identifyMonoGenicInversion=True,
                                 identifyBreakpointsWithinGaps=True,
                                 overlapMax=None,
-                                consistentSwDType=True,
+                                sameStrand=True,
                                 minChromLength=2,
                                 nbHpsRecommendedGap=2,
                                 targetProbaRecommendedGap=0.01,
@@ -2401,7 +2465,7 @@ def extractSbsInPairCompGenomes(g1, g2, families,
                                                      gapMaxMicroInv=gapMaxMicroInv,
                                                      identifyBreakpointsWithinGaps=identifyBreakpointsWithinGaps,
                                                      overlapMax=overlapMax,
-                                                     consistentSwDType=consistentSwDType,
+                                                     sameStrand=sameStrand,
                                                      nbHpsRecommendedGap=nbHpsRecommendedGap,
                                                      targetProbaRecommendedGap=targetProbaRecommendedGap,
                                                      validateImpossToCalc_mThreshold=validateImpossToCalc_mThreshold,
