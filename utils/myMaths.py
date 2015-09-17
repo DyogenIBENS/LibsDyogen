@@ -306,17 +306,20 @@ class randomValue:
         #  0 to 2*pi) was fixed in Pyhton 2.7.4
         if sys.version_info <= (2, 7, 3):
             vmrv = random.vonmisesvariate(0, kappa) / math.pi
-        else :
-            vmrv = random.vonmisesvariate(math.pi, kappa) / \
-                   math.pi - 1
-        # vmrv - a von-Mises random variable between -1 and 1, mean = 0
-        r = vmrv/2 + mean
-        if r < 0:
-            return mean * abs(r) / (0.5-mean)
-        elif r > 1:
-            return 1 - (1-mean) * abs(1-r) / (mean-0.5)
         else:
+            vmrv = random.vonmisesvariate(math.pi, kappa) / math.pi - 1
+        # vmrv = a von-Mises random variable between -1 and 1, mean = 0
+        r = vmrv/float(1 - mean)
+        # r is in [- 1 + mean, + (1 - mean)]
+        r = r + mean
+        # r is in [-1 + 2 * mean, 1]
+        if r < 0:
+            # abs(r) is in [0, 1 - 2 * mean]
+            return mean * abs(r) / (1 - 2 * mean)
+        elif r <= 1:
             return r
+        else:
+            raise ValueError('this case should not happen')
 
     # Tirage aleatoire selon une densite issue d'une loi geometrique
     ##################################################################
