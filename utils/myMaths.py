@@ -309,7 +309,8 @@ class randomValue:
         else:
             vmrv = random.vonmisesvariate(math.pi, kappa) / math.pi - 1
         # vmrv = a von-Mises random variable between -1 and 1, mean = 0
-        r = vmrv/float(1 - mean)
+
+        r = vmrv * float(1 - mean)
         # r is in [- 1 + mean, + (1 - mean)]
         r = r + mean
         # r is in [-1 + 2 * mean, 1]
@@ -319,7 +320,8 @@ class randomValue:
         elif r <= 1:
             return r
         else:
-            raise ValueError('this case should not happen')
+            print >> sys.stderr, r
+            raise ValueError('this case should not happen' + "mean=%s, kappa=%s and r=%s" % (mean, kappa, r))
 
     # Tirage aleatoire selon une densite issue d'une loi geometrique
     ##################################################################
