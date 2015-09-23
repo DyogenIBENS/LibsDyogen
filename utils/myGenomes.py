@@ -8,7 +8,6 @@
 import sys
 import itertools
 import collections
-
 import enum
 
 import myFile
@@ -25,28 +24,40 @@ def commonChrName(x):
     except ValueError:
         return intern(x)
 
-# return the type of contig depending on its name
-ContigType = enum.Enum('None', 'Random', 'Scaffold', 'Chromosome')
-def contigType(chrom):
-    if chrom in [None, "Un_random", "UNKN", "Un"]:
+ContigType = enum.Enum('Chromosome', 'Mitochondrial', 'Scaffold', 'None', 'Random')
+def contigType(chrName):
+    if chrName in [None, "Un_random", "UNKN", "Un"]:
+        # chromosome named "Un" in Monodelphis.domestica corresponds to a scaffold that concatenates all unassembled
+        # fragments
         return ContigType.None
     try:
-        x = int(chrom)
+        x = int(chrName)
         if x < 100:
             return ContigType.Chromosome
         else:
             return ContigType.Scaffold
     except:
-        c = chrom.lower()
-        if "rand" in c:
+        chrNameLow = chrName.lower()
+        if "rand" in chrNameLow:
+            # FIXME : what is a random contig ? It seems that a random contig is always associated to a chromosome number.
+            # Thus we know that this random chromosome is on a specific chromosome number but we do not know where.
             return ContigType.Random
-        keys = ["cont", "scaff", "ultra", "reftig", "_", "un", "mt", "gl"]
+        # mitochondrion in Drosophila melanogaster
+        for x in ['mt', 'mitochondrion']:
+            if x in chrNameLow:
+                return ContigType.Mitochondrial
+        # ki in Homo.sapiens data81
+        # jh in mus.musculus, Canis.lupus.familiaris
+        # aaex in Canis.lupus.familiaris
+        # aadn in Gallus.gallus
+        keys = ["cont", "scaff", "ultra", "reftig", "_", "un", "gl", "ki", "jh", "aaex", "aadn"]
         for x in keys:
-            if x in c:
+            if x in chrNameLow:
                 return ContigType.Scaffold
-        if (chrom in ["U", "E64", "2-micron"]) or chrom.endswith("Het"):
+        if (chrName in ["U", "E64", "2-micron"]) or chrName.endswith("Het"):
             return ContigType.Scaffold
         else:
+            # sex chromosomes of the chicken as (Z, W) or sex chromosomes of the human (X, Y)
             return ContigType.Chromosome
 
 class myFASTA:

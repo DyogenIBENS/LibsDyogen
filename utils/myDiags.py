@@ -1343,7 +1343,7 @@ def crossGeneContent(g1, g2):
 # Returns (g1,g2,trans1,trans2)
 #      - g1 the genome 'g1' rewritten with ancGenes ID
 #       - trans1 = { ..., newi:oldi, ...} with newi, the index of a gene in 'g1' and oldi the index of the same gene in the original genome 'g1'
-def filter2D(g1_orig, g2_orig, filterType, minChromLength, keepOriginal=False):
+def filter2D(g1_orig, g2_orig, filterType, minChromLength=1, keepOriginal=False):
     # Mark genes that are not in the intersection for future removal
     # Marking is done by switching (g,s) into (None,s)
     # warning : modifies g1 and g2
