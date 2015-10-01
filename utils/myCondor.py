@@ -37,6 +37,7 @@ import sys
 # import logging
 from multiprocessing.dummy import Pool
 from utils import myTools
+import stat
 
 # Logging messages which are less severe than level will be ignored
 # logging.basicConfig(level=logging.DEBUG, format='(%(threadName)-10s) %(message)s')
@@ -50,6 +51,7 @@ LOCAL_BUFF_FOLDER = home + '/condor'
 SCRIPTFILE = "conpy.%s.jobscript"
 OUTFILE = "conpy.%s.stdout.log"
 ERRFILE = "conpy.%s.stderr.log"
+SOE = "conpy.%s.soe"
 MACHINES = ["bioclust%02d.bioclust.biologie.ens.fr" % i for i in range(1, 11)] + \
            ["dyoclust%02d.bioclust.biologie.ens.fr" % i for i in range(4, 22)]
 # Mathieu BAHIN set 10 000 for the total quantity of available simultaneous space for one user.
@@ -342,158 +344,156 @@ def submit_COND_ManyJobs(COND):
         assert int(jobid1.split('.')[1]) == int(jobid2.split('.')[1]) - 1
     return listOfJobids
 
-# TAKE CARE TO ENSURE THAT THE EXECUTABLE RETURNS A NON-EMPTY LOGOUT AND/OR LOGERR.
-# THIS IS NEEDED TO KNOW WHEN THE SCRIPT HAS FINISHED
-# FIXME
-# FIND A SOLUTION THAT DOES NOT REQUIRE A NON-EMPTY LOG (ERR OR OUT) TO KNOW WHEN A JOB HAS FINISHED
-def submit_ManyJobs(executable,
-                    listOfArguments,
-                    universe="vanilla",
-                    mail=None,
-                    # group name of the job
-                    jobGroup='<group>',
-                    niceUser=False,
-                    requirements='',
-                    # cf, https://research.cs.wisc.edu/htcondor/CondorWeek2012/presentations/thain-dynamic-slots.pdf
-                    request_memory='1000',  # request_memory is in mbytes => at least 1Go of RAM
-                    request_disk='10000',  # request_disk is in kbytes => at least 10Mbytes
-                    request_cpus='1',
-                    priority=0,
-                    # maximum number of simultaneous jobs with the same group name
-                    maxSimultaneousJobsInGroup=MAX_SIMULTANEOUS_JOBS,
-                    log=LOG_FILE):
-    """Starts a Condor job based on specified parameters. A job
-    description is generated. Returns the cluster ID of the new job.
+class CondorSubmitor():
+    def __init__(self, executableNameOnCondor):
+        assert isinstance(executableNameOnCondor, str)
+        self.wrapperExecFileName = LOCAL_BUFF_FOLDER + '/' + executableNameOnCondor + '.sh'
+        self.outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE
+        self.errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE
+        self.signalOfEndFileName = LOCAL_BUFF_FOLDER + '/' + SOE
+        self.log = LOG_FILE
 
-    # FIXME
-    TAKE CARE TO ENSURE THAT THE EXECUTABLE RETURNS A NON-EMPTY LOGOUT AND/OR LOGERR.
-    THIS IS NEEDED TO KNOW WHEN THE SCRIPT HAS FINISHED
+    def submit_ManyJobs(self,
+                        executable,
+                        listOfArguments,
+                        universe="vanilla",
+                        mail=None,
+                        # group name of the job
+                        jobGroup='<group>',
+                        niceUser=False,
+                        requirements='',
+                        # cf, https://research.cs.wisc.edu/htcondor/CondorWeek2012/presentations/thain-dynamic-slots.pdf
+                        request_memory='0.5G',  # request_memory is in mbytes => at least 1Go of RAM
+                        request_disk='10000',  # request_disk is in kbytes => at least 10Mbytes
+                        request_cpus='1',
+                        priority=0,
+                        # maximum number of simultaneous jobs with the same group name
+                        maxSimultaneousJobsInGroup=MAX_SIMULTANEOUS_JOBS):
+        """
+        examples of options:
+        1) requirements:
+        requirements = (Machine != "bioclust01.bioclust.biologie.ens.fr") && (slotid <= 6)
+        (slotid <= 6) means that the job won't occupy more than 6 thread on a multi-core machine.
+        This option may be interesting if the job uses several threads on a same machine.
+        For instance Blast uses 4 threads and it would be interesting to send the job with (slotid <= 4) on an octo-core
+        machine.
+        2) priority:
+        Each job may have a priority level specified by 'priority', an int >= 0.
+        Condor executes jobs by decreasing priority levels.
+        If a job1 has a priority1 and job2 has a priority2 and if priority1 > priority2, job1 will be executed before job2
+        This won't change the priority between two different users, it just changes the order of jobs of a same user.
+        3) niceUser:
+        If the user is planning to send a big amount of jobs that do not take long to execute, he may execute them with
+        the niceUser option set to True (and no limit of simultaneous runs), thus all other users will have the priority
+        over him.
+        4) maxSimRuns is an upper limit of simultaneous runs on all the machines of the cluster. The user can send an
+        unlimited amount of jobs that will be queued but no more than 100 jobs will be executed simultaneously.
+        This limit limit the saturation of cores and keep some cores free for other users.
+        This option is especially important if jobs take a long time.
+        """
 
-    examples of options:
-    1) requirements:
-    requirements = (Machine != "bioclust01.bioclust.biologie.ens.fr") && (slotid <= 6)
-    (slotid <= 6) means that the job won't occupy more than 6 thread on a multi-core machine.
-    This option may be interesting if the job uses several threads on a same machine.
-    For instance Blast uses 4 threads and it would be interesting to send the job with (slotid <= 4) on an octo-core
-    machine.
-    2) priority:
-    Each job may have a priority level specified by 'priority', an int >= 0.
-    Condor executes jobs by decreasing priority levels.
-    If a job1 has a priority1 and job2 has a priority2 and if priority1 > priority2, job1 will be executed before job2
-    This won't change the priority between two different users, it just changes the order of jobs of a same user.
-    3) niceUser:
-    If the user is planning to send a big amount of jobs that do not take long to execute, he may execute them with
-    the niceUser option set to True (and no limit of simultaneous runs), thus all other users will have the priority
-    over him.
-    4) maxSimRuns is an upper limit of simultaneous runs on all the machines of the cluster. The user can send an
-    unlimited amount of jobs that will be queued but no more than 100 jobs will be executed simultaneously.
-    This limit limit the saturation of cores and keep some cores free for other users.
-    This option is especially important if jobs take a long time.
-    """
-    warningMessage =  "Warning, due to an imperfection of the Condor API, the executable \"%s\" should yield a " % executable
-    warningMessage += "non-empty log (a non-empty logOut or/and a non-empty logErr). This is because the API checks "
-    warningMessage += "if logErr and/or logOut exists and are non-empty to know when a job is finished"
-    print >> sys.stderr, warningMessage
-
-    if maxSimultaneousJobsInGroup is not None:
-        qtEatenByOneJob = quantityEatenByOneJob(maxSimultaneousJobsInGroup)
-    else:
-        qtEatenByOneJob = 1 # the smallest quantity
-
-    # This is useful if the user wrote the executable as a bash command.
-    # For instance if the user wrote: 'echo', distutils.spawn.find_executable(executable) returns '/bin/echo'
-    # If the user wrote the path toward the executable, this keeps the executable var as a path toward the executable
-
-    # remove previous log file otherwise the new log will be written at the end and the log file will be long to parse
-    outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % "$(Cluster).%s"
-    errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % "$(Cluster).%s"
-    try:
-        os.unlink(log)
-    except:
-        pass
-    try:
-        os.unlink(outFileName)
-    except:
-        pass
-    try:
-        os.unlink(errFileName)
-    except:
-        pass
-
-    executable = distutils.spawn.find_executable(executable)
-
-    COND = [
-        "Executable = %s" % executable,
-        "Universe = %s" % universe,
-        "Log = %s" % log,
-        "GetEnv = %s" % True,
-        "Initialdir = %s" % os.getcwd(),
-        "should_transfer_files = %s" % 'NO',
-        "run_as_owner = %s" % 'True',
-        "Requirements = %s" % requirements,
-        # cf, https://research.cs.wisc.edu/htcondor/CondorWeek2012/presentations/thain-dynamic-slots.pdf
-        "request_memory = %s" % request_memory,  # in mbytes
-        "request_disk = %s" % request_disk,  # in kbytes
-        "request_cpus = %s" % request_cpus,
-        "Notify_user = %s" % mail,
-        "Notification = %s" % 'never',
-        "NiceUser = %s" % niceUser,
-        "Priority = %s" % priority,
-        "Rank = %s" % 'kflops+1000*Memory',
-        # limit the nb of simultaneous runs
-        "concurrency_limits = %s:%s" % (jobGroup, qtEatenByOneJob)
-    ]
-
-    for (i, arguments) in enumerate(listOfArguments):
-        COND += "\n"
-        if arguments:
-            COND += ["Arguments = %s" % arguments]
-        COND += ["Input = %s" % '',
-                 "Output = %s" % (outFileName % i),
-                 "Error = %s" % (errFileName % i)]
-        COND += ["Queue"]
-
-    COND = "\n".join(COND)
-    return submit_COND_ManyJobs(COND)
-
-# FIXME
-# FIND A SOLUTION THAT DOES NOT REQUIRE A NON-EMPTY LOG (ERR OR OUT) TO KNOW WHEN A JOB HAS FINISHED
-# wait max 8 minutes for job, then time out
-def waitUntilLogOutExists(jobid, waitTime=2, maxWaitTime=480):
-    outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
-    errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
-    while True:
-        # if one of the log (either stdout or stderr) exists and is non-empty
-        if (os.path.isfile(outFileName) and os.stat(outFileName).st_size != 0) or\
-            (os.path.isfile(errFileName) and os.stat(errFileName).st_size != 0):
-            hasFinished = True
-            break
-        time.sleep(waitTime)
-        maxWaitTime -= waitTime
-        if maxWaitTime < 0:
-            # Case if process timed out
-            hasFinished = False
-            break
-    return (jobid, hasFinished)
-
-# FIXME
-# FIND A SOLUTION THAT DOES NOT REQUIRE A NON-EMPTY LOG (ERR OR OUT) TO KNOW WHEN A JOB HAS FINISHED
-def getoutput_ManyJobs(listOfJobids):
-    """Waits for a job to complete and then returns its standard output
-    and standard error data if the files were given default names.
-    Deletes these files after reading them if ``cleanup`` is True.
-    """
-
-    pool = Pool()
-    for (jobid, hasFinished) in pool.imap_unordered(waitUntilLogOutExists, tuple(jobid for jobid in listOfJobids)):
-        if hasFinished:
-            print >> sys.stderr, 'return logs of job', jobid
+        if maxSimultaneousJobsInGroup is not None:
+            qtEatenByOneJob = quantityEatenByOneJob(maxSimultaneousJobsInGroup)
         else:
-            print >> sys.stderr, 'job', jobid, 'has not finished, over max allowed running time'
-        outFileName = LOCAL_BUFF_FOLDER + '/' + OUTFILE % str(jobid)
-        errFileName = LOCAL_BUFF_FOLDER + '/' + ERRFILE % str(jobid)
-        yield jobid, outFileName, errFileName
+            qtEatenByOneJob = 1  # the smallest quantity
 
+        errFileName = self.errFileName % "$(Cluster).%s"
+        signalOfEndFileName = self.signalOfEndFileName % "$(Cluster).%s"
+
+        # remove previous log file otherwise the new log will be written at the end and the log file will be long to parse
+        for file in [self.log, self.wrapperExecFileName]:
+            try:
+                os.unlink(file)
+            except:
+                pass
+
+        # This is useful if the user wrote the executable as a bash command.
+        # For instance if the user wrote: 'echo', distutils.spawn.find_executable(executable) returns '/bin/echo'
+        # If the user wrote the path toward the executable, this keeps the executable var as a path toward the executable
+        executable = distutils.spawn.find_executable(executable)
+        with open(self.wrapperExecFileName, 'w') as f:
+            print >> f, "#!/bin/bash"
+            print >> f, "length=$(($#-1))"
+            # array contains all the arguments except the two first arguments
+            print >> f, "array=${@:3:$length+1}"
+            print >> f, "%s $array > %s" % (executable, self.outFileName % '${1}.${2}')
+            # this line will be sent to the file 'signalOfEndFileName'
+            print >> f, "echo \"Signal to inform that job ${1}.${2} has finished\" "
+        # http://stackoverflow.com/questions/12791997/how-do-you-do-a-simple-chmod-x-from-within-python
+        st = os.stat(self.wrapperExecFileName)
+        os.chmod(self.wrapperExecFileName, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+        COND = [
+            "Executable = %s" % self.wrapperExecFileName,
+            "Universe = %s" % universe,
+            "Log = %s" % self.log,
+            "GetEnv = %s" % True,
+            "Initialdir = %s" % os.getcwd(),
+            "should_transfer_files = %s" % 'NO',
+            "run_as_owner = %s" % 'True',
+            "Requirements = %s" % requirements,
+            # cf, https://research.cs.wisc.edu/htcondor/CondorWeek2012/presentations/thain-dynamic-slots.pdf
+            "request_cpus = %s" % request_cpus,
+            "request_memory = %s" % request_memory,  # in mbytes
+            "request_disk = %s" % request_disk,  # in kbytes
+            "Notify_user = %s" % mail,
+            "Notification = %s" % 'never',
+            "NiceUser = %s" % niceUser,
+            "Priority = %s" % priority,
+            "Rank = %s" % 'kflops+1000*Memory',
+            # limit the nb of simultaneous runs
+            "concurrency_limits = %s:%s" % (jobGroup, qtEatenByOneJob)
+        ]
+
+        for (i, arguments) in enumerate(listOfArguments):
+            arguments = '$(Cluster)' + ' ' + str(i) + ' ' + arguments
+            COND += "\n"
+            if arguments:
+                COND += ["Arguments = %s" % arguments]
+            COND += ["Input = %s" % '',
+                     "Output = %s" % (signalOfEndFileName % i),
+                     "Error = %s" % (errFileName % i)]
+            COND += ["Queue"]
+
+        COND = "\n".join(COND)
+        return submit_COND_ManyJobs(COND)
+
+    def waitUntilSignalOfEnd(self, jobid, waitTime=2, maxWaitTime=480):
+        signalOfEndFileName = self.signalOfEndFileName % str(jobid)
+        while True:
+            # if stdout log exists and is non-empty
+            if (os.path.isfile(signalOfEndFileName) and os.stat(signalOfEndFileName).st_size != 0) :
+                hasFinished = True
+                break
+            time.sleep(waitTime)
+            maxWaitTime -= waitTime
+            if maxWaitTime < 0:
+                # Case if process timed out
+                hasFinished = False
+                break
+        return (jobid, hasFinished)
+
+    def getoutput_ManyJobs(self, listOfJobids):
+        """Waits for a job to complete and then returns its standard output
+        and standard error data if the files were given default names.
+        """
+
+        pool = Pool()
+        for (jobid, hasFinished) in pool.imap_unordered(self.waitUntilSignalOfEnd, tuple(jobid for jobid in listOfJobids)):
+            if hasFinished:
+                print >> sys.stderr, 'return logs of job', jobid
+            else:
+                print >> sys.stderr, 'job', jobid, 'has not finished, over max allowed running time'
+            signalOfEndFileName = self.signalOfEndFileName % str(jobid)
+            try:
+                os.remove(signalOfEndFileName)
+            except:
+                pass
+            outFileName = self.outFileName % str(jobid)
+            errFileName = self.errFileName % str(jobid)
+            yield jobid, outFileName, errFileName
+
+        os.remove(self.wrapperExecFileName)
 
 def execBashCmdOnAllMachines(command, machines=MACHINES, mail=None, log=LOG_FILE):
     """
@@ -784,8 +784,9 @@ if __name__ == '__main__':
                        ' -out:ancGenesFiles=' + ancGenesName +\
                        ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
            listOfArguments.append(arguments)
-        listOfJids = submit_ManyJobs(executable, listOfArguments, niceUser=True, maxSimultaneousJobsInGroup=None)
-        for (jobid, stdoutFileName, stderrFileName) in getoutput_ManyJobs(listOfJids):
+        cs = CondorSubmitor('magSimus1')
+        listOfJids = cs.submit_ManyJobs(executable, listOfArguments, niceUser=True, maxSimultaneousJobsInGroup=None)
+        for (jobid, stdoutFileName, stderrFileName) in cs.getoutput_ManyJobs(listOfJids):
             # print the 3 first lines of stdout and stderr logs
             with open(stdoutFileName, 'r') as f:
                 print >> sys.stdout, f.readline(),
@@ -875,8 +876,9 @@ if __name__ == '__main__':
 
         command = './fib35.py'
         listOfArguments = [None] * nbJobs
-        listOfJobids = submit_ManyJobs(command, listOfArguments, niceUser=True, maxSimultaneousJobsInGroup=None)
-        for (jobid, stderrFileName, stdoutFileName) in getoutput_ManyJobs(listOfJobids):
+        cs = CondorSubmitor('fibs')
+        listOfJobids = cs.submit_ManyJobs(command, listOfArguments, niceUser=True, maxSimultaneousJobsInGroup=None)
+        for (jobid, stderrFileName, stdoutFileName) in cs.getoutput_ManyJobs(listOfJobids):
             with open(stdoutFileName, 'r') as f:
                 print >> sys.stdout, f.read()
             with open(stderrFileName, 'r') as f:

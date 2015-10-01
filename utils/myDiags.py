@@ -2113,7 +2113,7 @@ def doMergeAllDiags(diagsInPairComp, gapMax, g2_tb, distanceMetric):
     for (c1, c2) in diagsInPairComp.keys2d():
         listOfDiags = diagsInPairComp[c1][c2]
         if len(listOfDiags) > 0:
-            diagsInPairComp[c1][c2] = mergeDiags(listOfDiags, gapMax, g2_tb[c2], distanceMetric, verbose=True)
+            diagsInPairComp[c1][c2] = mergeDiags(listOfDiags, gapMax, g2_tb[c2], distanceMetric, verbose=False)
     return diagsInPairComp
 
 def loop_Ibwg_Om_Mnosbs(sbsInPairComp, identifyBreakpointsWithinGaps, overlapMax,
