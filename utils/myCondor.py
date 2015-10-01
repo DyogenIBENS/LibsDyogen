@@ -14,8 +14,6 @@
 #    publicly, you agree to allow others to view and fork your repositories."""
 # we forked its deposit https://github.com/DyogenIBENS/CondorViaPython
 
-# FIXME
-# FIND A SOLUTION THAT DOES NOT REQUIRE A NON-EMPTY LOG (ERR OR OUT) TO KNOW WHEN A JOB HAS FINISHED
 
 # It might be a good thing to do execute this two next lines if the ~/condor/ folder is full of old useless files
 # cd ~
@@ -38,6 +36,7 @@ import sys
 from multiprocessing.dummy import Pool
 from utils import myTools
 import stat
+import inspect
 
 # Logging messages which are less severe than level will be ignored
 # logging.basicConfig(level=logging.DEBUG, format='(%(threadName)-10s) %(message)s')
@@ -344,6 +343,28 @@ def submit_COND_ManyJobs(COND):
         assert int(jobid1.split('.')[1]) == int(jobid2.split('.')[1]) - 1
     return listOfJobids
 
+def createCodeFromFunc(pythonFunction, path='./', optimised=True):
+        if optimised:
+            codeFunc = "#!/usr/bin/python -O\n"
+        else:
+            codeFunc = "#!/usr/bin/python\n"
+        codeFunc += "\n"
+        codeFunc += "import sys\n"
+        codeFunc += inspect.getsource(pythonFunction)
+        codeFunc += "\n"
+        codeFunc += "print %s(*sys.argv[1:])\n" % pythonFunction.__name__
+
+        funcNbArgs = inspect.getargspec(pythonFunction)
+        funcName = pythonFunction.__name__
+        extension = '.py'
+        scriptName = funcName + extension
+        script = path + scriptName
+        with open(script, 'w') as f:
+            print >> f, codeFunc
+        st = os.stat(script)
+        os.chmod(script, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        return (script, funcNbArgs)
+
 class CondorSubmitor():
     def __init__(self, executableNameOnCondor):
         assert isinstance(executableNameOnCondor, str)
@@ -413,12 +434,13 @@ class CondorSubmitor():
         executable = distutils.spawn.find_executable(executable)
         with open(self.wrapperExecFileName, 'w') as f:
             print >> f, "#!/bin/bash"
-            print >> f, "length=$(($#-1))"
-            # array contains all the arguments except the two first arguments
-            print >> f, "array=${@:3:$length+1}"
-            print >> f, "%s $array > %s" % (executable, self.outFileName % '${1}.${2}')
+            print >> f, "arrayArgs=(\"$@\")"
+            print >> f, "lenArrayArgs=${#arrayArgs[@]}"
+            # array contains all the arguments except the two last arguments
+            print >> f, "subArray=${arrayArgs[@]:0:$lenArrayArgs-2}"
+            print >> f, "%s $subArray > %s" % (executable, self.outFileName % '${arrayArgs[$length-2]}.${arrayArgs[$length-1]}')
             # this line will be sent to the file 'signalOfEndFileName'
-            print >> f, "echo \"Signal to inform that job ${1}.${2} has finished\" "
+            print >> f, "echo \"Signal to inform that job ${arrayArgs[$length-2]}.${arrayArgs[$length-1]} has finished\" "
         # http://stackoverflow.com/questions/12791997/how-do-you-do-a-simple-chmod-x-from-within-python
         st = os.stat(self.wrapperExecFileName)
         os.chmod(self.wrapperExecFileName, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -446,7 +468,7 @@ class CondorSubmitor():
         ]
 
         for (i, arguments) in enumerate(listOfArguments):
-            arguments = '$(Cluster)' + ' ' + str(i) + ' ' + arguments
+            arguments = arguments + ' ' + '$(Cluster)' + ' ' + str(i)
             COND += "\n"
             if arguments:
                 COND += ["Arguments = %s" % arguments]
@@ -639,135 +661,45 @@ def printFileIntoStream(fileName, stream):
         except:
             pass
 
+def fib(n):
+    n = int(n)
+    if n < 2:
+        return n
+    else:
+        return fib(n-2) + fib(n-1)
+
 if __name__ == '__main__':
 
     ##################
-    #  first example #
+    # first example  #
     ##################
-    def helloWorld_noBuff(nbJobs):
-        listOfJNamesIds = []
-        for jobName in range(nbJobs):
-            # jid = job id (cluster ID of the new job)
-            jid = submit_OneJob("echo", arguments="Hello job %s!" % jobName)
-            print "job %s has id %i" % (jobName, jid)
-            listOfJNamesIds.append((jobName, jid))
 
-        for (jobName, jid) in listOfJNamesIds:
-            (stdoutFileName, stderrFileName) = getoutput(jid)
-            print "job %s has finished" % jobName
-            printFileIntoStream(stdoutFileName, sys.stdout)
-            # printFileIntoStream(stderrFileName, sys.stderr)
-            # remove files
-            os.unlink(stdoutFileName)
+    def fibs_localSequential(nbJobs):
+        for n in range(nbJobs):
+            print "job%s: fib(35) = %s" % (n, fib(35))
+
+    def fibs_ManyJobs(nbJobs):
+        path = './'
+        (script, funcNbArgs) = createCodeFromFunc(fib, path=path, optimised=True)
+        listOfArguments = [str(35)] * nbJobs
+        cs = CondorSubmitor(fib.__name__)
+        listOfJobids = cs.submit_ManyJobs(script, listOfArguments, niceUser=True, maxSimultaneousJobsInGroup=None)
+        for (jobid, stderrFileName, stdoutFileName) in cs.getoutput_ManyJobs(listOfJobids):
+            with open(stdoutFileName, 'r') as f:
+                print >> sys.stdout, f.read()
+            with open(stderrFileName, 'r') as f:
+                print >> sys.stderr, f.read()
             os.unlink(stderrFileName)
-        print "jobs done"
-
-    def helloWorld_buff(nbJobs):
-        # Same with buffer
-        listOfJNamesIds = []
-        for jobName in range(nbJobs):
-            jid = submitWithBuffer("echo \"Hello job %s!\"" % jobName, jobName)
-            print "job %s has id %i" % (jobName, jid)
-            listOfJNamesIds.append((jobName, jid))
-
-        for (jobName, jid) in listOfJNamesIds:
-            (stdoutFileName, stderrFileName) = getOutputWithBuffer(jid, jobName)
-            print "job %s has finished" % jobName
-            printFileIntoStream(stdoutFileName, sys.stdout)
-            # printFileIntoStream(stderrFileName, sys.stderr)
-            # remove files
             os.unlink(stdoutFileName)
-            os.unlink(stderrFileName)
-        print "jobs done"
+        try:
+            os.unlink(script)
+        except:
+            pass
 
-    def helloWorld_thread(nbJobs):
-        # Same with threads
-        verbose = True
-        listOfThreads = []
-        for jobName in range(nbJobs):
-            t = condorThread(command="echo \"Hello job %s!\"" % jobName, name=jobName, callBack=printLogOut, verbose=verbose)
-            t.start()
-            listOfThreads.append(t)
 
-        for t in listOfThreads:
-            t.join()
-            (stdoutFileName, stderrFileName) = t.res
-            # printFileIntoStream(stdoutFileName, sys.stdout)
-            # printFileIntoStream(stderrFileName, sys.stderr)
-            # remove files
-            os.unlink(stdoutFileName)
-            os.unlink(stderrFileName)
-            del t
-
-    # ##################
-    # # second example #
-    # ##################
-    def magSimus_buff(nbJobs):
-        # This example uses a software called src/magSimus1.py but with specific
-        # arguments but it could use any other executable and arguments.
-        # condor.py should be launched in MagSimus root folder for having good links
-        listOfJids = []
-        for idxSimu in range(nbJobs):
-           try:
-               os.mkdir("res/simu1/%s/" % idxSimu)
-           except:
-               pass
-           jobName = idxSimu
-           genesName = 'res/simu1/' + str(idxSimu) + '/genes.%s.list.bz2'
-           ancGenesName = 'res/simu1/' + str(idxSimu) + '/ancGenes.%s.list.bz2'
-           executable = 'src/magSimus1.py'
-           arguments = 'res/speciesTree.phylTree -out:genomeFiles=' + genesName +\
-                       ' -out:ancGenesFiles=' + ancGenesName +\
-                       ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
-           command = executable + ' ' + arguments
-           jid = submitWithBuffer(command, jobName)
-           print "simu %s (job id %i) sent to condor" % (idxSimu, jid)
-           listOfJids.append((jid, jobName))
-
-        for (jid, jobName) in listOfJids:
-            idxSimu = jobName
-            stdoutFileName, stderrFileName = getOutputWithBuffer(jid, jobName)
-            print "data of %s returned (thread %s)" % (idxSimu, jobName)
-            # printFileIntoStream(stdoutFileName, sys.stdout)
-            printFileIntoStream(stderrFileName, sys.stderr)
-            # remove files
-            os.unlink(stdoutFileName)
-            os.unlink(stderrFileName)
-
-    def magSimus_thread(nbJobs):
-        # Same with threads
-        listOfThreads = []
-        for idxSimu in range(nbJobs):
-           try:
-               os.mkdir("res/simu1/%s/" % idxSimu)
-           except:
-               pass
-           jobName = 'simu' + str(idxSimu)
-           genesName = 'res/simu1/' + str(idxSimu) + '/genes.%s.list.bz2'
-           ancGenesName = 'res/simu1/' + str(idxSimu) + '/ancGenes.%s.list.bz2'
-           executable = 'src/magSimus1.py'
-           arguments = 'res/speciesTree.phylTree -out:genomeFiles=' + genesName +\
-                       ' -out:ancGenesFiles=' + ancGenesName +\
-                       ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
-           command = executable + ' ' + arguments
-
-           # do not print stdout because here we do not need it
-           t = condorThread(command=command, name=jobName, callBack=printLogErr, verbose=True)
-           t.start()
-           print "simu %s (thread name %s) sent to condor" % (idxSimu, t.tName)
-           listOfThreads.append((t, idxSimu))
-
-        for (t, idxSimu) in listOfThreads:
-            t.join()
-            stdoutFileName, stderrFileName = t.res
-            print "data of %s returned (thread %s)" % (idxSimu, t.tName)
-            # printFileIntoStream(stdoutFileName, sys.stdout)
-            # The callBack function already print the errLog
-            # printFileIntoStream(stderrFileName, sys.stderr)
-            # remove files
-            os.unlink(stdoutFileName)
-            os.unlink(stderrFileName)
-            del t
+    ##################
+    # second example #
+    ##################
 
     def magSimus_ManyJobs(nbJobs):
         # Same with threads
@@ -818,80 +750,23 @@ if __name__ == '__main__':
         # remove all files in remote folders
         execBashCmdOnAllMachines('rm ' + REMOTE_BUFF_FOLDER + '/*')
 
-    def createFib35Script():
-            code =\
-            ("#!/usr/bin/python\n"
-             "def fib(n):\n"
-             "    if n < 2:\n"
-             "        return n\n"
-             "    return fib(n-2) + fib(n-1)\n"
-             "print 'fib(35) =', fib(35)"
-             )
-            filename = './fib35.py'
-            try:
-                os.unlink(filename)
-            except:
-                pass
-            with open(filename, 'w') as f:
-                print >> f, code
-            os.chmod(filename, 0755)
-
-    def fibs_localSequential(nbJobs):
-        def fib(n):
-            if n < 2:
-                return n
-            return fib(n-2) + fib(n-1)
-
-        for n in range(nbJobs):
-            print "job%s: fib(35) = %s" % (n, fib(35))
-
-    def fibs_condorThreads(nbJobs):
-
-        listOfThreads = []
-        createFib35Script()
-        for n in range(nbJobs):
-           jobName = 'fib35_' + str(n)
-           command = 'python ./fib35.py'
-           t = condorThread(command=command, name=jobName, verbose=False)
-           t.start()
-           assert t.tName == jobName
-           listOfThreads.append((t, jobName))
-
-        for (t, jobName) in listOfThreads:
-            t.join()
-            stdoutFileName, stderrFileName = t.res
-            print >> sys.stdout, jobName + ':',
-            printFileIntoStream(stdoutFileName, sys.stdout)
-            # remove files
-            os.unlink(stdoutFileName)
-            os.unlink(stderrFileName)
-            try:
-                os.unlink('./fib35.py')
-            except:
-                pass
-            del t
-
-    def fibs_ManyJobs(nbJobs):
-        createFib35Script()
-
-        command = './fib35.py'
-        listOfArguments = [None] * nbJobs
-        cs = CondorSubmitor('fibs')
-        listOfJobids = cs.submit_ManyJobs(command, listOfArguments, niceUser=True, maxSimultaneousJobsInGroup=None)
-        for (jobid, stderrFileName, stdoutFileName) in cs.getoutput_ManyJobs(listOfJobids):
-            with open(stdoutFileName, 'r') as f:
-                print >> sys.stdout, f.read()
-            with open(stderrFileName, 'r') as f:
-                print >> sys.stderr, f.read()
-            os.unlink(stderrFileName)
-            os.unlink(stdoutFileName)
-        try:
-            os.unlink('./fib35.py')
-        except:
-            pass
-
 
     import timeit
+
+    nbJobs = 500
+    # 1st example
+    t_fibs_ManyJobs = timeit.timeit("fibs_ManyJobs(%s)" % nbJobs, setup="from __main__ import fibs_ManyJobs", number=1)
+    print >> sys.stderr, "t_fibs_ManyJobs", t_fibs_ManyJobs
+
+    # 2nd example
+
+    # t_magSimus_ManyJobs = timeit.timeit("magSimus_ManyJobs(%s)" % nbJobs, setup="from __main__ import magSimus_ManyJobs", number=1)
+    # print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
+
+
+
+
+
 
     #nbJobs = 20
     #t_helloWorld_noBuff = timeit.timeit("helloWorld_noBuff(%s)" % nbJobs, setup="from __main__ import helloWorld_noBuff", number=1)
@@ -911,13 +786,13 @@ if __name__ == '__main__':
     # over 3000 i get this error:
     #__main__.CommandError: 'condor_submit -v' exited with status 1: '\nWARNING: your Requirements expression refers to TARGET.Memory. This is obsolete. Set request_memory and condor_submit will modify the Requirements expression as needed.\n\nERROR: Failed submission for job 30670.2085 - aborting entire submit\n\nERROR: Failed to queue
     #nbJobs = 3000
-    nbJobs = 200
+    #nbJobs = 200
     # t_magSimus_thread = timeit.timeit("magSimus_thread(%s)" % nbJobs, setup="from __main__ import magSimus_thread", number=1)
     # print >> sys.stderr, "t_magSimus_thread", t_magSimus_thread
     #t_magSimus_buff = timeit.timeit("magSimus_buff(%s)" % nbJobs, setup="from __main__ import magSimus_buff", number=1)
     #print >> sys.stderr, "t_magSimus_buff", t_magSimus_buff
-    t_magSimus_ManyJobs = timeit.timeit("magSimus_ManyJobs(%s)" % nbJobs, setup="from __main__ import magSimus_ManyJobs", number=1)
-    print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
+
+    # print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
     # nbJobs = 200 -> t_magSimus_ManyJobs 60 secs !
     # nbJobs = 1000 -> t_magSimus_ManyJobs 155 secs !
     # nbJobs = 3000 -> t_magSimus_ManyJobs 478 secs !
@@ -930,15 +805,15 @@ if __name__ == '__main__':
     # print >> sys.stderr, "t_magSimus_ManyJobs", t_magSimus_ManyJobs
     # nbJobs=150 -> t_magSimus_thread 45 seconds :D
 
-    # nbJobs = 500
+
     #print >> sys.stderr, "Local sequential execution:"
     #t_fibs = timeit.timeit("fibs_localSequential(%s)" % nbJobs, setup="from __main__ import fibs_localSequential", number=1)
     #print >> sys.stderr, "Condor parallel execution:"
     #t_fibs_withThreads = timeit.timeit("fibs_condorThreads(%s)" % nbJobs, setup="from __main__ import fibs_condorThreads", number=1)
     # print >> sys.stderr, "Condor parallel execution (ManyJobs):"
-    # t_fibs_ManyJobs = timeit.timeit("fibs_ManyJobs(%s)" % nbJobs, setup="from __main__ import fibs_ManyJobs", number=1)
+
 
     #print >> sys.stderr, "t_fibs_localSequential", t_fibs
     #print >> sys.stderr, "t_fibs_condorThreads", t_fibs_withThreads
-    # print >> sys.stderr, "t_fibs_ManyJobs", t_fibs_ManyJobs
+
     # nbJobs=500 -> t_fibs_ManyJobs = 40sec
