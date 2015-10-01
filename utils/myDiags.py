@@ -83,11 +83,13 @@ defaultArgsPhylDiag = \
      ('verbose', bool, False)]
 
 defaultKwargsPhylDiagDict = dict((n, (t, v)) for (n, t, v) in defaultArgsPhylDiag)
+
 def defaultKwargsPhylDiag(arguments=None):
     res = dict((n, t(v)) for (n, t, v) in defaultArgsPhylDiag)
     if arguments is None:
         return res
     else:
+        res.update(dict((k, v) for (k, v) in arguments.iteritems() if k in defaultKwargsPhylDiagDict.keys()))
         for (argN, tpe) in [('gapMax', int), ('overlapMax', int), ('gapMaxMicroInv', int), ('pThreshold', float)]:
             if arguments[argN] == 'None':
                 res[argN] = None
@@ -95,7 +97,7 @@ def defaultKwargsPhylDiag(arguments=None):
                 try:
                     res[argN] = tpe(arguments[argN])
                 except:
-                    raise TypeError('%s is either an int or None' % argN)
+                    raise TypeError('%s should be either an int or None, not %s, a %s' % (argN, arguments[argN], type(arguments[argN])))
         res['filterType'] = FilterType[list(FilterType._keys).index(arguments["filterType"])]
     return res
 

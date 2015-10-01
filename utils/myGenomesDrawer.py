@@ -232,7 +232,6 @@ class levelIdxGenerator():
             # random.shuffle(tmp)
             for i in tmp:
                 self.availableLevels += range(self.firstLevelIdx + i, self.lastLevelIdx + 1, farIdxs)
-            print >> sys.stderr, self.availableLevels
         self.currIdx = 0
         assert len(self.availableLevels) == (self.lastLevelIdx+1) - self.firstLevelIdx
 
@@ -656,8 +655,6 @@ def prepareHomologyMatrix((range1, range2), (genesStrandsC1, genesStrandsC2),
 
         width = (nx+3) * sizeCase
         height = (ny+3) * sizeCase
-        print >> sys.stderr, "width=", width
-        print >> sys.stderr, "height=", height
 
         closeColorsGenerator = levelIdxGenerator()
 
@@ -974,8 +971,6 @@ def prepareWholeGenomeHomologyMatrices(genome1, genome2, families,
     sizeCase = min(float(maxWidth - lchrNames) / (wnx + (cx+1)), float(maxHeight - lchrNames) / (wny + (cy+1)))
     width  = (wnx + (cx + 1)) * sizeCase + lchrNames
     height = (wny + (cy + 1)) * sizeCase + lchrNames
-    print >> sys.stderr, "width=", width
-    print >> sys.stderr, "height=", height
 
     # sort chromosome by decreasing lengths
     sortedChrs1 = [c for (c, nbGenes) in sorted(genome1.iteritems(), key=lambda x: len(x[1]), reverse=True)]
@@ -1032,11 +1027,9 @@ def prepareWholeGenomeHomologyMatrices(genome1, genome2, families,
                        doDrawChromosomes=drawChromosomes,
                        drawlinesNumbersAndSigns=drawChromosomes,
                        scaleFactorRectangles=scaleFactorRectangles)
-            print >> sys.stderr, 'len(listOfMatrixItems)=', len(listOfMatrixItems)
             listOfMatrixItems = mySvgDrawer.tanslateItems(listOfMatrixItems, Point(cumulatedX, cumulatedY - (ny * sizeCase)))
             cumulatedY -= ny * sizeCase + sizeCase
             listOfItems += listOfMatrixItems
-            print >> sys.stderr, 'len(listOfItems)=', len(listOfItems)
             progressBar.printProgressIn(sys.stderr, i1 + i2)
         cumulatedY = height - lchrNames
         cumulatedX += nx * sizeCase + sizeCase
