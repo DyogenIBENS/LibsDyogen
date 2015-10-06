@@ -47,12 +47,15 @@ USER = getpass.getuser()
 REMOTE_BUFF_FOLDER = '/localtmp/' + USER
 home = os.path.expanduser("~")
 LOCAL_BUFF_FOLDER = home + '/condor'
+LASTCOND = LOCAL_BUFF_FOLDER + '/COND'
 SCRIPTFILE = "conpy.%s.jobscript"
 OUTFILE = "conpy.%s.stdout.log"
 ERRFILE = "conpy.%s.stderr.log"
 SOE = "conpy.%s.soe"
 MACHINES = ["bioclust%02d.bioclust.biologie.ens.fr" % i for i in range(1, 11)] + \
-           ["dyoclust%02d.bioclust.biologie.ens.fr" % i for i in range(4, 22)]
+            ["dyoclust%02d.bioclust.biologie.ens.fr" % i for i in range(5, 22)]
+           #["dyoclust%02d.bioclust.biologie.ens.fr" % i for i in range(4, 22)]
+REQUIREMENT = '(machine != "dyoclust04.bioclust.biologie.ens.fr")'
 # Mathieu BAHIN set 10 000 for the total quantity of available simultaneous space for one user.
 TOTAL_QUANTITY_AVAILABLE_BY_USER = 10000
 MAX_SIMULTANEOUS_JOBS = 100
@@ -327,13 +330,13 @@ def getOutputWithBuffer(jobid, jobName, waitMaxTime=None, log=LOG_FILE, cleanup=
     return (outfileName, errfileName)
 
 
-def submit_COND_ManyJobs(COND):
+def submit_COND_ManyJobs(condFileForSubmission):
     """Submits a Condor job represented as a job file string. Returns
     the list of jobids of the submitted jobs.
     """
-    # print >> sys.stdout, COND
+    # print >> sys.stdout, condFileForSubmission
     print >> sys.stderr, "submission of jobs to condor, this may take some time... usually the more jobs the more time (~5sec for 100 jobs and ~25sec for 1000 jobs)"
-    out, err = chcall('condor_submit -v', COND)
+    out, err = chcall('condor_submit -v', condFileForSubmission)
     print >> sys.stderr, "submission finished"
     # list [..., (clusterId, jid), ...]
     listOfJobids = re.findall(r'Proc (\d+\.\d+)', out)
@@ -382,7 +385,7 @@ class CondorSubmitor():
                         # group name of the job
                         jobGroup='<group>',
                         niceUser=False,
-                        requirements='',
+                        requirements=REQUIREMENT,
                         # cf, https://research.cs.wisc.edu/htcondor/CondorWeek2012/presentations/thain-dynamic-slots.pdf
                         request_memory='0.5G',  # request_memory is in mbytes => at least 1Go of RAM
                         request_disk='10000',  # request_disk is in kbytes => at least 10Mbytes
@@ -445,7 +448,7 @@ class CondorSubmitor():
         st = os.stat(self.wrapperExecFileName)
         os.chmod(self.wrapperExecFileName, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-        COND = [
+        condFileForSubmission = [
             "Executable = %s" % self.wrapperExecFileName,
             "Universe = %s" % universe,
             "Log = %s" % self.log,
@@ -469,16 +472,19 @@ class CondorSubmitor():
 
         for (i, arguments) in enumerate(listOfArguments):
             arguments = arguments + ' ' + '$(Cluster)' + ' ' + str(i)
-            COND += "\n"
+            condFileForSubmission += "\n"
             if arguments:
-                COND += ["Arguments = %s" % arguments]
-            COND += ["Input = %s" % '',
+                condFileForSubmission += ["Arguments = %s" % arguments]
+            condFileForSubmission += ["Input = %s" % '',
                      "Output = %s" % (signalOfEndFileName % i),
                      "Error = %s" % (errFileName % i)]
-            COND += ["Queue"]
+            condFileForSubmission += ["Queue"]
 
-        COND = "\n".join(COND)
-        return submit_COND_ManyJobs(COND)
+        condFileForSubmission = "\n".join(condFileForSubmission)
+        # write a backup of the last submission file for debug purposes
+        with open(LASTCOND, 'w') as f:
+            print >> f, condFileForSubmission
+        return submit_COND_ManyJobs(condFileForSubmission)
 
     def waitUntilSignalOfEnd(self, jobid, waitTime=2, maxWaitTime=480):
         signalOfEndFileName = self.signalOfEndFileName % str(jobid)
@@ -714,7 +720,7 @@ if __name__ == '__main__':
            ancGenesName = 'res/simu1/' + str(idxSimu) + '/ancGenes.%s.list.bz2'
            arguments = 'res/speciesTree.phylTree -out:genomeFiles=' + genesName +\
                        ' -out:ancGenesFiles=' + ancGenesName +\
-                       ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 +lazyBreakpointAnalyzer'
+                       ' -parameterFile=data/parameters.v80 -userRatesFile=data/specRates_MS1.v80 -breakpointAnalyzer'
            listOfArguments.append(arguments)
         cs = CondorSubmitor('magSimus1')
         listOfJids = cs.submit_ManyJobs(executable, listOfArguments, niceUser=True, maxSimultaneousJobsInGroup=None)
