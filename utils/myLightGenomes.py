@@ -9,10 +9,21 @@ import sys
 import copy
 import collections
 import itertools
+import re
 import myFile
 import myGenomes
 import myTools
 import enum
+
+
+def _keyFuncNaturalSort((c, chrom)):
+    '''
+    alist.sort(key=natural_keys) sorts in human wished order
+    http://nedbatchelder.com/blog/200712/human_sorting.html
+    (See Toothy's implementation in the comments)
+    '''
+    res = [myTools.atoi(c) for c in re.split('([0-9]+)', str(c))]
+    return res
 
 # TODO : unoriented genes
 # TODO : unoriented adjacencies
@@ -398,14 +409,19 @@ class LightGenome(myTools.DefaultOrderedDict):
                 nbRemovedChrs += 1
         return (nbRemovedChrs, nbRemovedGenes)
 
-    def sort(self):
-        """ Sort sbs by decreasing sizes """
+    def sort(self, byName=False):
+        """ Sort sbs by decreasing sizes (default), or byName """
         l = self.items()
         for c in self.keys():
             del self[c]
-        for (c, chrom) in sorted(l, key=lambda x: len(x[1]), reverse=True):
-            self[c] = chrom
-
+        if byName is False:
+            # sort by decreasing size
+            for (c, chrom) in sorted(l, key=lambda x: len(x[1]), reverse=True):
+                self[c] = chrom
+        else:
+            assert byName is True
+            for (c, chrom) in sorted(l, key=_keyFuncNaturalSort):
+                self[c] = chrom
 
 # FIXME, it could also be easier to use a dict here and no family IDs, but IDs are processed faster than strings when
 # FIXME managing rewritten genomes

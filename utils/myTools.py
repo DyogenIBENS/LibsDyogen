@@ -868,3 +868,6 @@ def _getTerminalSize_linux():
         except:
             pass
     return int(cr[1]), int(cr[0])
+
+def atoi(text):
+    return int(text) if text.isdigit() else text

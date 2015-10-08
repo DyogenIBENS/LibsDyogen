@@ -147,11 +147,11 @@ class Diagonal():
         return (self.l1[-1], self.l2[-1])
 
     def minOnG(self, rankGenome):
-        assert rankGenome in [1,2]
+        assert rankGenome in [1, 2]
         return min(self.l1) if rankGenome == 1 else min(self.l2)
 
     def maxOnG(self, rankGenome):
-        assert rankGenome in [1,2]
+        assert rankGenome in [1, 2]
         return max(self.l1) if rankGenome == 1 else max(self.l2)
 
     #returns the maximum gap between two hps with the Chebyschev Distance metric (CD)
