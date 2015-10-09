@@ -641,7 +641,7 @@ class PhylogeneticTree:
 
     def printBranchName(self, child, stream=sys.stderr):
         # To print branch name to sys.stderr
-        # Please be aware that changing this breaks the analysis of the stderr by myScore.readLogErr()
+        # Please be aware that changing this breaks the analysis of the stderr by myScore.effectiveValuesFromSimulationLogErr()
         (parent, bLength) = self.parent[child]
         foo = "# Branch %s -> %s (%s My) #" % (parent, child, bLength)
         bar = "#" * len(foo)
