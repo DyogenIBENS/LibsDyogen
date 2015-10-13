@@ -64,15 +64,15 @@ FilterType = enum.Enum('InFamilies', 'InBothGenomes', 'None')
 
 defaultArgsPhylDiag = \
     [("filterType", str, 'InBothGenomes'),
-     ("tandemGapMax", int, 0),
-     ("gapMax", str, 'None'),
+     ("tandemGapMax", int, 10),
+     ("gapMax", str, 5),
      ("distinguishMonoGenicDiags", bool, True),
      ('distanceMetric', str, 'CD'),
      ('pThreshold', str, 'None'),
      ('gapMaxMicroInv', str, '1'),
      ('identifyMonoGenicInversion', bool, True),
      ('identifyBreakpointsWithinGaps', bool, True),
-     ('overlapMax', str, 'None'),
+     ('overlapMax', str, 10),
      ("minChromLength", int, 2),
      ("sameStrand", bool, True),
      ('nbHpsRecommendedGap', int, 2), ('targetProbaRecommendedGap', float, 0.01),
