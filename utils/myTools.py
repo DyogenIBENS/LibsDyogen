@@ -871,3 +871,47 @@ def _getTerminalSize_linux():
 
 def atoi(text):
     return int(text) if text.isdigit() else text
+
+def isSorted(l, increasingOrder=False, stricly=False):
+    assert isinstance(l, list)
+    assert isinstance(increasingOrder, bool)
+    if increasingOrder:
+        if stricly:
+            res= all(l[i] < l[i+1] for i in xrange(len(l)-1))
+        else:
+            res = all(l[i] <= l[i+1] for i in xrange(len(l)-1))
+    else:
+
+        if stricly:
+            res = all(l[i] > l[i+1] for i in xrange(len(l)-1))
+        else:
+            res = all(l[i] >= l[i+1] for i in xrange(len(l)-1))
+    return res
+
+
+# Beautiful example of how to draw an empirical distribution: source :
+# http://stackoverflow.com/questions/9378420/how-to-plot-cdf-in-matplotlib-in-python
+# import numpy as np
+# from pylab import *
+#
+# # Create some test data
+# dx = .01
+# X  = np.arange(-2,2,dx)
+# Y  = exp(-X**2)
+#
+# # Normalize the data to a proper PDF
+# LOVE THAT!
+# Y /= (dx*Y).sum()
+#
+# (or even better: Y /= np.trapz(Y,X), if the bins are not all equal)
+#
+# # Compute the CDF
+# CY = np.cumsum(Y*dx)
+#
+# # Plot both
+# plot(X,Y)
+# plot(X,CY,'r--')
+#
+# show()
+
+
