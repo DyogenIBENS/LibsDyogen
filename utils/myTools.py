@@ -75,10 +75,16 @@ class ProgressBar:
         self.totalLength = totalLength
         self.listOfPercentage = range(0, 101, step)[1:]
 
-    def printProgressIn(self, stream, currentLength):
+    def printProgressIn(self, stream, currentLength, prefixLabel=None):
         progress = int(float(currentLength*100)/self.totalLength)
         if progress in self.listOfPercentage:
-            stream.write("Progress: %d%%   \r" % progress)
+            if prefixLabel is None:
+                stream.write("Progress: %d%%   \r" % progress)
+            else:
+                # No return of the cursor.
+                # If they are some prints between two execution of printProgressIn, this allow to see the line in the
+                # console. It avoids the removal of the message of progress by intermediary lines.
+                stream.write(prefixLabel + "progress: %d%%   \n" % progress)
             stream.flush()
             self.listOfPercentage.remove(progress)
 
