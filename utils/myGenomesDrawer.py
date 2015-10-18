@@ -476,6 +476,11 @@ def drawMatrix(range1, range2, hpSigns, diagsIndices, sizeCell, width, height,
     # Nb of horizontal lines (y varies) in the matrix
     nbLinesY = ny + 1
 
+    smallestVisibleWidthOnFirefox = 1.0 / 100.0
+    # conversion either with inkscape or rsvg-convert
+    smallestVisibleWidthForGoodConversionIntoPDF = 1.0 / 10.0
+    smallestVisibleWidth=smallestVisibleWidthForGoodConversionIntoPDF
+
     # draw Diagonals first because they are on the background
     print >> sys.stderr, "Nb of diagonals showed = ", len(diagsIndices)
 
@@ -504,14 +509,15 @@ def drawMatrix(range1, range2, hpSigns, diagsIndices, sizeCell, width, height,
         cx_s = min_i*sizeCell
         cy_s = max_j*sizeCell
 
-        scaleFactorBoundingBoxDiags = 1.5 * scaleFactorRectangles if nx >= 300 or ny >= 300 else 1.0
+        homologyWidth = (sizeCell * scaleFactorRectangles)
+        strokeWidthBoundingBoxDiags = smallestVisibleWidth
         listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx_s, height-(cy_s+sizeCell)),
                                                        (max_j-min_j)*sizeCell + sizeCell, (max_i-min_i)*sizeCell + sizeCell,
-                                                       stroke='black', fill='none', strokeWidth=0.2*sizeCell*scaleFactorBoundingBoxDiags))
+                                                       stroke='black', fill='none', strokeWidth=strokeWidthBoundingBoxDiags))
 
     # tick lines
     if drawlinesNumbersAndSigns:
-        widthTicks = min(float(width)/1000, float(height)/1000)
+        widthTicks = min(float(width)/500, float(height)/500)
         sizeTextTicks = widthTicks*10
         for (i, ni) in enumerate(range(range1[0], range1[1])):
             cx = i*sizeCell
@@ -779,8 +785,7 @@ def writeSVGFileForPairwiseCompOfGenomes(genomeName1,
               '<style type="text/css">\n',
                  '*{stroke-linecap:square;stroke-linejoin:round;}\n',
               '</style>\n',
-           '</defs>\n'
-           '<g style="fill-opacity:1.0; stroke:black; stroke-width:1;">\n']
+           '</defs>\n']
 
     # Title
     title = \
@@ -828,7 +833,7 @@ def writeSVGFileForPairwiseCompOfGenomes(genomeName1,
         else:
             var += line
     var += ["</svg>\n"]
-    var += ["</g>\n", "</svg>\n"]
+    var += ["</svg>\n"]
 
     file = open(outImageFileName, 'w')
     file.writelines(var)
@@ -972,22 +977,29 @@ def prepareWholeGenomeHomologyMatrices(genome1, genome2, families,
     width  = (wnx + (cx + 1)) * sizeCase + lchrNames
     height = (wny + (cy + 1)) * sizeCase + lchrNames
 
+    minVisibleStrokeWidthOnFirefox = 1.0 / 100.0
+    # conversion either with inkscape or rsvg-convert
+    minVisibleStrokeForGoodConversionIntoPDF = 1.0 / 10.0
+    minVisibleStroke = minVisibleStrokeForGoodConversionIntoPDF
+
+    ((g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2)) = editGenomes(genome1, genome2, families,
+                                                                           filterType, minChromLength, tandemGapMax)
     # sort chromosome by decreasing lengths
-    sortedChrs1 = [c for (c, nbGenes) in sorted(genome1.iteritems(), key=lambda x: len(x[1]), reverse=True)]
-    sortedChrs2 = [c for (c, nbGenes) in sorted(genome2.iteritems(), key=lambda x: len(x[1]), reverse=True)]
+    sortedChrs1 = [c for (c, nbGenes) in sorted(g1_tb.iteritems(), key=lambda x: len(x[1]), reverse=True)]
+    sortedChrs2 = [c for (c, nbGenes) in sorted(g2_tb.iteritems(), key=lambda x: len(x[1]), reverse=True)]
 
     # for each pairwise comparison prepare the homology matrix
     cumulatedX = lchrNames
     cumulatedY = height - lchrNames
     listOfItems = []
     progressBar = myTools.ProgressBar(len(sortedChrs1) * len(sortedChrs2))
-    ((g1_tb, g1_fID, Gtb2GfID1), (g2_tb, g2_fID, Gtb2GfID2)) = editGenomes(genome1, genome2, families,
-                                                                           filterType, minChromLength, tandemGapMax)
+
     listOfChrNames = []
+    lineWidthBetweenChrs = minVisibleStroke
     for (i1, c1) in enumerate(sortedChrs1):
         # vertical line separating chromosome comparisons on the x-axis
         listOfItems.append(mySvgDrawer.Line(Point(cumulatedX,                  0),
-                                            Point(cumulatedX, height - lchrNames), width=float(width)/2000))
+                                            Point(cumulatedX, height - lchrNames), width=lineWidthBetweenChrs))
         nx = len(genome1[c1])
         listOfChrNames.append(mySvgDrawer.Text(Point(cumulatedX + float(nx * sizeCase)/2, height - float(lchrNames)/2),
                                                c1, size=float(lchrNames)/3, text_anchor='middle'))
@@ -997,7 +1009,7 @@ def prepareWholeGenomeHomologyMatrices(genome1, genome2, families,
             if i1 == 0:
                 # horizontal line separating chromosome comparisons on the y-axis
                 listOfItems.append(mySvgDrawer.Line(Point(lchrNames, cumulatedY),
-                                                    Point(width,     cumulatedY), width=float(width)/2000))
+                                                    Point(width,     cumulatedY), width=lineWidthBetweenChrs))
                 listOfChrNames.append(mySvgDrawer.Text(Point(float(lchrNames)/2, cumulatedY - float(ny * sizeCase)/2),
                                                        c2, size=float(lchrNames)/3, text_anchor='middle'))
             range2 = (0, ny)

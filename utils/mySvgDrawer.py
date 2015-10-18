@@ -120,13 +120,11 @@ class Scene:
               [genomicusColors] + \
               ['*{stroke-linecap:square;stroke-linejoin:round;}\n',
                '</style>\n',
-               '</defs>\n'
-               '<g style="fill-opacity:1.0; stroke:black;\n',
-               'stroke-width:0.25;">\n']
+               '</defs>\n']
 
         for item in self.items:
             var += item.strarray()
-        var += [" </g>\n", "</svg>\n"]
+        var += ["</svg>\n"]
         return var
 
     def write_svg(self, filename=None):
@@ -145,17 +143,18 @@ class Scene:
 
 
 class Line:
-    def __init__(self, start, end, width=0.03):
+    def __init__(self, start, end, width=0.03, color='black'):
         assert isinstance(start, Point)
         assert isinstance(end, Point)
         self.start = start  #xy tuple
         self.end = end  #xy tuple
         self.width = width  #xy tuple
+        self.color = color
         return
 
     def strarray(self):
-        return ["  <line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" style=\"stroke-width:%f\" />\n" % \
-                (self.start[0], self.start[1], self.end[0], self.end[1], self.width)]
+        return ["  <line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" style=\"stroke-width:%f; stroke:%s\" />\n" % \
+                (self.start[0], self.start[1], self.end[0], self.end[1], self.width, self.color)]
 
 
 class Circle:
