@@ -75,14 +75,23 @@ class myStats:
             res = float(sum(tmp))
             return res
 
-    # Renvoie (min quart1 median quart3 max mean stddev len)
-    #########################################################
+    # Returns (min quart1 median quart3 N75 N50 N25 max mean stddev len)
+    ####################################################################
     @staticmethod
     def valSummary(lst):
         l = list(lst)
         m = myStats.mean(l)
         return (myStats.getValue(l, 0), myStats.getValue(l, 25),myStats.getValue(l, 50),myStats.getValue(l, 75), \
                 myStats.getValueNX(l, 75),myStats.getValueNX(l, 50),myStats.getValueNX(l, 25), myStats.getValue(l, 100), m, myStats.stddev(l, m), len(l))
+    
+    # Returns (min quart1 median quart3  N75 N50 N25 weightedAverage max mean stddev len)
+    #####################################################################################
+    @staticmethod
+    def valSummary2(lst):
+        l = list(lst)
+        m = myStats.mean(l)
+        return (myStats.getValue(l, 0), myStats.getValue(l, 25),myStats.getValue(l, 50),myStats.getValue(l, 75), \
+                myStats.getValueNX(l, 75),myStats.getValueNX(l, 50),myStats.getValueNX(l, 25), myStats.getWeightedAverage(l), myStats.getValue(l, 100), m, myStats.stddev(l, m), len(l))
 
     # Returns (min N50 weightedAverage max)
     #########################################################
