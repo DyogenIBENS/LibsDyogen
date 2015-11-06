@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-# LibsDyogen
-# python 2.7
-# Copyright © 2015 IBENS/Dyogen Joseph LUCAS, and Hugues ROEST CROLLIUS
-# mail : hrc@ens.fr or jlucas@ens.fr
-# This is free software, you may copy, modify and/or distribute this work under the terms of the GNU General Public License, version 3 (GPL v3) or later and the CeCiLL v2 license in France
+
+# LibsDyogen version 1.0 (6/11/2015)
+# python v2.7 at least is needed
+# Copyright © 2015 IBENS/Dyogen : Joseph LUCAS and Hugues ROEST CROLLIUS
+# mail : jlucas@ens.fr
+# Licences GLP v3 and CeCILL v2
 
 import sys
 import os
@@ -758,8 +759,8 @@ def writeSVGFileForPairwiseCompOfGenomes(genomeName1,
                                          gapMax,
                                          distanceMetric,
                                          gapMaxMicroInv,
-                                         identifyBreakpointsWithinGaps,
-                                         overlapMax,
+                                         identifyMicroRearrangements,
+                                         truncationMax,
                                          nbSbs,
                                          outImageFileName,
                                          switchOnDirectView):
@@ -796,8 +797,8 @@ def writeSVGFileForPairwiseCompOfGenomes(genomeName1,
          gapMax,
          distanceMetric,
          gapMaxMicroInv,
-         identifyBreakpointsWithinGaps,
-         overlapMax,
+         identifyMicroRearrangements,
+         truncationMax,
          nbSbs)
     var += ['<svg x="5" y="0" viewBox="5 0 95 5" width="95" height="5">\n',
             ''.join(mySvgDrawer.Text(mySvgDrawer.Point(float(5 + 95)/2.0, 5.0/2.0), title,
@@ -851,8 +852,8 @@ def writeSVGFileForPairwiseCompOfChrs(genomeName1, chr1, range1,
                                       gapMax,
                                       distanceMetric,
                                       gapMaxMicroInv,
-                                      identifyBreakpointsWithinGaps,
-                                      overlapMax,
+                                      identifyMicroRearrangements,
+                                      truncationMax,
                                       nbSbs,
                                       outImageFileName,
                                       switchOnDirectView):
@@ -889,8 +890,8 @@ def writeSVGFileForPairwiseCompOfChrs(genomeName1, chr1, range1,
          gapMax,
          distanceMetric,
          gapMaxMicroInv,
-         identifyBreakpointsWithinGaps,
-         overlapMax,
+         identifyMicroRearrangements,
+         truncationMax,
          nbSbs)
     var += ['<svg x="5" y="0" viewBox="5 0 95 5" width="95" height="5">\n',
             ''.join(mySvgDrawer.Text(mySvgDrawer.Point(float(5 + 95)/2.0, 5.0/2.0), title,
@@ -1068,9 +1069,9 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                          distinguishMonoGenicDiags=True,
                          pThreshold=None,
                          gapMaxMicroInv=0,
-                         identifyMonoGenicInversion=False,
-                         identifyBreakpointsWithinGaps=True,
-                         overlapMax=None,
+                         identifyMonoGenicInvs=False,
+                         identifyMicroRearrangements=True,
+                         truncationMax=None,
                          sameStrand=True,
                          validateImpossToCalc_mThreshold=3,
                          nbHpsRecommendedGap=2,
@@ -1094,9 +1095,9 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
               'distinguishMonoGenicDiags': distinguishMonoGenicDiags,
               'gapMaxMicroInv': gapMaxMicroInv,
               'distanceMetric': distanceMetric,
-              'identifyMonoGenicInversion': identifyMonoGenicInversion,
-              'identifyBreakpointsWithinGaps': identifyBreakpointsWithinGaps,
-              'overlapMax': overlapMax,
+              'identifyMonoGenicInvs': identifyMonoGenicInvs,
+              'identifyMicroRearrangements': identifyMicroRearrangements,
+              'truncationMax': truncationMax,
               'sameStrand': sameStrand,
               'pThreshold': pThreshold,
               'nbHpsRecommendedGap': nbHpsRecommendedGap,
@@ -1344,8 +1345,8 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                                       gapMax,
                                       distanceMetric,
                                       gapMaxMicroInv,
-                                      identifyBreakpointsWithinGaps,
-                                      overlapMax,
+                                      identifyMicroRearrangements,
+                                      truncationMax,
                                       nbSbs,
                                       outImageFileName,
                                       switchOnDirectView)

@@ -1,6 +1,12 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+# LibsDyogen version 1.0 (6/11/2015)
+# python 2.7
+# Copyright © 2015 IBENS/Dyogen : Joseph LUCAS and Hugues ROEST CROLLIUS
+# mail : jlucas@ens.fr
+# Licences GLP v3 and CeCILL v2
+
 # last author: Joseph Lucas DYOGEN/IBENS 46 rue d'Ulm PARIS 75005
 # https://github.com/DyogenIBENS/CondorViaPython
 
