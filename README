@@ -4,6 +4,7 @@
 | |___| | |_) \__ \ |_| | |_| | (_) | (_| |  __/ | | |
 |_____|_|_.__/|___/____/ \__, |\___/ \__, |\___|_| |_|
                          |___/       |___/
+
 LibsDyogen version 1.0 (6/11/2015)
 python v2.7 at least is needed
 
@@ -12,16 +13,15 @@ and the CeCILL licence version 2 of the CNRS. These licences are contained in th
     1) LICENSE-GPL.txt (or http://www.gnu.org/licenses/gpl-3.0-standalone.html)
     2) LICENCE-CeCILL.txt (or http://www.cecill.info/licences/Licence_CeCILL_V2-en.html)
 
-
 Copyright for this code is held jointly by the Dyogen (DYnamic and Organisation of GENomes) team
 of the Institut de Biologie de l'Ecole Normale Supérieure (IBENS) 46 rue d'Ulm Paris, and the individual authors.
 
-Copyright © 2015 IBENS/Dyogen
-The authors' contributions:
+Copyright © 2015 IBENS/Dyogen and authors
+Authors' contributions:
 ---------------------------
-Matthieu MUFFATO: started the library (myGenomes, myTools, myPsOutput, myProteinTre, myPhylTree, myKaryoDrawer, myFile, myGenomes, myGraph, myMultiprocess, myMaths
-Joseph LUCAS: Updated the library and organised it, created myDiags, myLightGenomes, myCondor, myGeneTeams, myGenomesDrawer, myIntervals, myMapping, myProbas, mySvgDrawer and updated: myTools
-Nga Nguyen: Updated some functions of myDiags, myGraph
+Matthieu MUFFATO: started the library and created: myGenomes, myTools, myPsOutput, myProteinTre, myPhylTree, myKaryoDrawer, myFile, myGenomes, myGraph, myMultiprocess, myMaths
+Joseph LUCAS: Updated the library and organised it, created: myDiags, myLightGenomes, myCondor, myGeneTeams, myGenomesDrawer, myIntervals, myMapping, myProbas, mySvgDrawer and updated: myTools
+Nga THI THUY NGUYEN: Updated some functions of myDiags and myGraph
 Lucas Tittmann: Updated some functions of myDiags
 Hugues ROEST CROLLIUS: supervisor
 
@@ -31,7 +31,6 @@ About Licences:
 ---------------
 # Justify the use of snippets from stack overflow
 http://programmers.stackexchange.com/questions/12171/how-does-fair-use-apply-to-code-snippets
-
 
 Installation:
 -------------
@@ -44,19 +43,35 @@ sudo apt-get install git
 sudo apt-get install cython
 
 # Choose a path for the installation (here it is /home/<user>/Libs)
-PATH_LIBSDYOGEN="/home/${USER}/Libs"
+PATH_LIBSDYOGEN_PARENT="/home/${USER}/Libs"
 
 # Create the root folder of LibsDyogen
-mkdir ${PATH_LIBSDYOGEN}
-cd ${PATH_LIBSDYOGEN}
+mkdir ${PATH_LIBSDYOGEN_PARENT}
+cd ${PATH_LIBSDYOGEN_PARENT}
 
 # Clone the LibsDyogen library
 git clone git@depot.biologie.ens.fr:LibsDyogen
 
 # Add the LibsDyogen to the PYTHONPATH environment variable
-echo 'export PYTHONPATH="$PYTHONPATH:${PATH_LIBSDYOGEN}/LibsDyogen"' >> ~/.bashrc
+PATH_LIBSDYOGEN="${PATH_LIBSDYOGEN_PARENT}/LibsDyogen"
+echo "export PYTHONPATH=\"$PYTHONPATH:${PATH_LIBSDYOGEN}\"" >> ~/.bashrc
 
 # Then cythonise the utils/extractSbs.pyx file
 chmod +x ${PATH_LIBSDYOGEN}/cythonisePyxFiles.sh
-# the first argument of the script should be the path to the libsdyogen root folder
+# the first argument of the script should be the path to the LibsDyogen root folder
 bash ${PATH_LIBSDYOGEN}/cythonisePyxFiles.sh ${PATH_LIBSDYOGEN}
+
+Install optional plugable softwares:
+------------------------------------
+
+# Install homology teams
+PATH_HOMOLOGYTEAMS_PARENT="/home/${USER}/Libs"
+mkdir -p ${PATH_HOMOLOGYTEAMS_PARENT}
+cd ${PATH_HOMOLOGYTEAMS_PARENT}
+wget http://euler.slu.edu/~goldwasser/homologyteams/homologyteams-1.1.zip
+unzip homologyteams-1.1.zip
+PATH_HOMOLOGYTEAMS="${PATH_HOMOLOGYTEAMS_PARENT}/homologyteams-1.1"
+cd ${PATH_HOMOLOGYTEAMS}/src
+make
+echo "export PATH=\"\$PATH:${PATH_HOMOLOGYTEAMS}/src\"" >> ~/.bashrc
+cd

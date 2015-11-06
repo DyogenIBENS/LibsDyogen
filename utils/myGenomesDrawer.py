@@ -6,6 +6,8 @@
 # mail : jlucas@ens.fr
 # Licences GLP v3 and CeCILL v2
 
+# To use this file install homology teams, cf the README of LibsDyogen
+
 import sys
 import os
 import collections
