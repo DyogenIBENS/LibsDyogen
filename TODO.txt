@@ -1,3 +1,1 @@
-1) write licences in headers
-2) import the .css file used for MH and MHP in the libs. It's place is here, 
-		not in the phylDiag deposit.
+import the .css file used for MH and MHP in the libs. It's place is here, not in the phylDiag deposit.
