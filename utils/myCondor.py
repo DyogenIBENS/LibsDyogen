@@ -20,7 +20,6 @@
 #    publicly, you agree to allow others to view and fork your repositories."""
 # we forked its deposit https://github.com/DyogenIBENS/CondorViaPython
 
-
 # It might be a good thing to do execute this two next lines if the ~/condor/ folder is full of old useless files
 # cd ~
 # rm -rf condor

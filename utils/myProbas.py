@@ -6,9 +6,9 @@
 # mail : jlucas@ens.fr
 # Licences GLP v3 and CeCILL v2
 
-######################
-# probability package
-######################
+#######################
+# probability package #
+#######################
 
 ##################################
 # Probability for synteny blocks

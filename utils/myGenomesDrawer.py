@@ -1143,6 +1143,7 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
         else:
             sbsInPairComp = inSbsInPairComp
 
+        # truncate sbs to fit the ROI
         new_sbsInPairComp = myTools.Dict2d(list)
         for sb in sbsInPairComp[chr1][chr2]:
             newl1 = []
@@ -1165,7 +1166,6 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                 new_sbsInPairComp[chr1][chr2].append(myDiags.SyntenyBlock(myDiags.Diagonal(sb.dt, newl1, newl2, newla),
                                                                           sb.pVal))
         sbsInPairComp = new_sbsInPairComp
-
         genesDiagIndices = []
         for sb in sbsInPairComp[chr1][chr2]:
             genesDiagIndices.append([])
@@ -1239,8 +1239,8 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                 comparedGenome1 = chrom1_tb
                 comparedGenome2 = chrom2_tb
             inSbsInPairComp = myDiags.extractSbsInPairCompGenomesInTbs(comparedGenome1,
-                                                                     comparedGenome2,
-                                                                     **kwargs)
+                                                                       comparedGenome2,
+                                                                       **kwargs)
         else:
             for sb in inSbsInPairComp[chr1][chr2]:
                 # change the sb.lX structure from list of lists to list of ints
@@ -1414,14 +1414,14 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                 (chr1, range1) = parseChrRange(raw_input("chr1:deb1-fin1 = "), genome1)
                 break
             except ValueError:
-                print >> sys.stderr, "You need to write somtehing as chr1:deb1-fin1 with chr1 a chr of G1 and deb1 and fin1 indices of the first and last gene (indices start at 1)"
+                print >> sys.stderr, "You need to write something as chr1:deb1-fin1 with chr1 a chr of G1 and deb1 and fin1 indices of the first and last gene (indices start at 1)"
 
         while True:
             try:
                 (chr2, range2) = parseChrRange(raw_input("chr2:deb2-fin2 = "), genome2)
                 break
             except ValueError:
-                print >> sys.stderr, "You need to write somtehing as chr2:deb2-fin2 with chr2 a chr of G2 and deb2 and fin2 indices of the first and last gene (indices start at 1)"
+                print >> sys.stderr, "You need to write something as chr2:deb2-fin2 with chr2 a chr of G2 and deb2 and fin2 indices of the first and last gene (indices start at 1)"
 
         chrom1 ={}
         chrom2 ={}

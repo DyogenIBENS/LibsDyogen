@@ -54,7 +54,8 @@ git clone git@depot.biologie.ens.fr:LibsDyogen
 
 # Add the LibsDyogen to the PYTHONPATH environment variable
 PATH_LIBSDYOGEN="${PATH_LIBSDYOGEN_PARENT}/LibsDyogen"
-echo "export PYTHONPATH=\"$PYTHONPATH:${PATH_LIBSDYOGEN}\"" >> ~/.bashrc
+echo "export PYTHONPATH=\"\$PYTHONPATH:${PATH_LIBSDYOGEN}\"" >> ~/.bashrc
+bash
 
 # Then cythonise the utils/extractSbs.pyx file
 chmod +x ${PATH_LIBSDYOGEN}/cythonisePyxFiles.sh
@@ -63,7 +64,6 @@ bash ${PATH_LIBSDYOGEN}/cythonisePyxFiles.sh ${PATH_LIBSDYOGEN}
 
 Install optional plugable softwares:
 ------------------------------------
-
 # Install homology teams
 PATH_HOMOLOGYTEAMS_PARENT="/home/${USER}/Libs"
 mkdir -p ${PATH_HOMOLOGYTEAMS_PARENT}
@@ -75,3 +75,4 @@ cd ${PATH_HOMOLOGYTEAMS}/src
 make
 echo "export PATH=\"\$PATH:${PATH_HOMOLOGYTEAMS}/src\"" >> ~/.bashrc
 cd
+bash
