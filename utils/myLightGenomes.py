@@ -65,13 +65,22 @@ GeneP = collections.namedtuple("GeneP", ['c', 'idx'])
 
 def newChromName(genome):
     assert isinstance(genome, LightGenome)
-    chromNames = set([int(c) for c in genome.keys()])
-    maxChromName = max(chromNames)
-    chromNamesToFillGaps = set(range(maxChromName + 1)) - chromNames
-    if len(chromNamesToFillGaps) > 0:
-        chosenChromName = str(chromNamesToFillGaps.pop())
+    chromNames = set([])
+    for c in genome.keys():
+        try:
+            c = int(c)
+            chromNames.add(c)
+        except:
+            pass
+    if len(chromNames) == 0:
+        chosenChromName = 1
     else:
-        chosenChromName = str(maxChromName + 1)
+        maxChromName = max(chromNames)
+        chromNamesToFillGaps = set(range(maxChromName + 1)) - chromNames
+        if len(chromNamesToFillGaps) > 0:
+            chosenChromName = str(chromNamesToFillGaps.pop())
+        else:
+            chosenChromName = str(maxChromName + 1)
     return chosenChromName
 
 ContigType = enum.Enum('Chromosome', 'Mitochondrial', 'Scaffold', 'None', 'Random')

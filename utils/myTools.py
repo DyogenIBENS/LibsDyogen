@@ -638,6 +638,9 @@ class OrderedDict2dOfLists(Dict2d):
         (k1, k2, idx) = self.id2location[id]
         return self[k1][k2][idx]
 
+    def getItemsAndIdsByLocation(self, (k1, k2)):
+        return [(self.getItemById(id), id) for id in self.location2id[k1][k2]]
+
     def getItemLocationById(self, id):
         # (k1, k2, idx) = self.id2location[id]
         return self.id2location[id]
@@ -708,6 +711,12 @@ class OrderedDict2dOfLists(Dict2d):
         for (id, (k1, k2), item) in other.iterByOrderedIds():
             assert id < minSelfId or maxSelfId < id
             res.addToLocationWithId((k1, k2), item, id)
+        return res
+
+    def intoList(self):
+        res = []
+        for (id, (k1, k2), item) in self.iterByOrderedIds():
+            res.append(((k1, k2), item, id))
         return res
 
 # This class is a fusion of collections.defaultdict and collections.OrderedDict

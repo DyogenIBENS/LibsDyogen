@@ -405,3 +405,32 @@ class Genome:
             assert len(self.lstGenes[c]) >=1
             newGenome[c] = [(g.names[0],g.strand) for g in self.lstGenes[c]]
         return newGenome
+
+    def computeMeanInterGeneLen(self, setConsideredGeneNames):
+        chromosomesMeanInterConsideredGeneLen = {}
+        lGeneCoord = []
+        totalLenChrom = 0
+        totalLenConsideredGenes = 0
+        for c in self.chrList[ContigType.Chromosome]:
+            lenConsideredGenes = 0
+            nbConsideredGenes = 0
+            for g in self.lstGenes[c]:
+                assert g.beginning < g.end
+                lGeneCoord.extend([g.beginning, g.end])
+                assert len(g.names) == 1, g.names
+                if g.names[0] in setConsideredGeneNames:
+                    lenConsideredGenes += g.end - g.beginning
+                    nbConsideredGenes += 1
+            # convert in Mb
+            minC = float(min(lGeneCoord)) / 1000000
+            maxC = float(max(lGeneCoord)) / 1000000
+            lenChrom = maxC - minC
+            print >> sys.stderr, c
+            chromosomesMeanInterConsideredGeneLen[str(c)] = float(lenChrom) / lenConsideredGenes if lenConsideredGenes > 0 else float(lenChrom)
+            totalLenChrom += lenChrom if lenChrom > 0 else None
+            totalLenConsideredGenes += lenConsideredGenes
+        if totalLenChrom:
+            densityInConsideredGenes = totalLenConsideredGenes / totalLenChrom
+        else:
+            densityInConsideredGenes = None
+        return (chromosomesMeanInterConsideredGeneLen, densityInConsideredGenes)

@@ -304,12 +304,12 @@ class Gene:
     def strarray(self):
         if self.strand != None:
             scale = sqrt((self.end[0] - self.start[0]) ** 2 + (self.end[1] - self.start[1]) ** 2)
-            points = [(0.1, -0.5), (0.1, 0.5), (0.75, 0.5), (0.9, 0), (0.75, -0.5)] if self.strand == +1 else [(0.1, 0),
+            points = [(0.0, -0.5), (0.0, 0.5), (0.75, 0.5), (1.0, 0), (0.75, -0.5)] if self.strand == +1 else [(0.0, 0),
                                                                                                                (0.25,
                                                                                                                 0.5), (
-                                                                                                                   0.9,
+                                                                                                                   1.0,
                                                                                                                    0.5), (
-                                                                                                                   0.9,
+                                                                                                                   1.0,
                                                                                                                    -0.5), (
                                                                                                                    0.25,
                                                                                                                    -0.5)]  # Defines a gene symbol
@@ -346,6 +346,17 @@ class Gene:
                     (float(self.start[0] + self.end[0]) / 2, float(self.start[1] + self.end[1]) / 2), self.text,
                     size=self.width * 0.8, text_anchor="middle", fill=(0, 0, 0), stroke=None, fontWeight="800",
                     fontFamily="Arial", transform="").strarray()
+import sys
+# reorder the list before printing in order to print last the element you want to see
+def zItems(listOfItems, itemClassOnTop):
+    itemsOnTop = []
+    itemsBelow = []
+    for item in listOfItems:
+        if isinstance(item, itemClassOnTop):
+            itemsOnTop.append(item)
+        else:
+            itemsBelow.append(item)
+    return itemsOnTop + itemsBelow
 
 def tanslateItems(listOfItems, (tx, ty)):
     for item in listOfItems:

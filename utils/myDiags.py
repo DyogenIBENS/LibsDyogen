@@ -2543,13 +2543,25 @@ def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True, stream
         sXs = ''.join(sXs)
         return (gXs, sXs)
 
-    # listOfSbs = [ ..., ((c1, c2), sb), ...]
-    listOfSbs = sbsInPairComp.intoList()
+    if isinstance(sbsInPairComp, myTools.Dict2d):
+        # listOfSbs = [ ..., ((c1, c2), sb), ...]
+        listOfSbs = sbsInPairComp.intoList()
+    else:
+        assert isinstance(sbsInPairComp, myTools.OrderedDict2dOfLists)
+        # listOfSbs = [ ..., ((c1, c2), sb, id), ...]
+        listOfSbs = sbsInPairComp.intoList()
+
     if sortByDecrLengths:
         listOfSbs.sort(key=lambda x: len(x[1].la), reverse=True)
 
     statsSbs = []
-    for (idSb, ((c1, c2), sb)) in enumerate(listOfSbs):
+    if isinstance(sbsInPairComp, myTools.OrderedDict2dOfLists):
+        generatorSbs = ((id, (c1, c2), sb) for ((c1, c2), sb, id) in listOfSbs)
+    else:
+        assert isinstance(sbsInPairComp, myTools.Dict2d)
+        generatorSbs = ((idSb, (c1, c2), sb) for (idSb, ((c1, c2), sb)) in enumerate(listOfSbs))
+
+    for (idSb, (c1, c2), sb) in generatorSbs:
         assert len(sb.la) == len(sb.l1) == len(sb.l2), "len(l1)=%s, len(l2)=%s, len(la)=%s\nl1=%s\nl2=%s\nla=%s" % (len(sb.l1), len(sb.l2), len(sb.la), sb.l1, sb.l2, sb.la)
         nbHps = len(sb.la)
         statsSbs.append(nbHps)
@@ -2561,12 +2573,67 @@ def printSbsFile(sbsInPairComp, genome1, genome2, sortByDecrLengths=True, stream
 
     print >> sys.stderr, "Distribution of the lengths of synteny blocks:", myMaths.myStats.syntheticTxtSummary(statsSbs)
 
+def findDiagTypeFromFileInfos(l1, l2, s1s=None, s2s=None):
+    assert len(l1) == len(l2)
+    # single gene diagonal
+    if len(l1) == 1:
+        assert len(l2) == 1 and s1s is not None and s2s is not None
+        assert len(l1[0]) == len(s1s), '%s %s' % (len(l1[0]), len(s1s))
+        # find orientations of genes
+        if all([s == +1 for s in s1s]):
+            s1 = +1
+        elif all([s == -1 for s in s1s]):
+            s1 = -1
+        else:
+            s1 = None
+        if all([s == +1 for s in s2s]):
+            s2 = +1
+        elif all([s == -1 for s in s2s]):
+            s2 = -1
+        else:
+            s2 = None
+        if s1 == +1:
+            if s2 == +1 or s2 == None:
+                diagType = '/'
+            elif s2 == -1:
+                diagType = '\\'
+            else:
+                diagType = None
+        elif s1 == -1:
+            if s2 == -1 or s2 == None:
+                diagType = '/'
+            elif s2 == +1:
+                diagType = '\\'
+            else:
+                diagType = None
+        else:
+            diagType = None
+    else:
+        # FIXME another idea instead of using 'min'
+        # if myMaths.mean(l1[0]) < myMaths.mean(l1[-1]):
+        # but this should be coherent with the rewriting in tbs
+
+        # since the rewriting in tbs use the localisation of the first gene
+        if min(l1[0]) < min(l1[-1]):
+            if min(l2[0]) < min(l2[-1]):
+                diagType = '/'
+            elif min(l2[0]) > min(l2[-1]):
+                diagType = '\\'
+            else:
+                # horizontal synteny block
+                diagType = None
+        else:
+            # vertical synteny block
+            diagType = None
+    return diagType
+
+
 #################################
 # Parser function
 #################################
 # adding genome1 and genome2 allow to recover l1 and l2, the lists of homologous
 # tbs on genome1 and genome2.
-def parseSbsFile(fileName, genome1=None, genome2=None):
+def parseSbsFile(fileName, genome1=None, genome2=None, withIds=False):
     assert isinstance(genome1, myLightGenomes.LightGenome)
     assert isinstance(genome2, myLightGenomes.LightGenome)
 
@@ -2611,7 +2678,10 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
         myFile.myTSV.readTabular(fileName,
                                  [int, str, str, int, str, str, str, str, str, str],
                                  delim='\t')
-    sbsInPairComp = myTools.Dict2d(list)
+    if withIds:
+        sbsInPairCompWithIds = myTools.OrderedDict2dOfLists()
+    else:
+        sbsInPairComp = myTools.Dict2d(list)
     pVal = 0
     idSb_old = 'foo'
     c1_old = 'fooC1'
@@ -2622,36 +2692,35 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
         dist = int(dist) if dist != 'None' else None
         (g1s, s1s) = foo(g1s, s1s, genome1, c1)
         (g2s, s2s) = foo(g2s, s2s, genome2, c2)
+        assert len(g1s) == len(s1s) and len(g2s) == len(s2s)
         if idSb != idSb_old:
             if idSb_old == 'foo':
                 # first idSb
                 l1 = [g1s]
                 l2 = [g2s]
                 la = [(aGname, aGstrand, dist)]
+                s1s_old = s1s
+                s2s_old = s2s
             else:
                 # record the former synteny block that has been parsed
-                # TODO find the diagType
 
                 #assert l1[0] <= l1[-1], "%s <= %s" % (l1[0], l1[-1])
-
-                if myMaths.mean(l1[0]) < myMaths.mean(l1[-1]):
-                    if myMaths.mean(l2[0]) < myMaths.mean(l2[-1]):
-                        diagType = '/'
-                    elif myMaths.mean(l2[0]) > myMaths.mean(l2[-1]):
-                        diagType = '\\'
-                    else:
-                        # horizontal synteny block
-                        diagType = None
+                if len(la) == 1:
+                    diagType = findDiagTypeFromFileInfos(l1, l2, s1s_old, s2s_old)
                 else:
-                    # vertical synteny block
-                    diagType = None
+                    diagType = findDiagTypeFromFileInfos(l1, l2)
                 #if c1_old == '10' and c2_old == '14':
-                #    print >> sys.stderr, 'Hello !', idSb_old
-                sbsInPairComp[c1_old][c2_old].append(SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal))
+                newSb = SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal)
+                if withIds:
+                    sbsInPairCompWithIds.addToLocationWithId((c1_old, c2_old), newSb, idSb_old)
+                else:
+                    sbsInPairComp[c1_old][c2_old].append(newSb)
                 # start a new sb
                 l1 = [g1s]
                 l2 = [g2s]
                 la = [(aGname, aGstrand, dist)]
+                s1s_old = s1s
+                s2s_old = s2s
             idSb_old = idSb
             c1_old = c1
             c2_old = c2
@@ -2659,22 +2728,20 @@ def parseSbsFile(fileName, genome1=None, genome2=None):
             l1.append(g1s)
             l2.append(g2s)
             la.append((aGname, aGstrand, dist))
+
     # last idSb
     # find the diagType
-    assert l1[0] <= l1[-1]
-    if l1[0] < l1[-1]:
-        if l2[0] < l2[-1]:
-            diagType = '/'
-        elif l2[0] > l2[-1]:
-            diagType = '\\'
-        else:
-            # horizontal synteny block
-            diagType = None
+    if len(la) == 1:
+        diagType = findDiagTypeFromFileInfos(l1, l2, s1s_old, s2s_old)
     else:
-        # vertical synteny block
-        diagType = None
-    sbsInPairComp[c1][c2].append(SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal))
-    return sbsInPairComp
+        diagType = findDiagTypeFromFileInfos(l1, l2)
+    newSb = SyntenyBlock(Diagonal(diagType, l1, l2, la), pVal)
+    if withIds:
+        sbsInPairCompWithIds.addToLocationWithId((c1, c2), newSb, idSb)
+        return sbsInPairCompWithIds
+    else:
+        sbsInPairComp[c1][c2].append(newSb)
+        return sbsInPairComp
 
 
 ###########################################
@@ -2707,6 +2774,99 @@ def buildGenomeFromSbs(sbsInPairComp, sbLengthThreshold=None):
         else:
             cptSb = cptSb + 1
     return ancSbGenome
+
+def lengthProjectionOnGenome(rankGenome, sb, c, genome, correctLens=True, meanInterGeneLen=None):
+    if meanInterGeneLen is None:
+        meanInterGeneLen = 0.0
+    assert isinstance(sb, SyntenyBlock)
+    assert isinstance(genome, myGenomes.Genome)
+    lGeneCoord = []
+    sblX = sb.l1 if rankGenome == 1 else sb.l2
+    for tbX in sblX:
+        for gIdx in tbX:
+            #g1Pos = genome1.getPosition([g1n]).pop()
+            #chromosome = g1Pos.chromosome
+            #assert c1 == chromosome
+            #index = g1Pos.index
+            c = myGenomes.commonChrName(c)
+            g = genome.lstGenes[c][gIdx]
+            lGeneCoord.extend([g.beginning, g.end])
+    minOnG = min(lGeneCoord)
+    maxOnG = max(lGeneCoord)
+    lengthG = maxOnG - minOnG
+    if correctLens:
+        # see Nadeau & Taylor 1984 815-816
+        n = len(sblX)
+        r = lengthG
+        if n >= 2:
+            # this consider the local density of markers
+            m = r * float(n+1)/float(n-1)
+        elif n == 1:
+            # add for each extremity (twice), the mean intergene length / 2
+            m = r + 2 * float(meanInterGeneLen) / 2
+        else:
+            raise ValueError('A sb should at least contain one marker')
+        lengthG = m
+    return lengthG
+
+# TODO
+# def computeMeanInterGeneLenInChrs(sbsInPairCompWithIds, )
+#     # preprocess data
+#     # record all mapped homologs
+#     setOfMappedHomologs1 = set()
+#     setOfMappedHomologs2 = set()
+#     for (id, (c1, c2), sb) in _sbsInPairCompWithIds.iterByOrderedIds():
+#         sblX = sb.l1
+#         for tbX in sblX:
+#             for gIdx in tbX:
+#                 g = genome1L[c1][gIdx]
+#                 setOfMappedHomologs1.add(g.n)
+#         sblX = sb.l2
+#         for tbX in sblX:
+#             for gIdx in tbX:
+#                 g = genome2L[c2][gIdx]
+#                 setOfMappedHomologs2.add(g.n)
+#
+#     (meanInterHomologLenInChr1, densityInG1) = genome1.computeMeanInterGeneLen(setOfMappedHomologs1)
+#     (meanInterHomologLenInChr2, densityInG2) = genome2.computeMeanInterGeneLen(setOfMappedHomologs2)
+#     return meanInterGeneLenInChrs
+
+# genome1 and genome2 must be myGenomes.Genomes
+def getSbsLengths(genome1, genome2, sbsInPairComp, lengthUnit='Mb', meanInterHomologsLenInChrs=None):
+    assert lengthUnit in ['Mb', 'gene']
+    assert isinstance(genome1, myGenomes.Genome)
+    assert isinstance(genome2, myGenomes.Genome)
+    if meanInterHomologsLenInChrs:
+        assert len(meanInterHomologsLenInChrs) == 2
+        (meanInterGeneLenInChr1, meanInterGeneLenInChr2) = meanInterHomologsLenInChrs
+    if isinstance(sbsInPairComp, myTools.OrderedDict2dOfLists):
+        _sbsInPairCompWithIds = sbsInPairComp
+    else:
+        assert isinstance(sbsInPairComp, myTools.Dict2d)
+        _sbsInPairCompWithIds = myTools.OrderedDict2dOfLists()
+        for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
+            _sbsInPairCompWithIds.addToLocation((c1, c2), sb)
+
+    sbId2Length = {}
+
+    # compute sb lengths
+    if lengthUnit == 'gene':
+        for (id, (c1, c2), sb) in _sbsInPairCompWithIds.iterByOrderedIds():
+            nbAncGenes = len(sb.la)
+            sbId2Length[id] = nbAncGenes
+    elif lengthUnit == 'Mb':
+        for (id, (c1, c2), sb) in _sbsInPairCompWithIds.iterByOrderedIds():
+            if meanInterHomologsLenInChrs:
+                lengthG1 = lengthProjectionOnGenome(1, sb, c1, genome1, correctLens=True, meanInterGeneLen=meanInterGeneLenInChr1[c1])
+                lengthG2 = lengthProjectionOnGenome(2, sb, c2, genome2, correctLens=True, meanInterGeneLen=meanInterGeneLenInChr2[c2])
+            else:
+                lengthG1 = lengthProjectionOnGenome(1, sb, c1, genome1, correctLens=True)
+                lengthG2 = lengthProjectionOnGenome(2, sb, c2, genome2, correctLens=True)
+            averageSbLength = float(lengthG1 + lengthG2) / 2.0
+            # in megabases
+            averageSbLength = averageSbLength / 1000000
+            sbId2Length[id] = averageSbLength
+    return sbId2Length
 
 @myTools.verbose
 def computeAncestralCoverageBySbs(g1_tb, g2_tb, ancSbGenome, verbose = False):

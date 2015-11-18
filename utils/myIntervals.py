@@ -35,6 +35,29 @@ def geneExtremityFromGene(og, leftOrRight):
             geneExtr = GeneExtremity(og.n, None)
     return geneExtr
 
+# returns the gene extremities given the intergene location on the chromosome
+def geneExtremitiesFromIntergeneInChrom(idx, chrom):
+    assert isinstance(idx, int)
+    assert 0 <= idx <= len(chrom)
+    assert isinstance(chrom, list)
+    assert len(chrom) >= 1
+    assert isinstance(chrom[0], OGene)
+    if 0 < idx < len(chrom):
+        assert len(chrom) >= 2
+        # left and right gene extremities
+        lge = geneExtremityFromGene(chrom[idx-1], +1)
+        rge = geneExtremityFromGene(chrom[idx], -1)
+        geneExtremities = {lge, rge}
+    elif idx == 0:
+        lge = geneExtremityFromGene(chrom[0], -1)
+        geneExtremities = {lge}
+    elif idx == len(chrom):
+        rge = geneExtremityFromGene(chrom[len(chrom)-1], +1)
+        geneExtremities = {rge}
+    else:
+        raise ValueError('idx=%s > len(chrom) = %s' %(idx, len(chrom)))
+    return geneExtremities
+
 class Adjacency(tuple):
     def __new__(cls, g1n, g2n):
         assert isinstance(g1n, str) and isinstance(g2n, str)

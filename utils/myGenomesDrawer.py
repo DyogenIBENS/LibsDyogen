@@ -11,7 +11,6 @@
 import sys
 import os
 import collections
-import random
 import itertools
 import myTools
 import myDiags
@@ -284,7 +283,12 @@ def prepareChromosome(genesStrands,
                       genesRemovedDuringFiltering=None,
                       noHomologGraysGenerator=None,
                       symbolsInGenes=None,
-                      lengthGene=1):
+                      lengthGenes=0.7,
+                      halfIntergeneLength=0.15):
+    differentGeneLengths = False
+    if isinstance(lengthGenes, list):
+        assert len(lengthGenes) == len(genesStrands)
+        differentGeneLengths = True
 
     def giveGreyLevelsTo(chromosome, tbsWithNoHomologyInWindow=None):
         if tbsWithNoHomologyInWindow:
@@ -307,13 +311,28 @@ def prepareChromosome(genesStrands,
         homologsColorsGenerator = levelIdxGenerator(farIdxs=None)
 
     # create chromosomes
+    if differentGeneLengths:
+        assert isinstance(lengthGenes, list)
+        cumGeneLengths = sum(lengthGenes) + (2 * halfIntergeneLength) * len(lengthGenes)
+        width = cumGeneLengths * 0.01
+        stroke_width  =0.05 * width
+    else:
+        cumGeneLengths = len(genesStrands) * (lengthGenes + (2 * halfIntergeneLength))
+        width = lengthGenes * 0.7
+        # stroke_width  = 0.05 * lengthGenes
+        stroke_width  = 0.05 * width
+    cx = 0
     for (i, s) in enumerate(genesStrands):
-        cx = i * lengthGene
+        if differentGeneLengths:
+            lengthGene = lengthGenes[i]
+        else:
+            lengthGene = lengthGenes
         symbol = symbolsInGenes[i] if symbolsInGenes is not None else None
-        chromosomeItems.append(mySvgDrawer.Gene(Point(cx, 0),
-                                                Point(cx + lengthGene, 0),
-                                                strand=s, width=lengthGene*0.7, stroke_width=0.05*lengthGene, SVGclass=None,
+        chromosomeItems.append(mySvgDrawer.Gene(Point(cx + halfIntergeneLength, 0),
+                                                Point(cx + halfIntergeneLength + lengthGene, 0),
+                                                strand=s, width=width, stroke_width=stroke_width, SVGclass=None,
                                                 text=symbol))
+        cx += halfIntergeneLength + lengthGene + halfIntergeneLength
 
     # give grey levels to genes that have no homology in the window
     chromosomeItems = giveGreyLevelsTo(chromosomeItems, tbsWithNoHomolog)
@@ -334,13 +353,33 @@ def prepareChromosome(genesStrands,
                 chromosomeItems[idxG].SVGclass = "HomologGroup%s" % color
     return chromosomeItems
 
+def drawSimpleChromosomeWithGeneLengths(chrom, geneName2Length):
+    assert isinstance(geneName2Length, dict)
+    chromosomeItems = []
+    cumLengthGenes = 0
+    for (gN, gS) in chrom:
+        lengthGene = geneName2Length[gN]
+        chromosomeItems.append(mySvgDrawer.Gene(Point(cumLengthGenes, 0),
+                                                Point(0 + lengthGene, 0),
+                                                strand=gS, width=lengthGene*0.7, stroke_width=0.05*lengthGene,
+                                                SVGclass=None,
+                                                text=gN))
+        cumLengthGenes += lengthGene
+    chromosomeItems.append(mySvgDrawer.Line(Point(0, 0),
+                                            Point(0 + cumLengthGenes, 0), width=0.05*lengthGene))
+    return chromosomeItems
+
+
+
 def drawLightGenome(genome,
                     families=None,
                     familyName2color=None,
                     filterType='InFamilies',
                     tandemGapMax=None,
-                    lengthGene=1,
-                    homologsColorsGenerator=None):
+                    # lengthGenes may also be a dict: {chr1: (lengthGene1, ....), ...}
+                    lengthGenes=1,
+                    homologsColorsGenerator=None,
+                    halfIntergeneLength=0.1):
     assert filterType in {None, 'InFamilies'}
     assert isinstance(genome, myLightGenomes.LightGenome)
     assert families is None or isinstance(families, myLightGenomes.Families)
@@ -362,7 +401,8 @@ def drawLightGenome(genome,
         for c in genome.keys():
             Cfamf2C[c] = myMapping.Mapping([[i] for i, _ in enumerate(genome[c])])
         genome_famf = genome
-    print >> sys.stderr, genome_famf
+    # FIXME
+    # print >> sys.stderr, genome_famf
 
     # rewrite in tandem blocks
     if tandemGapMax:
@@ -382,7 +422,11 @@ def drawLightGenome(genome,
     tmp_familyName2color = {}
     familyName2Idxs = collections.defaultdict(lambda: collections.defaultdict(list))
     genome_tb.computeDictG2Ps()
-    for famName in sorted(genome_tb.getOwnedFamilyNames(families, asA=set)):
+    if families:
+        consideredFamilies = sorted(genome_tb.getOwnedFamilyNames(families, asA=set))
+    else:
+        consideredFamilies = sorted(list(genome_tb.getGeneNames(checkNoDuplicates=False)))
+    for famName in consideredFamilies:
         tmp_familyName2color[famName] = homologsColorsGenerator.getLevel()
         famPositions = genome_tb.getPositions(famName, default=None)
         for tbPos in famPositions:
@@ -418,7 +462,12 @@ def drawLightGenome(genome,
 
         # add a line that goes through all genes of the chromosome
         genomeItems[chr] = []
-        genomeItems[chr].append(mySvgDrawer.Line(Point(0, 0), Point(lengthGene * len(genome[chr]), 0)))
+        if isinstance(lengthGenes, dict):
+            assert isinstance(lengthGenes[chr], list), '%s' % lengthGenes[chr]
+            cumLengthGenes = sum(lengthGenes[chr]) + len(lengthGenes[chr]) * (2 * halfIntergeneLength)
+        else:
+            cumLengthGenes = len(genome[chr]) * (2 * halfIntergeneLength + lengthGenes)
+        genomeItems[chr].append(mySvgDrawer.Line(Point(0, 0), Point(cumLengthGenes, 0)))
         genomeItems[chr].extend(prepareChromosome(genesStrands,
                                                   familyName2Idxs=familyName2Idxs[chr],
                                                   familyName2color=familyName2color,
@@ -426,7 +475,8 @@ def drawLightGenome(genome,
                                                   genesRemovedDuringFiltering=genesRemovedDuringFiltering,
                                                   noHomologGraysGenerator=None,
                                                   symbolsInGenes=symbolsInGenes,
-                                                  lengthGene=lengthGene))
+                                                  lengthGenes=lengthGenes[chr],
+                                                  halfIntergeneLength=halfIntergeneLength))
     return genomeItems
 
 def drawChromosomes(genesStrandsC1, tbWithNoHomologyInWindowC1, genesRemovedDuringFilteringC1,
@@ -436,11 +486,11 @@ def drawChromosomes(genesStrandsC1, tbWithNoHomologyInWindowC1, genesRemovedDuri
 
     chromosome1 = prepareChromosome(genesStrandsC1, None, None, tbWithNoHomologyInWindowC1, genesRemovedDuringFilteringC1,
                                     symbolsInGenes=symbolsInGenes[0] if symbolsInGenes else None,
-                                    lengthGene=sizeCase)
+                                    lengthGenes=sizeCase * 0.80, halfIntergeneLength=sizeCase * 0.10)
 
     chromosome2 = prepareChromosome(genesStrandsC2, None, None, tbWithNoHomologyInWindowC2, genesRemovedDuringFilteringC2,
                                     symbolsInGenes=symbolsInGenes[1] if symbolsInGenes else None,
-                                    lengthGene=sizeCase)
+                                    lengthGenes=sizeCase * 0.80, halfIntergeneLength=sizeCase * 0.10)
 
     # give a color to each gene using homology relationships
     for (tbs1, tbs2) in homologyGroupsInWindow:
@@ -461,6 +511,7 @@ def drawChromosomes(genesStrandsC1, tbWithNoHomologyInWindowC1, genesRemovedDuri
     return (chromosome1, chromosome2)
 
 def drawMatrix(range1, range2, hpSigns, diagsIndices, sizeCell, width, height,
+               diagNames=None,
                diagColorGenerator=None,
                drawAllInformations=False,
                drawlinesNumbersAndSigns=True,
@@ -469,7 +520,7 @@ def drawMatrix(range1, range2, hpSigns, diagsIndices, sizeCell, width, height,
     sizeText = float(sizeCell*0.9)
     listOfMatrixItems = []
     if not diagColorGenerator:
-        diagColorGenerator = levelIdxGenerator(farIdxs=True)
+        diagColorGenerator = levelIdxGenerator(farIdxs=7 )
 
     nx = range1[1] - range1[0]
     # Nb of vertical lines (x varies) in the matrix
@@ -488,8 +539,11 @@ def drawMatrix(range1, range2, hpSigns, diagsIndices, sizeCell, width, height,
     print >> sys.stderr, "Nb of diagonals showed = ", len(diagsIndices)
 
     # sort diagonals to give colors according to localisations of diagonals
-    diagsIndices.sort(key=lambda x: x[0])
-    for diag in diagsIndices:
+
+    # FIXME Do not sort!!  otherwise the diagNames do not correspond any more!!!
+    # diagsIndices.sort(key=lambda x: x[0])
+
+    for (idiag, diag) in enumerate(diagsIndices):
         # choose a color different from the neighbours
         color = diagColorGenerator.getLevel()
         for (i, j) in diag:
@@ -517,6 +571,12 @@ def drawMatrix(range1, range2, hpSigns, diagsIndices, sizeCell, width, height,
         listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx_s, height-(cy_s+sizeCell)),
                                                        (max_j-min_j)*sizeCell + sizeCell, (max_i-min_i)*sizeCell + sizeCell,
                                                        stroke='black', fill='none', strokeWidth=strokeWidthBoundingBoxDiags))
+        # need to do it after to be on top layer
+        if diagNames is not None:
+            widthText = min(float(width)/100, float(height)/100)
+            # write the id of the diagonal if any
+            listOfMatrixItems.append(mySvgDrawer.Text(Point(cx_s, height-(cy_s+sizeCell)), str(diagNames[idiag]), size=widthText))
+
 
     # tick lines
     if drawlinesNumbersAndSigns:
@@ -627,14 +687,15 @@ def drawMatrix(range1, range2, hpSigns, diagsIndices, sizeCell, width, height,
 # output :
 #       the svg drawing of the mhp (or the mh)
 def prepareHomologyMatrix((range1, range2), (genesStrandsC1, genesStrandsC2),
-                       (genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
-                       (tbWithNoHomologyInWindowC1, tbWithNoHomologyInWindowC2),
-                       hpSigns, homologyGroupsInWindow, diagsIndices,
-                       maxWidth=100, maxHeight=100, symbolsInGenes=None,
-                       drawAllInformations=False,
-                       doDrawChromosomes=True,
-                       drawlinesNumbersAndSigns=True,
-                       scaleFactorRectangles=1):
+                          (genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
+                          (tbWithNoHomologyInWindowC1, tbWithNoHomologyInWindowC2),
+                          hpSigns, homologyGroupsInWindow, diagsIndices,
+                          diagNames=None,
+                          maxWidth=100, maxHeight=100, symbolsInGenes=None,
+                          drawAllInformations=False,
+                          doDrawChromosomes=True,
+                          drawlinesNumbersAndSigns=True,
+                          scaleFactorRectangles=1):
         # example
         # genesStrandsC1 = [1,-1, None, ...]
         # tbWithNoHomologyInWindowC1=[0,2,3,6,10]
@@ -666,12 +727,13 @@ def prepareHomologyMatrix((range1, range2), (genesStrandsC1, genesStrandsC2),
         height = (ny+3) * sizeCase
 
         closeColorsGenerator = levelIdxGenerator()
-
         listOfMatrixItems = drawMatrix(range1, range2, hpSigns, diagsIndices, sizeCase, width, height,
+                                       diagNames=diagNames,
                                        diagColorGenerator=None,
                                        drawAllInformations=drawAllInformations,
                                        drawlinesNumbersAndSigns=drawlinesNumbersAndSigns,
                                        scaleFactorRectangles=scaleFactorRectangles)
+
         listOfMatrixItems = mySvgDrawer.tanslateItems(listOfMatrixItems, Point(2 * sizeCase, - 2 * sizeCase))
 
         listOfItems = []
@@ -703,6 +765,7 @@ def drawHomologyMatrix((range1, range2), (genesStrandsC1, genesStrandsC2),
                        (genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
                        (tbWithNoHomologyInWindowC1, tbWithNoHomologyInWindowC2),
                        hpSigns, homologyGroupsInWindow, diagsIndices,
+                       diagNames=None,
                        outputFileName=None, maxWidth=100, maxHeight=100,
                        symbolsInGenes=None,
                        drawAllInformations=False,
@@ -714,6 +777,7 @@ def drawHomologyMatrix((range1, range2), (genesStrandsC1, genesStrandsC2),
                        (genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
                        (tbWithNoHomologyInWindowC1, tbWithNoHomologyInWindowC2),
                        hpSigns, homologyGroupsInWindow, diagsIndices,
+                       diagNames=diagNames,
                        maxWidth=maxWidth, maxHeight=maxHeight,
                        symbolsInGenes=symbolsInGenes,
                        drawAllInformations=drawAllInformations,
@@ -735,15 +799,17 @@ def drawWholeGenomeHomologyMatrices(genome1, genome2, families,
                                     tandemGapMax=0,
                                     scaleFactorRectangles=4.0,
                                     maxWidth=100, maxHeight=100,
-                                    outputFileName=None):
+                                    outputFileName=None,
+                                    fillCompsWithSbs=False):
 
     WHM = prepareWholeGenomeHomologyMatrices(genome1, genome2, families,
-                                    inSbsInPairComp=inSbsInPairComp,
-                                    filterType=filterType,
-                                    minChromLength=minChromLength,
-                                    tandemGapMax=tandemGapMax,
-                                    scaleFactorRectangles=scaleFactorRectangles,
-                                    maxWidth=maxWidth, maxHeight=maxHeight)
+                                             inSbsInPairComp=inSbsInPairComp,
+                                             filterType=filterType,
+                                             minChromLength=minChromLength,
+                                             tandemGapMax=tandemGapMax,
+                                             scaleFactorRectangles=scaleFactorRectangles,
+                                             maxWidth=maxWidth, maxHeight=maxHeight,
+                                             fillCompsWithSbs=fillCompsWithSbs)
 
     scene = mySvgDrawer.Scene(name='homology_matrix', width=maxWidth, height=maxHeight)
     for item in WHM:
@@ -939,13 +1005,15 @@ def writeSVGFileForPairwiseCompOfChrs(genomeName1, chr1, range1,
 
 
 def prepareWholeGenomeHomologyMatrices(genome1, genome2, families,
-                                inSbsInPairComp=None,
-                                filterType=FilterType.InBothGenomes,
-                                minChromLength=0,
-                                tandemGapMax=0,
-                                outputFileName=None,
-                                scaleFactorRectangles=4.0,
-                                maxWidth=100, maxHeight=100):
+                                       inSbsInPairComp=None,
+                                       filterType=FilterType.InBothGenomes,
+                                       minChromLength=0,
+                                       tandemGapMax=0,
+                                       outputFileName=None,
+                                       scaleFactorRectangles=4.0,
+                                       maxWidth=100, maxHeight=100,
+                                       # for illustrating Mazowita2006
+                                       fillCompsWithSbs=False):
 
     assert isinstance(genome1, myLightGenomes.LightGenome)
     assert isinstance(genome2, myLightGenomes.LightGenome)
@@ -999,6 +1067,7 @@ def prepareWholeGenomeHomologyMatrices(genome1, genome2, families,
 
     listOfChrNames = []
     lineWidthBetweenChrs = minVisibleStroke
+    nbCompWithSb = 0
     for (i1, c1) in enumerate(sortedChrs1):
         # vertical line separating chromosome comparisons on the x-axis
         listOfItems.append(mySvgDrawer.Line(Point(cumulatedX,                  0),
@@ -1029,25 +1098,36 @@ def prepareWholeGenomeHomologyMatrices(genome1, genome2, families,
 
             ((genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2), genesHomologiesHpSign,
              (genesNoHomologiesInWindowC1, genesNoHomologiesInWindowC2), genesHomologyGroupsInWindow) = \
-                computeHomologyInformations(c1, c2,
-                                            (genome1, g1_tb, g1_fID, Gtb2GfID1),
-                                            (genome2, g2_tb, g2_fID, Gtb2GfID2))
-
-            listOfMatrixItems = prepareHomologyMatrix((range1, range2), (genesStrandsC1, genesStrandsC2),
-                       (genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
-                       (genesNoHomologiesInWindowC1, genesNoHomologiesInWindowC2),
-                       genesHomologiesHpSign, genesHomologyGroupsInWindow, genesDiagIndices,
-                       maxWidth=(nx * sizeCase), maxHeight=(ny * sizeCase), symbolsInGenes=None,
-                       drawAllInformations=False,
-                       doDrawChromosomes=drawChromosomes,
-                       drawlinesNumbersAndSigns=drawChromosomes,
-                       scaleFactorRectangles=scaleFactorRectangles)
+            computeHomologyInformations(c1, c2,
+                                        (genome1, g1_tb, g1_fID, Gtb2GfID1),
+                                        (genome2, g2_tb, g2_fID, Gtb2GfID2))
+            listOfMatrixItems = []
+            # for illustrating Mazowita2006
+            if fillCompsWithSbs:
+                if len(sbsInPairComp[c1][c2]) > 0:
+                    listOfMatrixItems += [mySvgDrawer.Rectangle(Point(0, 0), (ny * sizeCase), (nx * sizeCase), fill=(0,0,0), fill_opacity=1.0)]
+                    nbCompWithSb += 1
+            else:
+                listOfMatrixItems = prepareHomologyMatrix((range1, range2), (genesStrandsC1, genesStrandsC2),
+                                                          (genesRemovedDuringFilteringC1, genesRemovedDuringFilteringC2),
+                                                          (genesNoHomologiesInWindowC1, genesNoHomologiesInWindowC2),
+                                                          genesHomologiesHpSign, genesHomologyGroupsInWindow, genesDiagIndices,
+                                                          maxWidth=(nx * sizeCase), maxHeight=(ny * sizeCase), symbolsInGenes=None,
+                                                          drawAllInformations=False,
+                                                          doDrawChromosomes=drawChromosomes,
+                                                          drawlinesNumbersAndSigns=drawChromosomes,
+                                                          scaleFactorRectangles=scaleFactorRectangles)
             listOfMatrixItems = mySvgDrawer.tanslateItems(listOfMatrixItems, Point(cumulatedX, cumulatedY - (ny * sizeCase)))
             cumulatedY -= ny * sizeCase + sizeCase
             listOfItems += listOfMatrixItems
             progressBar.printProgressIn(sys.stderr, i1 + i2)
         cumulatedY = height - lchrNames
         cumulatedX += nx * sizeCase + sizeCase
+    print >> sys.stderr, '## Nb pair. comp. with sbs = %s' % nbCompWithSb
+    nbComps = len(sortedChrs1) * len(sortedChrs2)
+    print >> sys.stderr, '## Nb chrs1 = %s, Nb chrs2 = %s' % (len(sortedChrs1), len(sortedChrs2))
+    print >> sys.stderr, '## Nb pair. comp. = %s' % nbComps
+    print >> sys.stderr, '## prop. comp. with sbs = %.2f' % (float(nbCompWithSb) / float(nbComps))
     # last horizontal line
     listOfItems.append(mySvgDrawer.Line(Point(lchrNames, 0),
                                         Point(width,     0), width=float(width)/2000))
@@ -1141,11 +1221,20 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                                                                 filterType=filterType,
                                                                 **kwargs)
         else:
-            sbsInPairComp = inSbsInPairComp
+            if isinstance(inSbsInPairComp, myTools.OrderedDict2dOfLists):
+                withSbIds = True
+                sbsInPairComp = inSbsInPairComp
+            else:
+                assert isinstance(inSbsInPairComp, myTools.Dict2d)
+                withSbIds = False
+                sbsInPairComp = myTools.OrderedDict2dOfLists()
+                for ((c1, c2), sb) in  inSbsInPairComp.items2d():
+                    sbsInPairComp.addToLocation((c1, c2), sb)
 
+        assert isinstance(sbsInPairComp, myTools.OrderedDict2dOfLists)
         # truncate sbs to fit the ROI
-        new_sbsInPairComp = myTools.Dict2d(list)
-        for sb in sbsInPairComp[chr1][chr2]:
+        new_sbsInPairComp = myTools.OrderedDict2dOfLists()
+        for (sb, id) in sbsInPairComp.getItemsAndIdsByLocation((chr1, chr2)):
             newl1 = []
             newl2 = []
             newla = []
@@ -1163,11 +1252,16 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                     newl2.append(tb2)
                     newla.append(aG)
             if len(newla) > 0:
-                new_sbsInPairComp[chr1][chr2].append(myDiags.SyntenyBlock(myDiags.Diagonal(sb.dt, newl1, newl2, newla),
-                                                                          sb.pVal))
+                newSb = myDiags.SyntenyBlock(myDiags.Diagonal(sb.dt, newl1, newl2, newla), sb.pVal)
+                new_sbsInPairComp.addToLocationWithId((chr1, chr2), newSb, id)
+
         sbsInPairComp = new_sbsInPairComp
+        if withSbIds:
+            genesDiagNames = [id for (sb, id) in sbsInPairComp.getItemsAndIdsByLocation((chr1, chr2))]
+        else:
+            genesDiagNames = None
         genesDiagIndices = []
-        for sb in sbsInPairComp[chr1][chr2]:
+        for (sb, id) in sbsInPairComp.getItemsAndIdsByLocation((chr1, chr2)):
             genesDiagIndices.append([])
             for idxHp, aG in enumerate(sb.la):
                 for (gi1, gi2) in itertools.product(sb.l1[idxHp], sb.l2[idxHp]):
@@ -1194,6 +1288,7 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                                 genesHomologiesHpSign,
                                 genesHomologyGroupsInWindow,
                                 genesDiagIndices,
+                                diagNames=genesDiagNames,
                                 outputFileName=outImageFileName,
                                 maxWidth=100,
                                 maxHeight=100,
@@ -1231,6 +1326,7 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
 
         # load precomputed sbs if any
         if inSbsInPairComp is None:
+            withSbIds = False
             if considerAllPairComps:
                 comparedGenome1 = g1_tb
                 comparedGenome2 = g2_tb
@@ -1241,19 +1337,28 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
             inSbsInPairComp = myDiags.extractSbsInPairCompGenomesInTbs(comparedGenome1,
                                                                        comparedGenome2,
                                                                        **kwargs)
+        if isinstance(inSbsInPairComp, myTools.OrderedDict2dOfLists):
+            withSbIds = True
+            sbsInPairComp = inSbsInPairComp
         else:
-            for sb in inSbsInPairComp[chr1][chr2]:
-                # change the sb.lX structure from list of lists to list of ints
-                sb.l1 = [g2tb1[tb[0]] for tb in sb.l1]
-                sb.l2 = [g2tb2[tb[0]] for tb in sb.l2]
+            assert isinstance(inSbsInPairComp, myTools.Dict2d)
+            withSbIds = False
+            sbsInPairComp = myTools.OrderedDict2dOfLists()
+            for ((c1, c2), sb) in  inSbsInPairComp.items2d():
+                sbsInPairComp.addToLocation((c1, c2), sb)
+
+        for sb in sbsInPairComp[chr1][chr2]:
+            # change the sb.lX structure from list of lists to list of ints
+            sb.l1 = [g2tb1[tb[0]] for tb in sb.l1]
+            sb.l2 = [g2tb2[tb[0]] for tb in sb.l2]
 
         # truncate sbs to fit the ROI
-        new_sbsInPairComp = myTools.Dict2d(list)
-        for sb in inSbsInPairComp[chr1][chr2]:
+        new_sbsInPairComp = myTools.OrderedDict2dOfLists()
+        for (sb, id) in sbsInPairComp.getItemsAndIdsByLocation((chr1, chr2)):
             if (range1[0] <= sb.minOnG(1) and sb.maxOnG(1) <= range1[1]) \
                     and (range2[0] <= sb.minOnG(2) and sb.maxOnG(2) <= range2[1]):
                 # sb is perfectly included in the ROI
-                new_sbsInPairComp[chr1][chr2].append(sb)
+                new_sbsInPairComp.addToLocationWithId((chr1, chr2), sb, id)
             elif (sb.maxOnG(1) < range1[0] or range1[1] < sb.minOnG(1)) \
                     or (sb.maxOnG(2) < range2[0] or range2[1] < sb.minOnG(2)):
                 # sb is not in the ROI
@@ -1262,8 +1367,13 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                 # sb is partially included in the ROI
                 sb.truncate(range1, range2)
                 if len(sb.la) > 0:
-                    new_sbsInPairComp[chr1][chr2].append(sb)
+                    new_sbsInPairComp.addToLocationWithId((chr1, chr2), sb, id)
         sbsInPairComp = new_sbsInPairComp
+
+        if withSbIds:
+            TbDiagNames = [id for (sb, id) in sbsInPairComp.getItemsAndIdsByLocation((chr1, chr2))]
+        else:
+            TbDiagNames = None
 
         # Build TbNumberOfGenesInEachTbC1 : [ 4,5,1,1,6,2, ...] number og genes in each TB of C1
         TbNumberOfGenesInEachTbC1 = [len(tb2g1[i1_tb]) for i1_tb in range(len(chrom1_tb[chr1]))]
@@ -1309,6 +1419,7 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                                 TbHpSign,
                                 TbHomologyGroupsInWindow,
                                 TbDiagIndices,
+                                diagNames=TbDiagNames,
                                 outputFileName=outImageFileName,
                                 maxWidth=100,
                                 maxHeight=100,
