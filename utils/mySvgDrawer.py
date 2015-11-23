@@ -9,6 +9,8 @@
 # display_prog = 'display' # Command to execute to display images.
 import collections
 
+import math
+
 display_prog = 'firefox'  # Command to execute to display images.
 from math import sqrt, acos, cos, sin
 
@@ -87,9 +89,20 @@ genomicusColors = """
 .SpeciesSpecificGenes {stroke:black; fill:white; fill-opacity:1.0 }
 """
 
-# TODO use points whenever it is possible
-Point = collections.namedtuple('Point', ['x', 'y'])
-
+class Point(collections.namedtuple('Point', ['x', 'y'])):
+    def __add__(self, point):
+        assert isinstance(point, Point)
+        return Point(self.x + point.x, self.y + point.y)
+    def __sub__(self, point):
+        assert isinstance(point, Point)
+        return Point(self.x - point.x, self.y - point.y)
+    def rotate(self, origin, angle):
+        angle = angle * (math.pi / 180.0)
+        assert isinstance(origin, Point)
+        tmp = self - origin
+        tmp = Point(tmp.x * cos(angle) - tmp.y * sin(angle), tmp.x * sin(angle) + tmp.y * cos(angle))
+        tmp = tmp + origin
+        return tmp
 
 def colorstr(rgb): return "#%x%x%x" % (rgb[0] / 16, rgb[1] / 16, rgb[2] / 16) if rgb != 'none' else 'none'
 
@@ -159,17 +172,18 @@ class Line:
 
 
 class Circle:
-    def __init__(self, center, radius, color):
+    def __init__(self, center, radius, color, opacity=1.0):
         assert isinstance(center, Point)
         self.center = center  #xy tuple
         self.radius = radius  #xy tuple
         self.color = color  #rgb tuple in range(0,256)
+        self.opacity = opacity
         return
 
     def strarray(self):
         return ["  <circle cx=\"%f\" cy=\"%f\" r=\"%f\"\n" % \
                 (self.center[0], self.center[1], self.radius),
-                "    style=\"fill:%s;\"  />\n" % colorstr(self.color)]
+                "    style=\"fill:%s;fill-opacity:%f\"  />\n" % (colorstr(self.color), self.opacity)]
 
 
 class Rectangle:
@@ -304,15 +318,8 @@ class Gene:
     def strarray(self):
         if self.strand != None:
             scale = sqrt((self.end[0] - self.start[0]) ** 2 + (self.end[1] - self.start[1]) ** 2)
-            points = [(0.0, -0.5), (0.0, 0.5), (0.75, 0.5), (1.0, 0), (0.75, -0.5)] if self.strand == +1 else [(0.0, 0),
-                                                                                                               (0.25,
-                                                                                                                0.5), (
-                                                                                                                   1.0,
-                                                                                                                   0.5), (
-                                                                                                                   1.0,
-                                                                                                                   -0.5), (
-                                                                                                                   0.25,
-                                                                                                                   -0.5)]  # Defines a gene symbol
+            points = [(0.0, -0.5), (0.0, 0.5), (0.75, 0.5), (1.0, 0), (0.75, -0.5)] if self.strand == +1 else\
+                [(0.0, 0),(0.25, 0.5), (1.0, 0.5), (1.0, -0.5), (0.25, -0.5)]  # Defines a gene symbol
             #rotation
             theta = acos(float(self.end.x - self.start.x) / scale) if self.end.y > self.start.y else -acos(
                 float(self.end.x - self.start.x) / scale)
@@ -330,8 +337,7 @@ class Gene:
                             fontFamily="Arial", transform="").strarray()
         else:
             scale = sqrt((self.end[0] - self.start[0]) ** 2 + (self.end[1] - self.start[1]) ** 2)
-            points = [(0.1, -0.5), (0.1, 0.5), (0.9, 0.5),
-                      (0.9, -0.5)]  # Defines a rectangle for unoriented genes or TBs
+            points = [(0.0, -0.5), (0.0, 0.5), (1.0, 0.5), (1.0, -0.5)]  # Defines a rectangle for unoriented genes or TBs
             #rotation
             theta = acos(float(self.end[0] - self.start[0]) / scale) if self.end[1] > self.start[1] else -acos(
                 float(self.end[0] - self.start[0]) / scale)
@@ -358,7 +364,7 @@ def zItems(listOfItems, itemClassOnTop):
             itemsBelow.append(item)
     return itemsOnTop + itemsBelow
 
-def tanslateItems(listOfItems, (tx, ty)):
+def translateItems(listOfItems, (tx, ty)):
     for item in listOfItems:
         if isinstance(item, Gene):
             item.start = Point(item.start.x + tx, item.start.y + ty)
@@ -377,6 +383,23 @@ def tanslateItems(listOfItems, (tx, ty)):
         elif isinstance(item, Ellipse):
             item.center = Point(item.center.x + tx, item.center.y + ty)
         else:
+            raise TypeError('Type %s of %s is unknown' % (type(item), item))
+    return listOfItems
+
+def rotateItems(listOfItems, origin, angle):
+    assert isinstance(origin, Point)
+    for item in listOfItems:
+        if isinstance(item, Line):
+            item.start = item.start.rotate(origin, angle)
+            item.end = item.end.rotate(origin, angle)
+        elif isinstance(item, Text):
+            # FIXME: how to rotate svg text ??
+            item.origin = item.origin.rotate(origin, angle)
+        elif isinstance(item, Gene):
+            item.start = item.start.rotate(origin, angle)
+            item.end = item.end.rotate(origin, angle)
+        # TODO for other classes
+        else:
             raise TypeError('Type is unknown')
     return listOfItems
 
@@ -392,7 +415,7 @@ def placeGenomesItems(genomesItems, origin=Point(0, 0), sizeGene=1):
         for (chr, chromosomeItems) in genomeItems.items():
             # add a space between each chromosome
             currPosition = Point(currPosition.x, currPosition.y + translateValue)
-            tanslateItems(chromosomeItems, currPosition)
+            translateItems(chromosomeItems, currPosition)
             for item in chromosomeItems:
                 listOfItems.append(item)
     return listOfItems

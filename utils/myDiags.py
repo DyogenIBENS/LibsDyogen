@@ -159,11 +159,27 @@ class Diagonal():
 
     def minOnG(self, rankGenome):
         assert rankGenome in [1, 2]
-        return min(self.l1) if rankGenome == 1 else min(self.l2)
+        if rankGenome == 1:
+            l = self.l1
+        else:
+            l = self.l2
+        if isinstance(l, list) and isinstance(l[0], list):
+            res = min([idx for tb in l for idx in tb])
+        else:
+            res = min(l)
+        return res
 
     def maxOnG(self, rankGenome):
         assert rankGenome in [1, 2]
-        return max(self.l1) if rankGenome == 1 else max(self.l2)
+        if rankGenome == 1:
+            l = self.l1
+        else:
+            l = self.l2
+        if isinstance(l, list) and isinstance(l[0], list):
+            res = max([idx for tb in l for idx in tb])
+        else:
+            res = max(l)
+        return res
 
     #returns the maximum gap between two hps with the Chebyschev Distance metric (CD)
     def max_g(self):
@@ -1077,6 +1093,7 @@ def solveSbsOverlaps(sbsInPairComp, truncationMax=0, removeSingleHpSbs=False, ve
     assert nbHpsAfterOverlapFiltering == nbHpsBeforeOverlapFiltering - (nbRemovedHpsBecauseOfNotAllowedOverlap + nbRemovedHpsAfterTruncation),\
         "%s = %s - (%s + %s)" % (nbHpsAfterOverlapFiltering, nbHpsBeforeOverlapFiltering, nbRemovedHpsBecauseOfNotAllowedOverlap, nbRemovedHpsAfterTruncation)
     print >> sys.stderr, "Nb hps before overlap-filtering = %s" % nbHpsBeforeOverlapFiltering
+    assert nbHpsBeforeOverlapFiltering > 0
     print >> sys.stderr, "Nb hps after overlap-filtering = %s (%%%.2f)" % (nbHpsAfterOverlapFiltering, float(nbHpsAfterOverlapFiltering) / float(nbHpsBeforeOverlapFiltering))
     print >> sys.stderr, "Nb hps removed because of not allowed overlap = %s (%%%.2f)" % (nbRemovedHpsBecauseOfNotAllowedOverlap, float(nbRemovedHpsBecauseOfNotAllowedOverlap)/ float(nbHpsBeforeOverlapFiltering))
     print >> sys.stderr, "Nb hps removed because of truncation = %s (%%%.2f)" % (nbRemovedHpsAfterTruncation, float(nbRemovedHpsAfterTruncation)/ float(nbHpsBeforeOverlapFiltering))
@@ -2649,8 +2666,8 @@ def parseSbsFile(fileName, genome1=None, genome2=None, withIds=False):
         new_gXs = []
         for i in range(nbTandemDup):
             gN = gXs[i]
-            genePos = genome.getPosition(gN)
-            if gN == None:
+            genePos = genome.getPosition(gN, default=None)
+            if genePos is None:
                 raise ValueError("gene %s is not in %s genome" % (gN, genome.name))
             chromosome = genePos.c
             assert chr == chromosome, "chr = %s(%s) and chromosome = %s(%s)" % (chr, type(chr), chromosome, type(chromosome))
@@ -2688,7 +2705,7 @@ def parseSbsFile(fileName, genome1=None, genome2=None, withIds=False):
     c2_old = 'fooC2'
     for (idSb, aGname, aGstrand, dist, c1, c2, s1s, s2s, g1s, g2s) in sbsReader:
         # iteration over each line of the input file that corresponds to tandem blocks
-        aGstrand = int(dist) if aGstrand != 'None' else None
+        aGstrand = int(aGstrand) if aGstrand != 'None' else None
         dist = int(dist) if dist != 'None' else None
         (g1s, s1s) = foo(g1s, s1s, genome1, c1)
         (g2s, s2s) = foo(g2s, s2s, genome2, c2)

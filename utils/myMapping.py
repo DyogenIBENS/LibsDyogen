@@ -7,6 +7,7 @@
 # Licences GLP v3 and CeCILL v2
 
 # This file contains classes and methods for 1D management of chromosomes
+import sys
 
 import myTools
 import myLightGenomes
@@ -32,7 +33,7 @@ def labelWithFamID(genome, families=None):
     This function keeps the original copy
     """
     assert isinstance(genome, myLightGenomes.LightGenome)
-    assert type(genome.values()[0]) == list
+    assert isinstance(genome.values()[0], list)
     if families is None:
         return genome
     assert isinstance(families, myLightGenomes.Families)
@@ -50,7 +51,7 @@ def labelWithFamID(genome, families=None):
 def labelWithFamNames(genome, families, keepGnOfGenesNotInFamilies=False):
     assert isinstance(families, myLightGenomes.Families)
     assert isinstance(genome, myLightGenomes.LightGenome)
-    assert type(genome.values()[0]) == list
+    assert isinstance(genome.values()[0], list)
     assert all(len(chrom) > 0 for chrom in genome.values()), " ".join(['%s:%s' % (c,len(chrom)) for c, chrom in genome.iteritems()])
     newGenome = myLightGenomes.LightGenome()
     for c in genome.keys():
@@ -176,7 +177,7 @@ def remap(genome, genomeMapping, assertCollapsedGenesHaveSameName=True):
         # if genome is a dict or a defaultdict
         newGenome = myLightGenomes.LightGenome()
         for c in genomeMapping:
-            newGenome[c] = []
+            newGenome[c] = myLightGenomes.Chromosome()
             chrMapping = genomeMapping[c]
             assert chrMapping.__class__.__name__ == 'Mapping'
             for (newIdx, oldIdxs) in chrMapping:

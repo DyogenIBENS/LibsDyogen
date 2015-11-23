@@ -7,12 +7,14 @@
 # Licences GLP v3 and CeCILL v2
 
 import os
-
 import sys
 import itertools
 import collections
 
 import myFile
+
+SYMBOL6X = '.'
+SYMBOL2X = '*'
 
 GeneSpeciesPosition = collections.namedtuple("GeneSpeciesPosition", ['species', 'chromosome', 'index'])
 
@@ -58,7 +60,7 @@ class PhylogeneticTree:
             family = [node]
             if node in self.items:
                 # interior node (not a leaf of the tree)
-                self.fileName.setdefault(node, str(node).replace(' ', '_').replace('/', '-'))
+                self.fileName.setdefault(node, str(node))
                 s = []
                 # list of subFamilies
                 lsf = []
@@ -86,7 +88,7 @@ class PhylogeneticTree:
                             self.dicLinks.get(e2).setdefault(e1, self.dicLinks.get(e2).get(node) + self.dicLinks.get(node).get(e1)[1:])
             else:
                 # leaf of the tree
-                self.fileName.setdefault(node, str(node).replace(' ', '.'))
+                self.fileName.setdefault(node, str(node))
                 self.species.setdefault(node, frozenset([node]))
                 self.tmpS.append(node)
             self.allDescendants.setdefault(node, frozenset(family))
@@ -176,10 +178,10 @@ class PhylogeneticTree:
 
         # loading process
         def loadFile():
-            lignes = []
-            for ligne in f:
+            lines = []
+            for line in f:
                 # the final "\n" is removed and we cut owing to the "\t"
-                l = ligne.split('\t')
+                l = line.split('\t')
                 # indentation level
                 indent = 0
                 for x in l:
@@ -193,54 +195,57 @@ class PhylogeneticTree:
                     age = int(l[indent+1])
                 else:
                     age = 0
-                lignes.append((indent, names, age))
-            lignes.reverse()
-            return lignes
+                lines.append((indent, names, age))
+            lines.reverse()
+            return lines
 
         # lines analysis process
-        def recLoad(indent):
+        # lines = [..., (indent, names, age), ..., (0, namesOfRoot, age)]
+        def recLoad(indent, lines):
             # we continue only if the next line is indented as expected
-            if len(lignes) == 0 or lignes[-1][0] != indent:
+            if len(lines) == 0 or lines[-1][0] != indent:
                 return None
             # the line is loaded
-            currLine = lignes.pop()
+            currLine = lines.pop()
             # all the children sub-trees are loaded, as long as it is possible
             children = []
             while True:
-                tmp = recLoad(indent + 1)
+                tmp = recLoad(indent + 1, lines)
                 if tmp is None:
                     break
                 # record (name_of_child, evolution_time)
-                children.append((tmp, currLine[2]-self.ages.get(tmp)))
+                children.append((tmp, currLine[2] - self.ages.get(tmp)))
             # current node
-            n = currLine[1][0]
+            (currIndent, currNames, currAge) = currLine
+            name = currNames[0]
             if len(children) == 0:
-                if n[0] == ".":
-                    currLine[1][0] = n = n[1:]
-                    self.lstEsp6X.add(n)
-                elif n[0] == "*":
-                    currLine[1][0] = n = n[1:]
-                    self.lstEsp2X.add(n)
+                if name[0] == SYMBOL6X:
+                    currLine[1][0] = name = currNames[0][1:]
+                    self.lstEsp6X.add(name)
+                elif name[0] == SYMBOL2X:
+                    currLine[1][0] = name = currNames[0][1:]
+                    self.lstEsp2X.add(name)
                 else:
-                    self.lstEspFull.add(n)
-            # a single child, the node is returned
+                    name = currNames[0]
+                    self.lstEspFull.add(name)
+            # FIXE: also return anc node if only one extant species
             if len(children) == 1:
-                return children[0][0]
+                self.items.setdefault(name, children)
             # several children, they are recorded
             elif len(children) > 1:
-                self.items.setdefault(n, children)
+                self.items.setdefault(name, children)
             # standard informations
-            self.ages.setdefault(n, currLine[2])
+            self.ages.setdefault(name, currLine[2])
             for s in currLine[1]:
-                self.officialName[s] = n
-            return n
+                self.officialName[s] = name
+            return name
 
         self.ages = self.newCommonNamesMapperInstance()
         self.lstEsp2X = set()
         self.lstEsp6X = set()
         self.lstEspFull = set()
-        lignes = loadFile()
-        self.root = recLoad(0)
+        lines = loadFile()
+        self.root = recLoad(0, lines)
 
     # tree in the Newick format (between parentheses)
     def __loadFromNewick__(self, s):

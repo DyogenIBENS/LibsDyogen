@@ -29,6 +29,7 @@ def _keyFuncNaturalSort((c, chrom)):
 # TODO : unoriented genes
 # TODO : unoriented adjacencies
 
+
 # n = name (ENSG00001 for a human gene)
 # s = strand (+1 ou -1)
 class OGene(collections.namedtuple("Gene", ['n', 's'])):
@@ -52,6 +53,7 @@ class OGene(collections.namedtuple("Gene", ['n', 's'])):
     def __repr__(self):
         #return self.__class__.__name__ + tuple.__repr__(self)
         return 'G' + tuple.__repr__(self)
+
 # fn = family name (it may be the ancestral gene name ENSGT0001.a.b.a for
 # instance)
 # ns = names of homologs, a tuple
@@ -122,6 +124,72 @@ def contigType(chrName):
             # sex chromosomes of the chicken as (Z, W) or sex chromosomes of the human (X, Y)
             return ContigType.Chromosome
 
+# TODO: implement all the basic classes of myLigthGenomes.LightGenome into myLightGenome.Chromosome for more modularity
+# then in myLigthGenomes.LightGenome, call the classes of myLigthGenomes.Chromosome whenever it is possible
+class Chromosome(list):
+    def __init__(self, seq=()):
+        list.__init__(self, seq)
+
+    # def __getitem__(self, key): # Methode appellee par obj[3] <=> obj.__getitem__(3)
+    #     return list.__getitem__(self, key)
+    #
+
+    # FIXME: is it optimal ?
+    def __getslice__(self, i,j): # If user enters A[a:b] <=> A.__getslice__(a,b) # Impossible to restrict to __getitem__ ...
+        return Chromosome(self.__getitem__(slice(i,j,1)))
+
+    def __getitem__(self, item):
+        result = list.__getitem__(self, item)
+        return result
+        # try:
+        #
+        # except TypeError:
+        #     return result
+
+    def __add__(self, rhs):
+        return Chromosome(list.__add__(self, rhs))
+
+    def getGeneNamesNotInFamilies(self, families, asA=set):
+        assert asA in [set, list]
+        assert isinstance(families, Families)
+        res = asA()
+        for gene in self:
+            family = families.getFamilyByName(gene.n, default=None)
+            if not family:
+                if asA == set:
+                    res.add(gene.n)
+                else:
+                    assert asA == list
+                    res.append(gene.n)
+        return res
+
+    def getGeneNamesInFamilies(self, families, asA=set):
+        assert asA in [set, list]
+        assert isinstance(families, Families)
+        res = asA()
+        for gene in self:
+            family = families.getFamilyByName(gene.n, default=None)
+            if family is not None:
+                if asA == set:
+                    res.add(gene.n)
+                else:
+                    assert asA == list
+                    res.append(gene.n)
+        return res
+
+    def getOwnedFamilyNames(self, families, asA=set):
+        assert asA in [set, list]
+        assert isinstance(families, Families)
+        res = asA()
+        for gene in self:
+            family = families.getFamilyByName(gene.n, default=None)
+            if family:
+                if asA == set:
+                    res.add(family.fn)
+                else:
+                    assert asA == list
+                    res.append(family.fn)
+        return res
 
 # It might be more interesting for certain applications to only use a classical
 # collections.defaultdict instead of the less specialised class
@@ -137,7 +205,7 @@ class LightGenome(myTools.DefaultOrderedDict):
         # this dict contains the sets chromosomes per type of contig (cf class ContigType)
         self.chrSet = collections.defaultdict(set)
         # kwargs.get('name', default=None)
-        myTools.DefaultOrderedDict.__init__(self, default_factory=list)
+        myTools.DefaultOrderedDict.__init__(self, default_factory=Chromosome)
         self.withDict = kwargs.get("withDict", False)
         if self.withDict:
             self.g2p = {}
@@ -355,7 +423,7 @@ class LightGenome(myTools.DefaultOrderedDict):
         return (nbRemovedGenes, nbRemovedChrs)
 
     # TODO change name to getGeneNames (no ambiguity any more with a possible setter)
-    def getGeneNames(self, asA=set, checkNoDuplicates=True):
+    def getGeneNames(self, asA=set, checkNoDuplicates=False):
         res = asA()
         for chrom in self.values():
             for gene in chrom:
@@ -381,6 +449,42 @@ class LightGenome(myTools.DefaultOrderedDict):
                     else:
                         assert asA == list
                         res.append(family.fn)
+        return res
+
+    def getOwnedFamilies(self, families):
+        res = []
+        for fn in self.getOwnedFamilyNames(families, asA=asA):
+            res.append(families.getFamilyByName(fn))
+        return res
+
+    def getGeneNamesInFamilies(self, families, asA=set):
+        assert asA in [set, list]
+        assert isinstance(families, Families)
+        res = asA()
+        for chrom in self.values():
+            for gene in chrom:
+                family = families.getFamilyByName(gene.n, default=None)
+                if family:
+                    if asA == set:
+                        res.add(gene.n)
+                    else:
+                        assert asA == list
+                        res.append(gene.n)
+        return res
+
+    def getGeneNamesNotInFamilies(self, families, asA=set):
+        assert asA in [set, list]
+        assert isinstance(families, Families)
+        res = asA()
+        for chrom in self.values():
+            for gene in chrom:
+                family = families.getFamilyByName(gene.n, default=None)
+                if not family:
+                    if asA == set:
+                        res.add(gene.n)
+                    else:
+                        assert asA == list
+                        res.append(gene.n)
         return res
 
     def removeChrsStrictlySmallerThan(self, minChrLen):
@@ -508,6 +612,7 @@ class Families(list):
         return self.getFamilyByID(famID, default=default)
 
     def getFamNameByName(self, name, default=None):
+        assert isinstance(name, str) or isinstance(name, int)
         famID = self.getFamID(name)
         if famID is not None:
             return self.getFamilyByID(famID, default=default).fn
@@ -519,6 +624,16 @@ class Families(list):
             return self[famID].fn
         except:
             return default
+
+    def genesAreInSameFamily(self, geneName1, geneName2):
+        famName1 = self.getFamNameByName(geneName1, default=None)
+        if famName1 is None:
+            return False
+        famName2 = self.getFamNameByName(geneName2)
+        if famName2 is None:
+            return False
+        if famName1 == famName2:
+            return True
 
     def printIn(self, stream):
         for (famID, family) in enumerate(self):

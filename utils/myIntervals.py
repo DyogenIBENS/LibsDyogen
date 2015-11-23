@@ -208,9 +208,12 @@ def analyseGenomeIntoChromExtremities(genome, oriented=True):
         res.update({chromGeneExtrLeft, chromGeneExtrRight})
     return res
 
-def analyseGenomeIntoAdjacencies(genome, oriented=True):
+def analyseGenomeIntoAdjacencies(genome, oriented=True, asA=set):
     isinstance(genome, LightGenome)
-    setAdjs = set()
+    if asA == set:
+        setAdjs = set()
+    else:
+        setAdjs = list()
     for chrom in genome.values():
         assert len(chrom) > 0
         if len(chrom) > 1:
@@ -220,10 +223,18 @@ def analyseGenomeIntoAdjacencies(genome, oriented=True):
                 assert og1.n != og2.n
                 if oriented:
                     # oriented adjacencies
-                    setAdjs.add(OAdjacency(og1, og2))
+                    if asA == set:
+                        setAdjs.add(OAdjacency(og1, og2))
+                    else:
+                        assert asA == list
+                        setAdjs.append(OAdjacency(og1, og2))
                 else:
                     # unoriented adjacencies
-                    setAdjs.add(Adjacency(og1.n, og2.n))
+                    if asA == set:
+                        setAdjs.add(Adjacency(og1.n, og2.n))
+                    else:
+                        assert asA == list
+                        setAdjs.append(Adjacency(og1.n, og2.n))
     return setAdjs
 
 # tp = nb True Positives
