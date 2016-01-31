@@ -2028,7 +2028,7 @@ def fIdentifyMonoGcSsAndIdentifyMonoGinvsNestedInSbsGaps(sbsInPairComp, putative
     return (new_sbsInPairComp, diagsThatAreNotSbsInPairComp)
 
 def fIdentifyInversionsAtSbsExtremities(sbsInPairComp, putativeMicroInversionsInPairComp,
-                                        gapMaxMicroInv=0, identifyMonogInvs=True, hyperSensitive=True):
+                                        gapMaxMicroInv=0, identifyMonogInvs=True, hyperSensitive=False):
     # 1) Give unique id to each sb and diag
     idsSbs = myTools.Dict2d(set)
     idsOfPutativeMicroInversions = set()
