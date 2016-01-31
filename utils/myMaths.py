@@ -450,3 +450,7 @@ def prod(factors):
 
 def mean(l):
     return float(sum(l)) / len(l)
+
+# geometrical mean
+def geoMean(l):
+    return (reduce(lambda x, y: x*y, l)**(1.0/len(l)))

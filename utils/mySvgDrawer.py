@@ -10,6 +10,7 @@
 import collections
 
 import math
+from utils import myTools
 
 display_prog = 'firefox'  # Command to execute to display images.
 from math import sqrt, acos, cos, sin
@@ -108,7 +109,9 @@ def colorstr(rgb): return "#%x%x%x" % (rgb[0] / 16, rgb[1] / 16, rgb[2] / 16) if
 
 
 class Scene:
-    def __init__(self, name="svg", width=400, height=400):
+    def __init__(self, name="svg", origin=Point(0,0), width=400, height=400):
+        assert isinstance(origin, Point)
+        self.origin = origin
         self.name = name
         self.items = []
         self.height = height
@@ -127,8 +130,8 @@ class Scene:
                #'<?xml-stylesheet type="text/css" href="styleForHomologyMatrixWithSBs.css" ?>\n', #Attention, necessite le fichier css avec la charte graphique de genomicus
                '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n',
                #"<svg height=\"%spt\" version=\"1.1\" viewBox=\"0 0 %s %s\" width=\"%spt\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n" % (self.height, self.width, self.height, self.width),
-               "<svg height=\"100%%\" version=\"1.1\" viewBox=\"0 0 %s %s\" width=\"100%%\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n" % (
-                   self.width, self.height),
+               "<svg height=\"100%%\" version=\"1.1\" viewBox=\"%s %s %s %s\" width=\"100%%\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n" %
+               (self.origin.x, self.origin.y, self.width, self.height),
                '<defs>\n',
                '<style type="text/css">\n'] + \
               [genomicusColors] + \
@@ -223,8 +226,8 @@ class Rectangle:
         else:
             return ["  <rect x=\"%f\" y=\"%f\" height=\"%f\"\n" % \
                     (self.origin[0], self.origin[1], self.height),
-                    "    width=\"%f\" style=\"fill-opacity:%f;stroke:%s\"\n" % \
-                    (self.width, self.fill_opacity, self.stroke), \
+                    "    width=\"%f\" style=\"fill-opacity:%f;stroke:%s;stroke-width:%s\"\n" % \
+                    (self.width, self.fill_opacity, self.stroke, self.strokeWidth), \
                     "    class=\"%s\"/>\n" % self.svgClass]
 
 
@@ -364,6 +367,57 @@ def zItems(listOfItems, itemClassOnTop):
             itemsBelow.append(item)
     return itemsOnTop + itemsBelow
 
+def boundingBoxItem(item):
+        origin = Point(0,0)
+        width = 0
+        height = 0
+        if isinstance(item, Gene):
+            origin = Point(min([item.start.x, item.end.x]),
+                           min([item.start.y, item.end.y]))
+            width = max([item.start.x, item.end.x]) - origin.x
+            height = max([item.start.y, item.end.y]) - origin.y
+        elif isinstance(item, Polygon):
+            origin = Point(min([point.x for point in item.points]),
+                           min([point.y for point in item.points]))
+            width = max([point.x for point in item.points]) - origin.x
+            height = max([point.y for point in item.points]) - origin.y
+        elif isinstance(item, Line):
+            origin = Point(min([item.start.x, item.end.x]),
+                           min([item.start.y, item.end.y]))
+            width = max([item.start.x, item.end.x]) - origin.x
+            height = max([item.start.y, item.end.y]) - origin.y
+        elif isinstance(item, Rectangle):
+            origin = item.origin
+            width = item.width
+            height = item.height
+        elif isinstance(item, Circle):
+            origin = item.center - Point(item.radius, item.radius)
+            width = 2 * item.radius
+            height = 2 * item.radius
+        elif isinstance(item, Text):
+            origin = item.origin
+            width = len(item.text) * item.size
+            height = item.size
+        elif isinstance(item, Ellipse):
+            # FIXME
+            origin = item.center
+        else:
+            raise TypeError('Type %s of %s is unknown' % (type(item), item))
+        assert isinstance(width, float) or isinstance(width, int), str(width)
+        assert isinstance(height, float) or isinstance(height, int), str(height)
+        return (origin, width, height)
+
+def boundingBoxItems(listOfItems):
+    origin = Point(0, 0)
+    width = 0
+    height = 0
+    for (_origin, _width, _height) in [boundingBoxItem(item) for item in listOfItems]:
+        origin = Point(min(origin.x, _origin.x),
+                       min(origin.y, _origin.y))
+        width = max(width, (_origin.x + _width) - origin.x)
+        height = max(height, (_origin.y + _height) - origin.y)
+    return (origin, width, height)
+
 def translateItems(listOfItems, (tx, ty)):
     for item in listOfItems:
         if isinstance(item, Gene):
@@ -403,6 +457,7 @@ def rotateItems(listOfItems, origin, angle):
             raise TypeError('Type is unknown')
     return listOfItems
 
+@myTools.deprecated
 def placeGenomesItems(genomesItems, origin=Point(0, 0), sizeGene=1):
     listOfItems = []
     translateValue = sizeGene

@@ -59,11 +59,11 @@ def geneExtremitiesFromIntergeneInChrom(idx, chrom):
     return geneExtremities
 
 class Adjacency(tuple):
-    def __new__(cls, g1n, g2n):
+    def __new__(cls, g1n, g2n, fixOrder=False):
         assert isinstance(g1n, str) and isinstance(g2n, str)
         assert g1n != g2n
         # this relationship of order works for if both g1n and g2n are strings as well as if they are both integers
-        if g1n < g2n:
+        if fixOrder or g1n < g2n:
             return tuple.__new__(cls, (g1n, g2n))
         else:
             return tuple.__new__(cls, (g2n, g1n))
@@ -91,14 +91,14 @@ class Adjacency(tuple):
 class OAdjacency(tuple):
     # cannot use __init__ since tuple is an immutable class
     # (cf http://stackoverflow.com/questions/1565374/subclassing-python-tuple-with-multiple-init-arguments)
-    def __new__(cls, og1, og2):
+    def __new__(cls, og1, og2, fixOrder=False):
         if not isinstance(og1, OGene):
             og1 = OGene(og1)
         if not isinstance(og2, OGene):
             og2 = OGene(og2)
         assert og1.n != og2.n
         # this relationship of order works for if both g1n and g2n are strings as well as if they are both integers
-        if og1.n < og2.n:
+        if fixOrder or og1.n < og2.n:
             return tuple.__new__(cls, (og1, og2))
         else:
             return tuple.__new__(cls, (og2.reversed(), og1.reversed()))
@@ -134,13 +134,22 @@ def findConsideredFlankingGenesIdxs(chrom, x, ignoredGeneNames=set()):
 def geneExtremitiesFromAdjacency(adj):
     assert isinstance(adj, OAdjacency)
     (og1, og2) = adj
-    assert og1.s in {+1, -1} and og2.s in {+1, -1}
-    # 'Head or Tail of the 1st gene', if it is equal to 'h' it means that the breakpoint occurred near
-    # the head of the 1st gene
-    g1ht = 'h' if og1.s == +1 else 't'
-    # 'Head or Tail of the 2nd gene', (same principle as above)
-    g2ht = 't' if og2.s == +1 else 'h'
-    return (GeneExtremity(og1.n, g1ht), GeneExtremity(og2.n, g2ht))
+    if og1.s not in {+1, -1}:
+        # 'Head or Tail of the 1st gene', if it is equal to 'h' it means that the breakpoint occurred near
+        # the head of the 1st gene
+        ge1 = GeneExtremity(og1.n, None)
+    else:
+        g1ht = 'h' if og1.s == +1 else 't'
+        ge1 = GeneExtremity(og1.n, g1ht)
+
+    if og2.s not in {+1, -1}:
+        ge2 = GeneExtremity(og2.n, None)
+    else:
+        # 'Head or Tail of the 2nd gene', (same principle as above)
+        g2ht = 't' if og2.s == +1 else 'h'
+        ge2 = GeneExtremity(og2.n, g2ht)
+
+    return (ge1, ge2)
 
 def intergeneFromGeneExtremity(geneExtr, genomeWithDict):
     assert isinstance(genomeWithDict, LightGenome)
@@ -208,7 +217,7 @@ def analyseGenomeIntoChromExtremities(genome, oriented=True):
         res.update({chromGeneExtrLeft, chromGeneExtrRight})
     return res
 
-def analyseGenomeIntoAdjacencies(genome, oriented=True, asA=set):
+def analyseGenomeIntoAdjacencies(genome, oriented=True, asA=set, fixOrderInAdj=False):
     isinstance(genome, LightGenome)
     if asA == set:
         setAdjs = set()
@@ -224,17 +233,17 @@ def analyseGenomeIntoAdjacencies(genome, oriented=True, asA=set):
                 if oriented:
                     # oriented adjacencies
                     if asA == set:
-                        setAdjs.add(OAdjacency(og1, og2))
+                        setAdjs.add(OAdjacency(og1, og2, fixOrder=fixOrderInAdj))
                     else:
                         assert asA == list
-                        setAdjs.append(OAdjacency(og1, og2))
+                        setAdjs.append(OAdjacency(og1, og2, fixOrder=fixOrderInAdj))
                 else:
                     # unoriented adjacencies
                     if asA == set:
-                        setAdjs.add(Adjacency(og1.n, og2.n))
+                        setAdjs.add(Adjacency(og1.n, og2.n, fixOrder=fixOrderInAdj))
                     else:
                         assert asA == list
-                        setAdjs.append(Adjacency(og1.n, og2.n))
+                        setAdjs.append(Adjacency(og1.n, og2.n, fixOrder=fixOrderInAdj))
     return setAdjs
 
 # tp = nb True Positives

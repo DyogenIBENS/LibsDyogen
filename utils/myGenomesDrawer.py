@@ -33,11 +33,9 @@ def parseChrRange(text, genome, g2gtb=None):
     if len(text.split(":")) == 2:
         chr = text.split(":")[0]
         if chr not in genome.keys():
-            print >> sys.stderr, "chr %s not in genome" % chr
-            raise ValueError
+            raise ValueError("chr %s not in genome" % chr)
     else:
-        print >> sys.stderr, "range not formated as expected : \"chr:deb-fin\""
-        raise ValueError
+        raise ValueError('range not formated as expected : \"chr:deb-fin\"')
 
     range = text.split(":")[-1].split("-")
     if len(range) == 2 and range[0].isdigit and (range[1].isdigit() or range[1] == '~'):
@@ -67,10 +65,8 @@ def parseChrRange(text, genome, g2gtb=None):
         else:
             range = (int(range[0])-1, int(range[1]) if range[1] != '~' else len(genome[chr]))
         if range[0] < 0 or len(genome[chr]) < range[1] or range[1] <= 0 or range[1] <= range[0]:
-            print >> sys.stderr, \
-                "range %s is incoherent for chr %s. FYI chr %s contains %s elements. Be sure that beginning < end of range"\
-                % ([range[0]+1, range[1]], chr, chr, len(genome[chr]))
-            raise ValueError
+            raise ValueError("range %s is incoherent for chr %s. FYI chr %s contains %s elements. Be sure that beginning < end of range"\
+                % ([range[0]+1, range[1]], chr, chr, len(genome[chr])))
     else:
         raise ValueError
     return (chr, range)
@@ -330,9 +326,9 @@ def drawChromosomeFromRawInformations(genesStrands,
     #                  homolog2[tb1'=[gene1'Idx, ...], tb2'=[geneA'Idx, ...]],
     #                 ... ]
     if not greyLevelsGenerator:
-        greyLevelsGenerator = LevelIdxGenerator(farIdxs=False, inGrays=True)
+        greyLevelsGenerator = LevelIdxGenerator(farIdxs=None, inGrays=True)
     if not name2color:
-        homologsColorsGenerator = LevelIdxGenerator(farIdxs=False)
+        homologsColorsGenerator = LevelIdxGenerator(farIdxs=None)
 
     # create chromosomes
     if differentGeneLengths:
@@ -348,7 +344,7 @@ def drawChromosomeFromRawInformations(genesStrands,
     # # stroke_width  = 0.05 * lengthGenes
     # stroke_width  = 0.05 * width
     chromLength = cumGeneLengths + cumIntergeneLengths
-    if desiredLength:
+    if desiredLength is not None:
         assert isinstance(desiredLength, float) or isinstance(desiredLength, int)
         factorLengh = desiredLength / float(chromLength)
         chromLength *= factorLengh
@@ -403,43 +399,43 @@ def drawChromosomeFromRawInformations(genesStrands,
 
     # add a line that goes through all genes of the chromosome
     chromosomeItems = [mySvgDrawer.Line(Point(0, 0), Point(chromLength, 0))] + chromosomeItems
-    if desiredLength:
+    if desiredLength is not None:
         return (chromosomeItems, factorLengh)
     else:
         return chromosomeItems
 
 # TODO: implement all the basic classes of myLigthGenomes.LightGenome into myLightGenome.Chromosome for more modularity
 # then in myLigthGenomes.LightGenome, call the classes of myLigthGenomes.Chromosome whenever it is possible
-def drawChromosome(chromosome,
-                   families=None,
-                   name2color=None,
-                   lengthGenes=1.0,
-                   genesCoordinates=None,
-                   halfIntergeneLengths=0.1,
-                   desiredLength=None,
-                   geneNamesWithSameGreyLevels=None,
-                   greyLevelsGenerator=None,
-                   whiteGeneNames=None,
-                   symbolsInGenes=None,
-                   colorsGenerator=None,
-                   geneWidth=None):
+def svgItemsChromosome(chromosome,
+                       families=None,
+                       name2color=None,
+                       lengthGenes=1.0,
+                       genesCoordinates=None,
+                       halfIntergeneLengths=0.1,
+                       desiredLength=None,
+                       geneNamesWithSameGreyLevels=None,
+                       greyLevelsGenerator=None,
+                       whiteGeneNames=None,
+                       symbolsInGenes=None,
+                       colorsGenerator=None,
+                       geneWidth=None):
     genomeWithOnlyChrom = myLightGenomes.LightGenome()
-    chr = 0
+    chr = '0'
     genomeWithOnlyChrom[chr] = chromosome
-    if lengthGenes:
+    if lengthGenes is not None:
         assert genesCoordinates is None
         if isinstance(lengthGenes, list):
             lengthGenes = {chr: lengthGenes}
         else:
             assert isinstance(lengthGenes, float)
-    if genesCoordinates:
+    if genesCoordinates is not None:
         assert lengthGenes is None
-        genesCoordinates = {chr: lengthGenes}
+        genesCoordinates = {chr: genesCoordinates}
     if isinstance(halfIntergeneLengths, list):
         halfIntergeneLengths = {chr: halfIntergeneLengths}
     if isinstance(symbolsInGenes, list):
         symbolsInGenes = {chr: symbolsInGenes}
-    return svgItemsLightGenome(genomeWithOnlyChrom,
+    res = svgItemsLightGenome(genomeWithOnlyChrom,
                                families=families,
                                name2color=name2color,
                                lengthGenes=lengthGenes,
@@ -451,7 +447,96 @@ def drawChromosome(chromosome,
                                whiteGeneNames=whiteGeneNames,
                                symbolsInGenes=symbolsInGenes,
                                colorsGenerator=colorsGenerator,
-                               geneWidth=geneWidth)[chr]
+                               geneWidth=geneWidth)
+    if desiredLength is not None:
+        assert  isinstance(res, tuple), '%s' % res
+        assert len(res) == 2
+        (genomeItems, factorLength) = res
+        # FIXME, factorLengthShould be a dict over chrs keys
+        # factorLength = desiredLength / float(chromLength)
+        return (genomeItems[chr], factorLength)
+    else:
+        assert len(res) == 1
+        genomeItems = res
+        return genomeItems[chr]
+
+def genesCoordinates2GeneAndHalfIntergeneLengths(listOfGenesCoordinates):
+    chrGeneLengths = []
+    chrHalfIntergeneLengths = []
+    beg_old = 0
+    end_old = 0
+    for (idxG, (beg, end)) in enumerate(listOfGenesCoordinates):
+        # DEBUG
+        print >> sys.stderr, str((beg_old, end_old, beg, end))
+        # 1) take the coordinates (beg, end) of the genes and edit the coordinates if they overlap
+        if idxG > 0: assert beg_old < end_old
+        assert beg < end
+        #(beg, end) = (end, beg) if end < beg else (beg, end)
+        if end_old <= beg:
+            if idxG > 0: assert beg_old < end_old <= beg < end
+        else:
+            assert beg < end_old
+            # overlap!
+            print >> sys.stderr, 'Warning: Overlapping genes extremities beg_right=%s < end_left=%s' % (beg, end_old)
+            print >> sys.stderr, 'This should not happen if genes were indexed on there 5\' extremities and if they do not overlap'
+            # The only solution to get out of this mess is to truncated the former gene
+            if end_old < end:
+                if (beg_old < beg < end_old < end):
+                    # FIXME arbitrary choice : could be (beg_old, end_old - 0.0000000001, end_old, end)
+                    (beg_old, end_old, beg, end) = (beg_old, beg - 0.0000000001, beg, end)
+                else:
+                    assert (beg < beg_old < end_old < end), '%s' % str((beg_old, beg, end_old, end))
+                    (beg_old, end_old, beg, end) = (beg_old, end_old - 0.0000000001, end_old, end)
+            else:
+                print >> sys.stderr, 'Warning: genes are nested!'
+                assert beg_old < beg < end <= end_old
+                # the current gene is nested in the previous beg_old
+                (beg_old, end_old, beg, end) = (beg_old, beg - 0.0000000001, end, end_old)
+            # edit the former gene length
+            if idxG > 0: assert beg_old < end_old <= beg < end
+            print >> sys.stderr, 'Warning: because of overlapping genes, the gene coordinates have been edited'
+            listOfGenesCoordinates[idxG - 1] = (beg_old, end_old)
+            listOfGenesCoordinates[idxG] = (beg, end)
+            chrGeneLengths[idxG - 1] = abs(beg_old - end_old)
+
+        # 2) compute gene lengths
+        chrGeneLengths.append(end - beg)
+
+        # 3) compute halfIntergenes
+        if idxG == 0:
+            leftTelomereLength = beg
+            chrHalfIntergeneLengths.append(leftTelomereLength)
+        else:
+            assert 1 <= idxG < len(listOfGenesCoordinates)
+            assert end_old <= beg
+            leftIntergeneLength = abs(end_old - beg)
+            halfLeftIntergeneLength = leftIntergeneLength / 2.0
+            chrHalfIntergeneLengths.extend([halfLeftIntergeneLength, halfLeftIntergeneLength])
+            if idxG == len(listOfGenesCoordinates) - 1:
+                rightTelomereLength = leftTelomereLength
+                chrHalfIntergeneLengths.append(rightTelomereLength)
+        (beg_old, end_old) = (beg, end)
+
+    # DEBUG ASSERTION
+    _cumChrLength = 0
+    assert len(chrGeneLengths) == len(listOfGenesCoordinates)
+    for (i, geneLength) in enumerate(chrGeneLengths):
+        (beg, end) = listOfGenesCoordinates[i]
+        assert beg < end
+        if i == 0:
+            leftTelomereLength = chrHalfIntergeneLengths[0]
+            _cumChrLength += leftTelomereLength
+            assert abs(beg - _cumChrLength) < 0.0001
+            _cumChrLength += geneLength
+            assert abs(end - _cumChrLength) < 0.0001
+        elif 1 <= i < len(chrGeneLengths):
+            # add length of ith intergene
+            leftInterGeneLength = sum(chrHalfIntergeneLengths[i*2-1:i*2+1])
+            _cumChrLength += leftInterGeneLength
+            assert abs(beg - _cumChrLength) < 0.0000001, '%s ~= %s' % (beg, _cumChrLength)
+            _cumChrLength += geneLength
+            assert abs(end - _cumChrLength) < 0.0000001, '%s ~= %s' % (end, _cumChrLength)
+    return (chrGeneLengths, chrHalfIntergeneLengths)
 
 
 def svgItemsLightGenome(genome,
@@ -462,6 +547,7 @@ def svgItemsLightGenome(genome,
                         # lengthGenes may also be a dict: {chr1: [lengthGene1, ....], ...}
                         lengthGenes=1.0,
                         # genesCoordinates: dict {chr1: [(begG1, endG1), ...], ...}, begG1 might be a length in bp
+                        # !!! WARNING: this object might be edited if genes overlap !!!
                         genesCoordinates=None,
                         # halfIntergeneLengths may also be a dict {chr1: [telomere1, 1sthalfIntergene1, 2ndhalfIntergene1, 1sthalfIntergene2, ...], ...}
                         halfIntergeneLengths=0.1,
@@ -499,6 +585,7 @@ def svgItemsLightGenome(genome,
                 for whiteGenePosition in whiteGenesPositions:
                     whiteGenesIdxs[whiteGenePosition.c].add(whiteGenePosition.idx)
     idxsOfGreyGenes = collections.defaultdict(set)
+    greyIdToGeneIdxs = collections.defaultdict(lambda: collections.defaultdict(set))
     if geneNamesWithSameGreyLevels:
         greyIdToGeneIdxs = collections.defaultdict(lambda: collections.defaultdict(set))
         for (iGrey, geneNamesWithSameGreyLevel) in enumerate(geneNamesWithSameGreyLevels):
@@ -508,8 +595,6 @@ def svgItemsLightGenome(genome,
                     for greyGenePosition in greyGenesPositions:
                         greyIdToGeneIdxs[greyGenePosition.c][iGrey].add(greyGenePosition.idx)
                         idxsOfGreyGenes[greyGenePosition.c].add(greyGenePosition.idx)
-    else:
-        greyIdToGeneIdxs = None
 
     # rewrite with families
     if families:
@@ -539,49 +624,31 @@ def svgItemsLightGenome(genome,
     for (chr, chrom) in genome.iteritems():
         genesStrands = [s for (_, s) in chrom]
         if genesCoordinates is None:
-            currLengthGenes = lengthGenes[chr] if isinstance(lengthGenes, dict) else lengthGenes
-            currHalfIntergeneLengths = halfIntergeneLengths[chr] if isinstance(halfIntergeneLengths, dict) else halfIntergeneLengths
+            chrGeneLengths = lengthGenes[chr] if isinstance(lengthGenes, dict) else lengthGenes
+            chrHalfIntergeneLengths = halfIntergeneLengths[chr] if isinstance(halfIntergeneLengths, dict) else halfIntergeneLengths
         else:
-            assert lengthGenes is None
-            currLengthGenes = []
-            currHalfIntergeneLengths = []
-            for (idxG, (beg, end)) in enumerate(genesCoordinates[chr]):
-                (beg, end) = (end, beg) if end < beg else (beg, end)
-                currLengthGenes.append(end - beg)
-                if idxG == 0:
-                    telomereLengthLeft = beg
-                    currHalfIntergeneLengths.append(telomereLengthLeft)
-                    end_old = end
-                else:
-                    if  beg < end_old:
-                        print >> sys.stderr, 'overlapping genes extremities beg_right=%s < end_left=%s' % (beg, end_old)
-                        beg = end_old
-                    intergeneLength = beg - end_old
-                    halfIntergeneLengthRightOldGene = intergeneLength / 2.0
-                    halfIntergeneLengthLeftNewGene = intergeneLength / 2.0
-                    currHalfIntergeneLengths.extend([halfIntergeneLengthRightOldGene, halfIntergeneLengthLeftNewGene])
-                    end_old = end
-                    if idxG == len(genesCoordinates[chr]) - 1:
-                        telomereLengthRight = telomereLengthLeft
-                        currHalfIntergeneLengths.append(telomereLengthRight)
+            # This step may edit the genesCoordinates[chr] if genes overlap
+            (chrGeneLengths, chrHalfIntergeneLengths) = genesCoordinates2GeneAndHalfIntergeneLengths(genesCoordinates[chr])
 
         res = drawChromosomeFromRawInformations(genesStrands,
                                                 coloredName2Idxs=coloredName2Idxs[chr],
                                                 name2color=name2color,
                                                 symbolsInGenes=symbolsInGenes[chr] if symbolsInGenes else None,
-                                                lengthGenes=currLengthGenes,
-                                                halfIntergeneLengths=currHalfIntergeneLengths,
+                                                lengthGenes=chrGeneLengths,
+                                                halfIntergeneLengths=chrHalfIntergeneLengths,
                                                 desiredLength=desiredLength,
                                                 greyIdToGeneIdxs=greyIdToGeneIdxs[chr],
                                                 whiteGenesIdxs=whiteGenesIdxs[chr],
                                                 greyLevelsGenerator=greyLevelsGenerator,
                                                 geneWidth=geneWidth)
-        if desiredLength:
+        if desiredLength is not None:
+            assert isinstance(res, tuple)
+            assert len(res) == 2
             (genomeItems[chr], factorLength) = res
         else:
             genomeItems[chr] = res
 
-    if desiredLength:
+    if desiredLength is not None:
         return (genomeItems, factorLength)
     else:
         return genomeItems
@@ -649,7 +716,7 @@ def svgItemsMatrixFromRawData(range1, range2,
     # conversion either with inkscape or rsvg-convert
     smallestVisibleWidthForGoodConversionIntoPDF = 1.0 / 10.0
     smallestVisibleWidth=smallestVisibleWidthForGoodConversionIntoPDF
-
+    strokeWidthHomologies = 0 if sizeCell * scaleFactorRectangles < 10 * smallestVisibleWidth else smallestVisibleWidth
     # draw Diagonals first because they are on the background
     print >> sys.stderr, "Nb of diagonals showed = ", len(coordsOfHomologiesPerDiags)
 
@@ -658,19 +725,22 @@ def svgItemsMatrixFromRawData(range1, range2,
     # FIXME Do not sort!!  otherwise the diagNames do not correspond any more!!!
     # coordsOfHomologiesPerDiags.sort(key=lambda x: x[0])
 
+    invYaxis = lambda y: height - (y + sizeCell)
+
     for (idiag, diag) in enumerate(coordsOfHomologiesPerDiags):
         # choose a color different from the neighbours
         color = diagColorGenerator.getLevel()
         for (i, j) in diag:
             cx_s = i * sizeCell
-            cy_s = j * sizeCell + sizeCell
+            cy_s = j * sizeCell
             if nx >= 300 or ny >= 300:
-                listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx_s, height - cy_s),
+                listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx_s, invYaxis(cy_s)),
                                                                sizeCell, sizeCell, fill_opacity=0.90,
                                                                svgClass="HomologGroup%s" % color,
-                                                               bigger=scaleFactorRectangles))
+                                                               bigger=scaleFactorRectangles,
+                                                               strokeWidth=strokeWidthHomologies))
             else:
-                listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx_s, height - cy_s),
+                listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx_s, invYaxis(cy_s)),
                                                                sizeCell, sizeCell, fill_opacity=0.90,
                                                                svgClass="HomologGroup%s" % color))
         # draw rectangles around diagonals
@@ -678,19 +748,19 @@ def svgItemsMatrixFromRawData(range1, range2,
         max_i = max(diag, key=lambda x: x[0])[0]
         min_j = min(diag, key=lambda x: x[1])[1]
         max_j = max(diag, key=lambda x: x[1])[1]
-        cx_s = min_i*sizeCell
-        cy_s = max_j*sizeCell + sizeCell
+        cx_s = min_i * sizeCell
+        cy_s = max_j * sizeCell
 
         homologyWidth = (sizeCell * scaleFactorRectangles)
         strokeWidthBoundingBoxDiags = smallestVisibleWidth
-        listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx_s, height - cy_s),
+        listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx_s, invYaxis(cy_s)),
                                                        (max_j-min_j)*sizeCell + sizeCell, (max_i-min_i)*sizeCell + sizeCell,
                                                        stroke='black', fill='none', strokeWidth=strokeWidthBoundingBoxDiags))
         # need to do it after to be on top layer
         if diagNames is not None:
             widthText = min(float(width)/100, float(height)/100)
             # write the id of the diagonal if any
-            listOfMatrixItems.append(mySvgDrawer.Text(Point(cx_s, height- cy_s), str(diagNames[idiag]), size=widthText))
+            listOfMatrixItems.append(mySvgDrawer.Text(Point(cx_s, invYaxis(cy_s)), str(diagNames[idiag]), size=widthText))
 
     if drawSmallLines:
         for i in range(nbLinesX):
@@ -699,46 +769,47 @@ def svgItemsMatrixFromRawData(range1, range2,
                                                       Point(cxLine, 0), width=sizeCell*0.01))
         for j in range(nbLinesY):
             cyLine = j * sizeCell
-            listOfMatrixItems.append(mySvgDrawer.Line(Point(0, height - cyLine),
-                                                      Point(width, height - cyLine), width=sizeCell*0.01))
+            listOfMatrixItems.append(mySvgDrawer.Line(Point(0, invYaxis(cyLine - sizeCell)),
+                                                      Point(width, invYaxis(cyLine - sizeCell)), width=sizeCell*0.01))
     if drawLargeLines:
         for i in range(nx):
             cxLine = i * sizeCell
-            if (i + range1[0]) % 50 == 0:
-                listOfMatrixItems.append(mySvgDrawer.Line(Point(cxLine - sizeCell/2.0, height),
-                                                          Point(cxLine - sizeCell/2.0, 0), width=sizeCell*0.05))
+            if (i + range1[0] + 1) % 50 == 0:
+                listOfMatrixItems.append(mySvgDrawer.Line(Point(cxLine + sizeCell/2.0, height),
+                                                          Point(cxLine + sizeCell/2.0, 0), width=sizeCell*0.05))
         for j in range(ny):
             cyLine = j * sizeCell
-            if (j + range2[0]) % 50 == 0:
-                listOfMatrixItems.append(mySvgDrawer.Line(Point(0.0, height - cyLine + sizeCell/2.0),
-                                                          Point(width, height - cyLine + sizeCell/2.0), width=sizeCell*0.05))
+            if (j + range2[0] + 1) % 50 == 0:
+                listOfMatrixItems.append(mySvgDrawer.Line(Point(0.0, invYaxis(cyLine) + sizeCell/2.0),
+                                                          Point(width, invYaxis(cyLine) + sizeCell/2.0), width=sizeCell*0.05))
 
     # fill homologies
     nonZeroValues = []
     allCoordsOfHomologiesInDiags = set([dot for diag in coordsOfHomologiesPerDiags for dot in diag])
     for i1 in coordsHomologiesAndSymbols:
         for i2 in coordsHomologiesAndSymbols[i1]:
-            cx = i1*sizeCell
-            cy = i2*sizeCell
+            cx = i1 * sizeCell
+            cy = i2 * sizeCell
             if drawHomologySymbols:
                 nonZeroValues.append((i1, i2))
                 s = coordsHomologiesAndSymbols[i1][i2]
                 assert s == +1 or s == -1 or s is None, "s=%s" % s
                 assocValue = (("+" if s == +1 else "-") if s is not None else '?')
-                listOfMatrixItems.append(mySvgDrawer.Text(Point(cx + sizeCell/2.0, height - (cy+sizeText*0.16) - sizeCell/2.0),
+                listOfMatrixItems.append(mySvgDrawer.Text(Point(cx + sizeCell/2.0, invYaxis(cy + sizeText*0.16 - sizeCell / 2.0)),
                                                           assocValue, text_anchor="middle", size=sizeText))
             else:
                 # represent homologies not in diags with a black rectangle
                 if (i1, i2) not in allCoordsOfHomologiesInDiags:
-                    listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx, height - cy),
+                    listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx, invYaxis(cy)),
                                                                    sizeCell, sizeCell, fill=(0, 0, 0), fill_opacity=0.90,
-                                                                   bigger=scaleFactorRectangles))
+                                                                   bigger=scaleFactorRectangles,
+                                                                   strokeWidth=strokeWidthHomologies))
     if nx < 20 and ny < 20:
         for (i1, i2) in itertools.product(range(nx), range(ny)):
             if (i1, i2) not in nonZeroValues:
-                cx = i1*sizeCell + float(sizeCell)/2
-                cy = i2*sizeCell + float(sizeCell)/2
-                listOfMatrixItems.append(mySvgDrawer.Text(Point(cx, height - (cy+sizeText*0.16)),
+                cx = i1 * sizeCell
+                cy = i2 * sizeCell
+                listOfMatrixItems.append(mySvgDrawer.Text(Point(cx + sizeCell/2.0, invYaxis(cy + sizeText*0.16 - sizeCell / 2.0 )),
                                                           "0", text_anchor="middle", size=sizeText,
                                                           fill=(200, 200, 200), stroke=None))
     return (listOfMatrixItems, (width, height))
@@ -807,7 +878,7 @@ def writeSVGFileForPairwiseCompOfGenomes(genomeName1,
 
     # Title
     title = \
-        "%s, f=%s, tgm=%s tbs, gm=%s%s, gmmi=%s, ibwg=%s, om=%s, %s sbs" % \
+        "%s, f=%s, tgm=%s tbs, gm=%s%s, gmmi=%s, ibwg=%s, tm=%s, %s sbs" % \
         ('MHPs' if chromosomesRewrittenInTbs else 'MHs',
          filterType,
          tandemGapMax,
@@ -916,7 +987,7 @@ def writeSVGFileForPairwiseCompOfChrs(genomeName1, chr1, range1,
 
     # Title
     title = \
-        "%s, f=%s, tgm=%s tbs, gm=%s%s, gmmi=%s, ibwg=%s, om=%s, %s sbs" % \
+        "%s, f=%s, tgm=%s tbs, gm=%s%s, gmmi=%s, ibwg=%s, tm=%s, %s sbs" % \
         ('MHP' if chromosomesRewrittenInTbs else 'MH',
          filterType,
          tandemGapMax,
@@ -1116,7 +1187,7 @@ def svgItemsHMChrom1Chrom2(chrom1, chrom2,
                            drawChromosomes=None,
                            drawSmallLines=None,
                            drawLargeLines=True,
-                           drawTicks=None,
+                           drawTicks=True,
                            drawHomologySymbols=None,
                            scaleFactorRectangles=1.0,
                            withSbIds=False,
@@ -1132,7 +1203,6 @@ def svgItemsHMChrom1Chrom2(chrom1, chrom2,
         range1 = (0, len(chrom1))
     if not range2:
         range2 = (0, len(chrom2))
-
     if not diagNames:
         if withSbIds:
             diagNames = [id for (sb, id) in listOfDiagsWithIds]
@@ -1186,23 +1256,22 @@ def svgItemsHMChrom1Chrom2(chrom1, chrom2,
         drawChromosomes = max(nx, ny) < 300
     if drawSmallLines is None:
         drawSmallLines = max(nx, ny) < 300
-    if drawTicks is None:
-        drawTicks = True
     if drawHomologySymbols is None:
         drawHomologySymbols = max(nx, ny) < 150
 
     # the size of the components of the matrix is chosen using the smallest and more restricting dimension
     # (contains more genes comparing to its size)
-    marginChrom = 1 if drawChromosomes else 0
-    marginTicks = 3 if drawTicks else 0
-    ncx = nx + marginChrom + marginTicks
-    ncy = ny + marginChrom + marginTicks
+    tmp_marginChrom = 1 if drawChromosomes else 0
+    tmp_marginTicks = 3 if drawTicks else 0
+    ncx = nx + tmp_marginChrom + tmp_marginTicks
+    ncy = ny + tmp_marginChrom + tmp_marginTicks
     sizeCase = float(min(float(maxWidth) / ncx, float(maxHeight) / ncy))
+    marginChrom = tmp_marginChrom * sizeCase
+    marginTicks = tmp_marginTicks * sizeCase
     finalWidth = sizeCase * ncx
     finalHeight = sizeCase * ncy
     assert maxHeight - finalHeight > -0.0001
     assert maxWidth - finalWidth > -0.0001
-
     (listOfMatrixItems, (width, height)) = svgItemsMatrixFromRawData(range1, range2,
                                                                      MHP,
                                                                      sizeCase,
@@ -1225,16 +1294,18 @@ def svgItemsHMChrom1Chrom2(chrom1, chrom2,
                                                                      geneNamesWithSameGreys=geneNamesWithSameGreys,
                                                                      whiteGeneNames=whiteGeneNames,
                                                                      symbolsInChrom1=symbolsInChrom1, symbolsInChrom2=symbolsInChrom2)
-        assert abs(width - (formerWidth + marginChrom * sizeCase)) < 0.001 and abs(height - (formerHeight + marginChrom * sizeCase)) < 0.001
+        assert abs(width - (formerWidth + marginChrom)) < 0.001 and abs(height - (formerHeight + marginChrom)) < 0.001
     if drawTicks:
         formerWidth = width
         formerHeight = height
         (listOfMatrixItems, (width, height)) = addTicksAlongMH(listOfMatrixItems, chrom1, chrom2, sizeCase,
                                                                      range1, range2,
+                                                                     marginChrom,
+                                                                     marginTicks,
                                                                      formerWidth, formerHeight)
-        assert abs(width - (nx + marginChrom + marginTicks) * sizeCase) < 0.001 and abs(height - (ny + marginChrom + marginTicks) * sizeCase) < 0.001
-    assert abs(finalHeight - (ny + marginChrom + marginTicks) * sizeCase) < 0.001
-    assert abs(finalWidth - (nx + marginChrom + marginTicks) * sizeCase) < 0.001
+        assert abs(width - ((nx * sizeCase) + marginChrom + marginTicks)) < 0.001 and abs(height - ((ny * sizeCase) + marginChrom + marginTicks)) < 0.001
+    assert abs(finalHeight - ((ny * sizeCase) + marginChrom + marginTicks)) < 0.001
+    assert abs(finalWidth - ((nx * sizeCase) + marginChrom + marginTicks)) < 0.001
     assert abs(height - finalHeight) < 0.001
     assert abs(width - finalWidth) < 0.001
     if not drawChromosomes and not drawTicks:
@@ -1286,26 +1357,26 @@ def addChromosomesAlongMH(listOfMatrixItems, chrom1, chrom2, families,
     assertWhiteGreyAndColourGeneNamesAreComplementary(whiteGeneNames, geneNamesWithSameGreys, coloredGeneNames1, chrom1)
     assertWhiteGreyAndColourGeneNamesAreComplementary(whiteGeneNames, geneNamesWithSameGreys, coloredGeneNames2, chrom2)
 
-    chromosome1Items = drawChromosome(chrom1,
-                                      families=families,
-                                      name2color=familyName2color,
-                                      lengthGenes=sizeCase * 0.90,
-                                      halfIntergeneLengths=sizeCase * 0.05,
-                                      geneNamesWithSameGreyLevels=geneNamesWithSameGreys,
-                                      whiteGeneNames=whiteGeneNames,
-                                      greyLevelsGenerator=LevelIdxGenerator(inGrays=True),
-                                      symbolsInGenes=symbolsInChrom1,
-                                      geneWidth=geneWidth)
-    chromosome2Items = drawChromosome(chrom2,
-                                      families=families,
-                                      name2color=familyName2color,
-                                      lengthGenes=sizeCase * 0.90,
-                                      halfIntergeneLengths=sizeCase * 0.05,
-                                      geneNamesWithSameGreyLevels=geneNamesWithSameGreys,
-                                      whiteGeneNames=whiteGeneNames,
-                                      greyLevelsGenerator=LevelIdxGenerator(inGrays=True),
-                                      symbolsInGenes=symbolsInChrom2,
-                                      geneWidth=geneWidth)
+    chromosome1Items = svgItemsChromosome(chrom1,
+                                          families=families,
+                                          name2color=familyName2color,
+                                          lengthGenes=sizeCase * 0.90,
+                                          halfIntergeneLengths=sizeCase * 0.05,
+                                          geneNamesWithSameGreyLevels=geneNamesWithSameGreys,
+                                          whiteGeneNames=whiteGeneNames,
+                                          greyLevelsGenerator=LevelIdxGenerator(inGrays=True),
+                                          symbolsInGenes=symbolsInChrom1,
+                                          geneWidth=geneWidth)
+    chromosome2Items = svgItemsChromosome(chrom2,
+                                          families=families,
+                                          name2color=familyName2color,
+                                          lengthGenes=sizeCase * 0.90,
+                                          halfIntergeneLengths=sizeCase * 0.05,
+                                          geneNamesWithSameGreyLevels=geneNamesWithSameGreys,
+                                          whiteGeneNames=whiteGeneNames,
+                                          greyLevelsGenerator=LevelIdxGenerator(inGrays=True),
+                                          symbolsInGenes=symbolsInChrom2,
+                                          geneWidth=geneWidth)
     chromosome1Items = mySvgDrawer.translateItems(chromosome1Items, Point(marginChroms, formerHeight + marginChroms - sizeCase/2.0))
     chromosome2Items = mySvgDrawer.rotateItems(chromosome2Items, Point(0.0, 0.0), -90)
     chromosome2Items = mySvgDrawer.translateItems(chromosome2Items, Point(sizeCase/2.0, formerHeight))
@@ -1317,19 +1388,21 @@ def addChromosomesAlongMH(listOfMatrixItems, chrom1, chrom2, families,
 
 def addTicksAlongMH(listOfMatrixItems, chrom1, chrom2, sizeCase,
                     range1, range2,
+                    marginChrom,
+                    marginTicks,
                     formerWidth, formerHeight):
-    widthTicks = max(formerWidth, formerHeight) / 500.0
-    sizeText = widthTicks * 7.5
-    marginTicks = 3 * sizeCase
-    listOfMatrixItems = mySvgDrawer.translateItems(listOfMatrixItems, Point(marginTicks, 0.0))
-    x_itemTicks = svgItemsTicks(range1, sizeCase, widthTicks=widthTicks, sizeText=sizeText, rankGenome=1)
-    x_itemTicks = mySvgDrawer.translateItems(x_itemTicks, Point(marginTicks + sizeCase,  formerHeight))
-    y_itemTicks = svgItemsTicks(range2, sizeCase, widthTicks=widthTicks, sizeText=sizeText, rankGenome=2)
-    y_itemTicks = mySvgDrawer.rotateItems(y_itemTicks, Point(0.0,0.0), -90)
-    y_itemTicks = mySvgDrawer.translateItems(y_itemTicks, Point(sizeCase, formerHeight-sizeCase))
-    listOfMatrixItems += x_itemTicks + y_itemTicks
     newHeight = formerHeight + marginTicks
     newWidth = formerWidth + marginTicks
+    invYaxis = lambda y: newHeight - (sizeCase + y)
+    widthTicks = max(formerWidth, formerHeight) / 500.0
+    sizeText = widthTicks * 7.5
+    listOfMatrixItems = mySvgDrawer.translateItems(listOfMatrixItems, Point(marginTicks, 0.0))
+    x_itemTicks = svgItemsTicks(range1, sizeCase, widthTicks=widthTicks, sizeText=sizeText, rankGenome=1)
+    x_itemTicks = mySvgDrawer.translateItems(x_itemTicks, Point(marginTicks + marginChrom, invYaxis(marginTicks - sizeCase)))
+    y_itemTicks = svgItemsTicks(range2, sizeCase, widthTicks=widthTicks, sizeText=sizeText, rankGenome=2)
+    y_itemTicks = mySvgDrawer.rotateItems(y_itemTicks, Point(0.0,0.0), -90)
+    y_itemTicks = mySvgDrawer.translateItems(y_itemTicks, Point(sizeCase, invYaxis(marginTicks + marginChrom - sizeCase)))
+    listOfMatrixItems += x_itemTicks + y_itemTicks
     return (listOfMatrixItems, (newWidth, newHeight))
 
 def editSbsInROIWithGenomesInGenes(inSbsInPairComp,
@@ -1583,7 +1656,9 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                                                            chr1, chr2,
                                                            range1, range2,
                                                            considerAllPairComps)
-
+        # FIXME : not sure for the next two lines but seems to work to show homologies
+        genome1OnlyChr1 = myMapping.labelWithFamNames(genome1OnlyChr1, familiesForComp)
+        genome2OnlyChr2 = myMapping.labelWithFamNames(genome2OnlyChr2, familiesForComp)
         svgItemsHM = svgItemsHMChrom1Chrom2(genome1OnlyChr1[chr1], genome2OnlyChr2[chr2],
                                             familiesForComp,
                                             listOfDiagsWithIds,
@@ -1593,10 +1668,11 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                                             drawChromosomes=None,
                                             drawSmallLines=None,
                                             drawLargeLines=True,
-                                            drawTicks=None,
-                                            scaleFactorRectangles=1.0,
+                                            drawTicks=True,
+                                            scaleFactorRectangles=scaleFactorRectangles,
                                             maxWidth=maxWidthHm,
-                                            maxHeight=maxHeightHm)
+                                            maxHeight=maxHeightHm,
+                                            withSbIds=withSbIds)
     else:
         assert chromosomesRewrittenInTbs
         ((g1_tb, mtb2g1, (nCL1, nGL1)), (g2_tb, mtb2g2, (nCL2, nGL2))) = \
@@ -1660,10 +1736,11 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                                             drawChromosomes=None,
                                             drawSmallLines=None,
                                             drawLargeLines=True,
-                                            drawTicks=None,
-                                            scaleFactorRectangles=1.0,
+                                            drawTicks=True,
+                                            scaleFactorRectangles=scaleFactorRectangles,
                                             maxWidth=maxWidthHm,
-                                            maxHeight=maxHeightHm)
+                                            maxHeight=maxHeightHm,
+                                            withSbIds=withSbIds)
 
     # write a simple file with all diagonals into output file
     with open(outSyntenyBlocksFileName, 'w') as f:

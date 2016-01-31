@@ -7,6 +7,7 @@
 # Licences GLP v3 and CeCILL v2
 
 import os
+import re
 import sys
 import itertools
 import time
@@ -719,6 +720,9 @@ class OrderedDict2dOfLists(Dict2d):
             res.append(((k1, k2), item, id))
         return res
 
+# http://stackoverflow.com/questions/9001509/how-can-i-sort-a-dictionary-by-key
+# to order the keys of an OrderedDict: d = collections.OrderedDict(sorted(d.items()))
+
 # This class is a fusion of collections.defaultdict and collections.OrderedDict
 class DefaultOrderedDict(OrderedDict):
     # Source: http://stackoverflow.com/a/6190500/562769
@@ -888,22 +892,41 @@ def _getTerminalSize_linux():
 def atoi(text):
     return int(text) if text.isdigit() else text
 
-def isSorted(l, increasingOrder=False, stricly=False):
+## http://stackoverflow.com/questions/23465462/check-if-sorted-using-recursion-in-python
+# def _isSorted(L, increasingOrder=True):
+#     return len(L) < 2 or (L[0] <= L[1] and isSorted(L[1:]))
+
+def isSorted(l, increasingOrder=False, stricly=False, key=lambda x: x):
     assert isinstance(l, list)
     assert isinstance(increasingOrder, bool)
     if increasingOrder:
         if stricly:
-            res= all(l[i] < l[i+1] for i in xrange(len(l)-1))
+            res= all(key(l[i]) < key(l[i+1]) for i in xrange(len(l)-1))
         else:
-            res = all(l[i] <= l[i+1] for i in xrange(len(l)-1))
+            res = all(key(l[i]) <= key(l[i+1]) for i in xrange(len(l)-1))
     else:
-
         if stricly:
-            res = all(l[i] > l[i+1] for i in xrange(len(l)-1))
+            res = all(key(l[i]) > key(l[i+1]) for i in xrange(len(l)-1))
         else:
-            res = all(l[i] >= l[i+1] for i in xrange(len(l)-1))
+            res = all(key(l[i]) >= key(l[i+1]) for i in xrange(len(l)-1))
     return res
 
+def keyNaturalSort(chrName):
+    '''
+    alist.sort(key=natural_keys) sorts in human wished order
+    http://nedbatchelder.com/blog/200712/human_sorting.html
+    (See Toothy's implementation in the comments)
+    '''
+    res = [atoi(c) for c in re.split('([0-9]+)', str(chrName))]
+    return res
+
+# http://stackoverflow.com/questions/14380371/export-a-latex-table-from-pandas-dataframe
+# for exemple tableIntoLatex(np.random.random((5, 5)))
+# in latex insert \usepackage{booktabs} in the imports
+def tableIntoLatex(numpyArray):
+    import pandas as pd
+    df = pd.DataFrame(numpyArray)
+    return df.to_latex()
 
 # Beautiful example of how to draw an empirical distribution: source :
 # http://stackoverflow.com/questions/9378420/how-to-plot-cdf-in-matplotlib-in-python

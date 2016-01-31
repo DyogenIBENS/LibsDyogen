@@ -820,7 +820,7 @@ if __name__ == '__main__':
     #print >> sys.stderr, "Local sequential execution:"
     #t_fibs = timeit.timeit("fibs_localSequential(%s)" % nbJobs, setup="from __main__ import fibs_localSequential", number=1)
     #print >> sys.stderr, "Condor parallel execution:"
-    #t_fibs_withThreads = timeit.timeit("fibs_condorThreads(%s)" % nbJobs, setup="from __main__ import fibs_condorThreads", number=1)
+    t_fibs_withThreads = timeit.timeit("fibs_condorThreads(%s)" % nbJobs, setup="from __main__ import fibs_condorThreads", number=1)
     # print >> sys.stderr, "Condor parallel execution (ManyJobs):"
 
 

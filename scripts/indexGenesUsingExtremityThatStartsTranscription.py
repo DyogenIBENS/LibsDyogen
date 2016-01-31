@@ -50,20 +50,21 @@ arguments = myTools.checkArgs(
     ],
     [
         ("orderGenesByIncreasingTranscriptionStart", bool, True),
-        ("orderChromosomeByDecreasingNbOfGenes", bool, True),
+        ("orderChromosomesBy", bool, 'decreasingNbOfGenes'),
         ("out:genome", str, 'genes.outPutGenome.list.bz2'),
-        ("removeUnofficialGeneNames", bool, False)
+        ("removeUnofficialChrNames", bool, False)
     ],
     __doc__)
+assert arguments['orderChromosomesBy'] in {'decreasingNbOfGenes', 'names'}
 
 # 1) Load the genome and ensure the consistency of gene strand ans gene coordinates
-geneExtremitiesHasChanged = False
 unofficialChromRemoved = False
 iniGenomeLength = 0
 genomeListByChr = myTools.DefaultOrderedDict(list)
 reader = readerDependingOnFileWithDebAndEnd(arguments['genome'])
+cptNbEditedGenes = 0
 for (chr, x1, x2, s, gNames) in reader:
-    if arguments['removeUnofficialGeneNames'] and myLightGenomes.contigType(chr) != myLightGenomes.ContigType.Chromosome:
+    if arguments['removeUnofficialChrNames'] and myLightGenomes.contigType(chr) != myLightGenomes.ContigType.Chromosome:
         unofficialChromRemoved = True
         continue
     assert isinstance(x1, int)
@@ -76,26 +77,30 @@ for (chr, x1, x2, s, gNames) in reader:
         else:
             assert x2 < x1
             (beg, end) = (x2, x1)
-            geneExtremitiesHasChanged = True
+            cptNbEditedGenes += 1
     else:
         assert s == -1
-        if x1 < x2:
-            (beg, end) = (x2, x1)
-        else:
-            assert x2 < x1
+        if x2 < x1:
             (beg, end) = (x1, x2)
-            geneExtremitiesHasChanged = True
+        else:
+            assert x1 < x2
+            (beg, end) = (x2, x1)
+            cptNbEditedGenes += 1
     genomeListByChr[chr].append((beg, end, s, gNames))
     iniGenomeLength += 1
-if geneExtremitiesHasChanged:
-    print >> sys.stderr, 'At least one gene has been edited because gene strand was not coherent with gene.beg and gene.end columns'
+if cptNbEditedGenes > 0:
+    print >> sys.stderr, '%s genes have been edited because gene strand was not coherent with gene.beg and gene.end columns' % cptNbEditedGenes
 if unofficialChromRemoved:
     print >> sys.stderr, 'At least one unofficial chromosome (int(chr) > 100 or discarded name in myLightGenome.contigType()) has been removed'
 
 rankOfChrHasChanged = False
-if arguments['orderChromosomeByDecreasingNbOfGenes']:
+if arguments['orderChromosomesBy'] == 'decreasingNbOfGenes':
     if not myTools.isSorted(genomeListByChr.items(), key=lambda x: len(x[1]), stricly=False, increasingOrder=False):
         genomeListByChr = collections.OrderedDict(sorted(genomeListByChr.items(), key=lambda x: len(x[1]), reverse=True))
+        rankOfChrHasChanged = True
+elif arguments['orderChromosomesBy'] == 'names':
+    if not myTools.isSorted(genomeListByChr.items(), key=lambda x: myTools.keyNaturalSort(x[0])):
+        genomeListByChr = collections.OrderedDict(sorted(genomeListByChr.items(), key=lambda x: myTools.keyNaturalSort(x[0]), reverse=True))
         rankOfChrHasChanged = True
 if rankOfChrHasChanged:
     print >> sys.stderr, 'The rank of at least one chromosome has changed while sorting chrNames using the length of chromosomes'

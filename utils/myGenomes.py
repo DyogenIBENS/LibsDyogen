@@ -146,6 +146,7 @@ class Genome:
 
     # builder
     def __init__(self, fichier, **kwargs):
+
         if isinstance(fichier, str):
             print >> sys.stderr, "Loading genome of", fichier, "...",
             f = myFile.firstLineBuffer(myFile.openFile(fichier, 'r'))
@@ -193,9 +194,21 @@ class Genome:
             elif (len(c) >= 5) and (" " not in c[3]) and (len(c[4]) > 0):
                 # Ensembl: "CHR BEG END STRAND NAMES"
                 #####################################
+                info = False
                 for l in f:
                     c = l.replace('\n', '').split('\t')
-                    self.addGene(c[4].split(), c[0], int(c[1]), int(c[2]), int(c[3]) if c[3]!='None' else None)
+                    if len(c) == 5:
+                        (chr, beg, end, s, geneNames) = c
+                    else:
+                        assert len(c) == 6
+                        (chr, beg, end, s, geneNames, transcriptNames) = c
+                    s = int(s) if s != 'None' else None
+                    (beg, end) = (int(beg), int(end))
+                    # TODO ensure that the 5' extremity (transcription start site) is the beg column
+                    if not ((s in {None, +1} and beg < end) or (s == -1  and end < beg)):
+                        pass
+                    assert (s in {None, +1} and beg < end) or (s == -1  and end < beg), 's=%s, beg=%s and end=%s' % (s, beg, end)
+                    self.addGene(geneNames.split(), chr, beg, end, s)
                 print >> sys.stderr, "(Ensembl)",
 
             elif (len(c) == 4) and int(c[1]) < 2:
@@ -271,6 +284,8 @@ class Genome:
 
         self.init(**kwargs)
         print >> sys.stderr, "OK"
+        if info:
+            print >> sys.stderr, 'INFO: because genes may be indexed by their 5\' (which is the right choice) extremity, gene.end=3\' < gene.beg=5\' may be true'
 
     # initialise the dictionary and the list of chromosomes
     def init(self, **kwargs):
@@ -301,10 +316,10 @@ class Genome:
 
     # add a gene to the genome
     def addGene(self, names, chromosome, beg, end, strand):
-        #assert 0 <= beg <= end
-        assert strand in [-1,0,1,None]
+        # FIXME : 0 ?
+        assert strand in {-1, 0, 1, None}
         chromosome = commonChrName(chromosome)
-        self.lstGenes[chromosome].append( Gene(chromosome, beg, end, strand, tuple(intern(s) for s in names)) )
+        self.lstGenes[chromosome].append(Gene(chromosome, beg, end, strand, tuple(intern(s) for s in names)) )
 
     # return genes in the chromosome that are between beg and end base pairs
     def getGenesAt(self, chr, beg, end, onlyInside=False):

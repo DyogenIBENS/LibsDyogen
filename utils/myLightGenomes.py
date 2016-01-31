@@ -127,7 +127,9 @@ def contigType(chrName):
 # TODO: implement all the basic classes of myLigthGenomes.LightGenome into myLightGenome.Chromosome for more modularity
 # then in myLigthGenomes.LightGenome, call the classes of myLigthGenomes.Chromosome whenever it is possible
 class Chromosome(list):
-    def __init__(self, seq=()):
+    def __init__(self, seq=(), name=None):
+        if name is not None:
+            self.name = name
         list.__init__(self, seq)
 
     # def __getitem__(self, key): # Methode appellee par obj[3] <=> obj.__getitem__(3)
@@ -200,6 +202,36 @@ class Chromosome(list):
 # built.
 class LightGenome(myTools.DefaultOrderedDict):
 
+    @staticmethod
+    def readerDependingOnFile(fileName):
+        flb = myFile.firstLineBuffer(myFile.openFile(fileName, 'r'))
+        c = flb.firstLine.split("\t")
+        if len(c) == 6:
+            print >> sys.stderr, "(c, beg, end, s, gName, transcriptName) -> (c, s, gName)",
+            # c, beg, end, s,  gName, transcriptName
+            reader = myFile.myTSV.readTabular(fileName, [str, int, int, int, str, str])
+            reader = ((c, strand, gName) for (c, beg, end, strand, gName, tName) in reader)
+        elif len(c) == 3:
+            print >> sys.stderr, "(c, s, gName)",
+            # c, s, gName
+            reader = myFile.myTSV.readTabular(fileName, [str, int, str])
+        elif len(c) == 5:
+            print >> sys.stderr, "(c, beg, end, s, gName) -> (c, s, gName)",
+            # c, beg, end, s,  gName
+            tmpReader = myFile.myTSV.readTabular(fileName, [str, int, int, int, str])
+            # check, with the first line, if there are several gene names (the format genome of Matthieu contains several gene names)
+            (c, beg, end, strand, gNames) = tmpReader.next()
+            severalNames = True if len(gNames.split(' ')) > 0 else False
+            reader = itertools.chain([(c, beg, end, strand, gNames)], tmpReader)
+            if severalNames:
+                # if gNames contains more than one gene name, only take the first gene name
+                reader = ((c, strand, gNames.split(' ')[0]) for (c, beg, end, strand, gNames) in reader)
+            else:
+                reader = ((c, strand, gName) for (c, beg, end, strand, gName) in reader)
+        else:
+            raise ValueError("%s file is badly formatted" % fileName)
+        return reader
+
     def __init__(self, *args, **kwargs):
         self.name = None
         # this dict contains the sets chromosomes per type of contig (cf class ContigType)
@@ -219,36 +251,11 @@ class LightGenome(myTools.DefaultOrderedDict):
             fileName = arg
             self.name = fileName
             print >> sys.stderr, "Loading LightGenome from", fileName,
-            # FIXME use myFile.firstLineBuffer to choose which format is in
-            # input.
+            # FIXME use myFile.firstLineBuffer to choose which format is in input.
             # choice of the loading function
-            flb = myFile.firstLineBuffer(myFile.openFile(fileName, 'r'))
-            c = flb.firstLine.split("\t")
-            if len(c) == 6:
-                print >> sys.stderr, "(c, beg, end, s, gName, transcriptName) -> (c, s, gName)",
-                # c, beg, end, s,  gName, transcriptName
-                reader = myFile.myTSV.readTabular(fileName, [str, int, int, int, str, str])
-                reader = ((c, strand, gName) for (c, beg, end, strand, gName, tName) in reader)
-            elif len(c) == 3:
-                print >> sys.stderr, "(c, s, gName)",
-                # c, s, gName
-                reader = myFile.myTSV.readTabular(fileName, [str, int, str])
-            elif len(c) == 5:
-                print >> sys.stderr, "(c, beg, end, s, gName) -> (c, s, gName)",
-                # c, beg, end, s,  gName
-                tmpReader = myFile.myTSV.readTabular(fileName, [str, int, int, int, str])
-                # check, with the first line, if there are several gene names (the format genome of Matthieu contains several gene names)
-                (c, beg, end, strand, gNames) = tmpReader.next()
-                severalNames = True if len(gNames.split(' ')) > 0 else False
-                reader = itertools.chain([(c, beg, end, strand, gNames)], tmpReader)
-                if severalNames:
-                    # if gNames contains more than one gene name, only take the first gene name
-                    reader = ((c, strand, gNames.split(' ')[0]) for (c, beg, end, strand, gNames) in reader)
-                else:
-                    reader = ((c, strand, gName) for (c, beg, end, strand, gName) in reader)
-            else:
-                raise ValueError("%s file is badly formatted" % fileName)
+            reader = self.readerDependingOnFile(fileName)
             print >> sys.stderr, "...",
+
             # FIXME do not need beg, end and tName
             # c = chromosome name
             # beg = coordinate in nucleotides of the beginning of
@@ -367,11 +374,20 @@ class LightGenome(myTools.DefaultOrderedDict):
         memo[id(self)] = newLightGenome
         return newLightGenome
 
-    def printIn(self, stream, format='Ensembl'):
+    def printIn(self, stream, format='Ensembl', begIsTranscriptionStart=True):
         if format == 'Ensembl':
             for c, chrom in self.iteritems():
                 for (i, g) in enumerate(chrom):
-                    print >> stream, myFile.myTSV.printLine([c, i, i+1, g.s, g.n])
+                    if begIsTranscriptionStart:
+                        if g.s in {+1, None}:
+                            (beg, end) = (i, i+1)
+                        else:
+                            assert g.s == -1
+                            (beg, end) =(i+1, i)
+                    else:
+                        (beg, end) = (i, i+1)
+                    print >> stream, myFile.myTSV.printLine([c, beg, end, g.s, g.n])
+
 
     # Returns the gene names around the intergene
     def getIntervStr(self, c, x):
@@ -524,7 +540,7 @@ class LightGenome(myTools.DefaultOrderedDict):
         return (nbRemovedChrs, nbRemovedGenes)
 
     def sort(self, byName=False):
-        """ Sort sbs by decreasing sizes (default), or byName """
+        """ Sort chrs by decreasing sizes (default), or byName """
         l = self.items()
         for c in self.keys():
             del self[c]
@@ -612,7 +628,8 @@ class Families(list):
         return self.getFamilyByID(famID, default=default)
 
     def getFamNameByName(self, name, default=None):
-        assert isinstance(name, str) or isinstance(name, int)
+        # "name is None" in the case of a chromosome rewritten with famNames that contain lineage specific genes without famNames
+        assert isinstance(name, str) or isinstance(name, int) or name is None
         famID = self.getFamID(name)
         if famID is not None:
             return self.getFamilyByID(famID, default=default).fn
