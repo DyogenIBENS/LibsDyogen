@@ -33,6 +33,8 @@ def labelWithFamID(genome, families=None):
     This function keeps the original copy
     """
     assert isinstance(genome, myLightGenomes.LightGenome)
+    # there is at least one chromosome
+    assert len(genome.values()) > 0
     assert isinstance(genome.values()[0], list)
     if families is None:
         return genome

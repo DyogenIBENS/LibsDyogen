@@ -106,7 +106,7 @@ elif arguments['orderChromosomesBy'] == 'names':
 if rankOfChrHasChanged:
     print >> sys.stderr, 'The rank of at least one chromosome has changed while sorting chrNames using the length of chromosomes'
 
-print >> sys.stderr,  genomeListByChr.keys()
+print >> sys.stderr,  'chromosome names = ', genomeListByChr.keys()
 
 lengthsOfGenes = []
 for chr, chrom in genomeListByChr.iteritems():
