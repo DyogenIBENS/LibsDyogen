@@ -1236,7 +1236,7 @@ def svgItemsHMChrom1Chrom2(chrom1, chrom2,
         famName = families.getFamNameByName(g.n, default=None)
         if famName in familiesConservedInOnlyOneGenome:
             geneNamesInEither1or2ButNotBoth.add(g.n)
-    assert len(geneNamesInEither1or2ButNotBoth) < len(chrom1) + len(chrom2)
+    assert len(geneNamesInEither1or2ButNotBoth) <= len(chrom1) + len(chrom2), "%s < %s + %s" % (len(geneNamesInEither1or2ButNotBoth), len(chrom1), len(chrom2))
 
     # cluster the genes of the same family
     tmp = collections.defaultdict(set)

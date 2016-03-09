@@ -153,7 +153,7 @@ class Genome:
 
             # list of genes per chromosome
             self.lstGenes = collections.defaultdict(list)
-
+            info = False
             # choice of the loading function
             c = f.firstLine.split("\t")
             if f.firstLine.startswith(">") or f.firstLine.endswith("$"):
@@ -194,7 +194,6 @@ class Genome:
             elif (len(c) >= 5) and (" " not in c[3]) and (len(c[4]) > 0):
                 # Ensembl: "CHR BEG END STRAND NAMES"
                 #####################################
-                info = False
                 for l in f:
                     c = l.replace('\n', '').split('\t')
                     if len(c) == 5:

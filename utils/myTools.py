@@ -59,12 +59,12 @@ def __len__(self):
 # table =[[l0c0, l0c1, l0c2],
 #         [l1c0, l1c1, l1c2]]
 # With 'lxcy' a string that corresponds to line 'x' and column 'y'
-def printTable(table, output):
+def printTable(table, output, spaceBetweenColumns=2):
     max_lens = []
     for i in range(len(table[0])):
         max_lens.append(max([len(str(r[i])) for r in table]))
     res = "\n".join(
-        ["".join([string.ljust(str(e), l + 2)
+        ["".join([string.ljust(str(e), l + spaceBetweenColumns)
                   for e, l in zip(r, max_lens)])
          for r in table])
     print >> output, res
@@ -923,10 +923,15 @@ def keyNaturalSort(chrName):
 # http://stackoverflow.com/questions/14380371/export-a-latex-table-from-pandas-dataframe
 # for exemple tableIntoLatex(np.random.random((5, 5)))
 # in latex insert \usepackage{booktabs} in the imports
-def tableIntoLatex(numpyArray):
-    import pandas as pd
-    df = pd.DataFrame(numpyArray)
-    return df.to_latex()
+# def tableIntoLatex(numpyArray):
+#     import pandas as pd
+#     df = pd.DataFrame(numpyArray)
+#     return df.to_latex()
+
+# from tabulate import tabulate
+# table = [["spam",42],["eggs",451],["bacon",0]]
+# headers = ["item", "qty"]
+# print tabulate(table, headers, tablefmt="latex")
 
 # Beautiful example of how to draw an empirical distribution: source :
 # http://stackoverflow.com/questions/9378420/how-to-plot-cdf-in-matplotlib-in-python

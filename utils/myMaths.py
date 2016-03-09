@@ -12,7 +12,7 @@ import math
 import operator
 import myTools
 import bisect
-
+import numpy as np
 
 #############################
 # Fonctions de statistiques #
@@ -453,4 +453,15 @@ def mean(l):
 
 # geometrical mean
 def geoMean(l):
-    return (reduce(lambda x, y: x*y, l)**(1.0/len(l)))
+    res = (reduce(lambda x, y: x*y, l)**(1.0/len(l)))
+    if res == 0:
+        res = 1
+    return res
+
+def geoSd(l):
+    gM = float(geoMean(l))
+    # https://en.wikipedia.org/wiki/Geometric_standard_deviation
+    n = float(len(l))
+    s = float(sum([(math.log(float(v)/gM))**2 for v in l if v != 0]))
+    res = np.exp(math.sqrt(s/n))
+    return res

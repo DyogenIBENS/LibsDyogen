@@ -522,6 +522,9 @@ class LightGenome(myTools.DefaultOrderedDict):
         return (nbRemovedChrs, nbRemovedGenes)
 
     def removeUnofficialChromosomes(self):
+        if len(self.chrSet.keys()) == 0:
+            for c in self.keys():
+                self.chrSet[contigType(c)].add(c)
         sCs = self.keys()
         nbRemovedChrs = 0
         nbRemovedGenes = 0
