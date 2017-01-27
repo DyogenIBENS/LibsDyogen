@@ -592,6 +592,19 @@ class PhylogeneticTree:
                 else:
                     dsi(d, name, value)
 
+            # Because it's recursive, use a non-ambiguous name for this method,
+            # since 'to_dict' for instance, is already a method of
+            # pandas.DataFrames.
+            def common_names_mapper_2_dict(self):
+                """Recursively converts the commonNamesMapper instance to a
+                dictionary. (to allow pickling for example)"""
+                as_dict = {}
+                for key, value in self.iteritems():
+                    if hasattr(value, 'common_names_mapper_2_dict'):
+                        value = value.common_names_mapper_2_dict()
+                    as_dict[key] = value
+                return as_dict
+
         return commonNamesMapper()
 
     # load all the species that come from an ancestor
