@@ -160,6 +160,7 @@ def launchADHoRe(genome1, genome2, families, gapMax=5, tandemGapMax=5, pThreshol
                  outAHoReConfigurationFile="../res/dataset_G1_G2.ini",
                  resADHoRePath="../res/resADHoRe",
                  pathIADHOREbin='/home/jlucas/Libs/i-adhore-3.0.01/build/src/i-adhore'):
+
     assert gapMax >= 1
     assert tandemGapMax >= 2
     assert minimalLengthForSbs >= 3

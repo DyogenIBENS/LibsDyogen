@@ -31,7 +31,7 @@ def geneExtremityFromGene(og, leftOrRight):
         elif og.s == -1:
             geneExtr = GeneExtremity(og.n, 't' if leftOrRight == +1 else 'h')
         else:
-            assert og.s == None
+            assert og.s == None, 'og.s = %s' % og.s
             geneExtr = GeneExtremity(og.n, None)
     return geneExtr
 

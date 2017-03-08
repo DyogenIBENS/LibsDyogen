@@ -733,16 +733,16 @@ def svgItemsMatrixFromRawData(range1, range2,
         for (i, j) in diag:
             cx_s = i * sizeCell
             cy_s = j * sizeCell
-            if nx >= 300 or ny >= 300:
-                listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx_s, invYaxis(cy_s)),
-                                                               sizeCell, sizeCell, fill_opacity=0.90,
-                                                               svgClass="HomologGroup%s" % color,
-                                                               bigger=scaleFactorRectangles,
-                                                               strokeWidth=strokeWidthHomologies))
-            else:
-                listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx_s, invYaxis(cy_s)),
-                                                               sizeCell, sizeCell, fill_opacity=0.90,
-                                                               svgClass="HomologGroup%s" % color))
+            #if nx >= 300 or ny >= 300:
+            listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx_s, invYaxis(cy_s)),
+                                                           sizeCell, sizeCell, fill_opacity=0.90,
+                                                           svgClass="HomologGroup%s" % color,
+                                                           bigger=scaleFactorRectangles,
+                                                           strokeWidth=strokeWidthHomologies))
+            #else:
+            #    listOfMatrixItems.append(mySvgDrawer.Rectangle(Point(cx_s, invYaxis(cy_s)),
+            #                                                   sizeCell, sizeCell, fill_opacity=0.90,
+            #                                                   svgClass="HomologGroup%s" % color))
         # draw rectangles around diagonals
         min_i = min(diag, key=lambda x: x[0])[0]
         max_i = max(diag, key=lambda x: x[0])[0]

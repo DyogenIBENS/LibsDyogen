@@ -465,3 +465,7 @@ def geoSd(l):
     s = float(sum([(math.log(float(v)/gM))**2 for v in l if v != 0]))
     res = np.exp(math.sqrt(s/n))
     return res
+
+def ratioAbs(ratio):
+    assert ratio > 0
+    return ratio if ratio >= 1 else 1.0 / ratio
