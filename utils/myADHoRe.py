@@ -8,7 +8,8 @@
 # Licences GLP v3 and CeCILL v2
 
 # Wrapper for 'ADHoRe'
-
+import collections
+import glob
 import os
 import subprocess
 import sys
@@ -19,6 +20,8 @@ import myFile, myLightGenomes, myDiags
 # genome1 = myLightGenomes.LightGenome(arguments["genome1"])
 # genome2 = myLightGenomes.LightGenome(arguments["genome2"])
 # families = utils.myLightGenomes.Families(arguments["ancGenes"])
+from utils import myTools
+
 
 def ourGenomeToADHoReGenomeAndFamily(genome, families,
                                      outADHoReChromosomes="../i-adhore/Homo.sapiens/Genome.Homo.sapiens.Chr%s.list",
@@ -97,6 +100,60 @@ def printConfigurationFileADHoRe(g1, outADHoReChromosomes1, g2, outADHoReChromos
         print >> f, 'number_of_threads=4'
     return outAHoReConfigurationFile
 
+def dictGeneName2ancGeneName(outAHoReFamilies):
+    geneName2ancGeneName = {}
+    for i, (geneName, ancGeneName) in enumerate(myFile.myTSV.readTabular(outAHoReFamilies, [str, str])):
+        geneName2ancGeneName[geneName] = ancGeneName
+    return geneName2ancGeneName
+
+def genomeFromAdhoreGenomes(outADHoReGenes):
+
+    def update(genome1, gtb1, tbName2Pos1):
+        genome1[chr].append(myLightGenomes.OGene(geneName, s))
+        assert gIdx == len(genome1[chr]) - 1
+        if isTandemRepresentative:
+            gtb1[chr].append([myLightGenomes.OGene(genomeN, s)])
+            tbName2Pos1[genomeN] = (chr, len(gtb1[chr]) - 1)
+        else:
+            assert isRemaped
+            assert tbName2Pos1[tandemReprName] == tbIdx
+            gtb1[chr][tbIdx].append(myLightGenomes.OGene(genomeN, s))
+
+    genome1 = myLightGenomes.LightGenome()
+    gtb1 = myLightGenomes.LightGenome()
+    tbName2Pos1 = {}
+
+    genome2 = myLightGenomes.LightGenome()
+    gtb2 = myLightGenomes.LightGenome()
+    tbName2Pos2 = {}
+
+    foo= set()
+    # id\tgenome\tlist\tcoordinate\torientation\tremapped_coordinate\tis_tandem\tis_tandem_representative\ttandem_representativeremapped
+    for i, (geneName, genomeN, chr, gIdx, s, tbIdx, isTandem, isTandemRepresentative, tandemReprName, isRemaped) in enumerate(
+            myFile.myTSV.readTabular(outADHoReGenes, [str, str, str, str, str, str, str, str, str, str])):
+        if i == 0:
+            continue  #  ignore the first line (header)
+        assert s == '+' or s == '-'
+        isTandemRepresentative = True if isTandemRepresentative == '-1' else False
+        isRemaped = True if isRemaped == '-1' else False
+        tbIdx = int(tbIdx)
+        if geneName in foo:
+            print >> sys.stderr, 'Warning: twice the same ancestral gene in adhore genes.txt'
+        foo.add(geneName)
+
+        s = (+1 if s == '+' else -1)
+        if genomeN == 'G1':
+            update(genome1, gtb1, tbName2Pos1, tbName2Pos1)
+        else:
+            assert genomeN == 'G2'
+            update(genome2, gtb2, tbName2Pos2, tbName2Pos2)
+
+        # ENSG00000186092 Homo.sapiens H_1 0 +	0 0 0 'None' 0
+        # geneName2Orientation[geneName] = s
+        # remappedGenesAtGeneName[tandemReprName].add(geneName)
+
+        return ((genome1, gtb1), (genome2, gtb2))
+
 def lightGenomeFrombaseClusterOfADHoRe(outAHoReFamilies, outADHoReGenes, outADHoReAnchorpoints):
     ancSbGenome = myLightGenomes.LightGenome()
     # Created usefull dictionnaries
@@ -106,7 +163,7 @@ def lightGenomeFrombaseClusterOfADHoRe(outAHoReFamilies, outADHoReGenes, outADHo
 
     test=set([])
     geneName2Orientation = {}
-    for i,(geneName,_,_,_,s,_,_,_,_,_) in enumerate(myFile.myTSV.readTabular(outADHoReGenes, [str,str,str,str,str,str,str,str,str,str])):
+    for i,(geneName,_,_,_,s,_,_,_,isTandemRepresentative,_) in enumerate(myFile.myTSV.readTabular(outADHoReGenes, [str,str,str,str,str,str,str,str,str,str])):
         if i == 0:
             continue # ignore the first line (header)
         #id\tgenome list\tcoordinate\torientation\tremapped_coordinate\tis_tandem\tis_tandem_representative\ttandem_representativeremapped
@@ -160,6 +217,23 @@ def launchADHoRe(genome1, genome2, families, gapMax=5, tandemGapMax=5, pThreshol
                  outAHoReConfigurationFile="../res/dataset_G1_G2.ini",
                  resADHoRePath="../res/resADHoRe",
                  pathIADHOREbin='/home/jlucas/Libs/i-adhore-3.0.01/build/src/i-adhore'):
+    filesToRemove = glob.glob(os.path.dirname(outADHoReChromosomes) + '/Genome.*.list')
+    filesToRemove += [outAHoReFamilies]
+    filesToRemove += [outAHoReConfigurationFile]
+    filesToRemove += [resADHoRePath + '/alignment.txt']
+    filesToRemove += [resADHoRePath + '/anchorpoints.txt']
+    filesToRemove += [resADHoRePath + '/baseclusters.txt']
+    filesToRemove += [resADHoRePath + '/collinear_portions.txt']
+    filesToRemove += [resADHoRePath + '/duplicated_portions.txt']
+    filesToRemove += [resADHoRePath + '/genes.txt']
+    filesToRemove += [resADHoRePath + '/list_elements.txt']
+    filesToRemove += [resADHoRePath + '/multiplicon_pairs.txt']
+    filesToRemove += [resADHoRePath + '/multiplicons.txt']
+    filesToRemove += [resADHoRePath + '/segments.txt']
+    for filename in filesToRemove:
+        if os.path.isfile(filename):
+            # os.remove will only remove one file at a time
+            os.remove(filename)
 
     assert gapMax >= 1
     assert tandemGapMax >= 2

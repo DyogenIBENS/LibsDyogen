@@ -469,7 +469,7 @@ class LightGenome(myTools.DefaultOrderedDict):
 
     def getOwnedFamilies(self, families):
         res = []
-        for fn in self.getOwnedFamilyNames(families, asA=asA):
+        for fn in self.getOwnedFamilyNames(families, asA=set):
             res.append(families.getFamilyByName(fn))
         return res
 
@@ -571,7 +571,17 @@ class Families(list):
         if len(args) == 0:
             # null constructor
             return
-        if len(args) == 1 and isinstance(args[0], str):
+        if isinstance(args, Families):
+            families = args
+            self.name = families.name
+            for family in families:
+                self.append(Family(copy.deepcopy(family.fn), copy.deepcopy(family.dns)))
+            self.g2fid = copy.deepcopy(families.g2fid)
+            self.fidMax = families.fidMax
+            assert self.fidMax == len(self)
+            # DEBUG assert
+            assert set(self.g2fid.key()) == set().union(*[{fn} | dns for (fn, dns) in self])
+        elif len(args) == 1 and isinstance(args[0], str):
             fileName = args[0]
             self.name = fileName
             print >> sys.stderr, "Loading Families from", fileName, "...",

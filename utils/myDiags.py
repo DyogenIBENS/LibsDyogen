@@ -2960,3 +2960,52 @@ def computeAncestralCoverageBySbs(g1_tb, g2_tb, ancSbGenome, verbose = False):
     print >> sys.stderr, "coverage LCA_S1-S2 = cardinal({ancGenes in Sb}) / cardinal({ancGenes that are present in G1 rewritten in tbs and in G2 rewritten in tbs})\ncoverage LCA_S1-S2 = ", float(len(ancGenesInSbs)) / len(ancGenesInG1TbAndInG2Tb)
     coverage = float(len(ancGenesInSbs)) / len(ancGenesInG1TbAndInG2Tb)
     return coverage
+
+@myTools.verbose
+def computeMeanCoverageInGenes(genome1, genome2, sbsInPairComp, families=None, verbose = True):
+    # TODO, use Diagonal.functions to compute projections on genomes
+    # if families is provided, reduce gene names to genes in families
+
+    assert isinstance(genome1, myLightGenomes.LightGenome)
+    assert isinstance(genome2, myLightGenomes.LightGenome)
+    if isinstance(sbsInPairComp, myTools.OrderedDict2dOfLists):
+        _sbsInPairCompWithIds = sbsInPairComp
+    else:
+        assert isinstance(sbsInPairComp, myTools.Dict2d)
+        _sbsInPairCompWithIds = myTools.OrderedDict2dOfLists()
+        for ((c1, c2), sb) in sbsInPairComp.iteritems2d():
+            _sbsInPairCompWithIds.addToLocation((c1, c2), sb)
+
+    genome1.getGeneNames(asA=set, checkNoDuplicates=True)
+    setExtantGenes1 = set([(c1, gIdx1) for (c1, chrom1) in genome1.iteritems() for gIdx1 in range(0, len(chrom1))])
+    #assert all([0<= gIdx1 < len(genome1[c1])+1 for (c1, gIdx1) in setExtantGenes1])
+    genome2.getGeneNames(asA=set, checkNoDuplicates=True)
+    setExtantGenes2 = set([(c2, gIdx2) for (c2, chrom2) in genome2.iteritems() for gIdx2 in range(0, len(chrom2))])
+
+    setExtantGenes1WithinSbsBoundaries = set()
+    setExtantGenes2WithinSbsBoundaries = set()
+    for (id, (c1, c2), sb) in _sbsInPairCompWithIds.iterByOrderedIds():
+        assert isinstance(sb, SyntenyBlock)
+        gIdxsInL1 = [gIdx1 for tb1 in sb.l1 for gIdx1 in tb1]
+        for gIdx1 in range(min(gIdxsInL1), max(gIdxsInL1)+1):
+            setExtantGenes1WithinSbsBoundaries.add((c1, gIdx1))
+        gIdxsInL2 = [gIdx2 for tb2 in sb.l2 for gIdx2 in tb2]
+        for gIdx2 in range(min(gIdxsInL2), max(gIdxsInL2)+1):
+            setExtantGenes2WithinSbsBoundaries.add((c2, gIdx2))
+
+    if families is not None:
+        # reduce sets of genes that are in families
+        assert isinstance(families, myLightGenomes.Families)
+        for setGenes in [setExtantGenes1, setExtantGenes1WithinSbsBoundaries]:
+            setGenes = set([(c1, gIdx1) for (c1, gIdx1) in setGenes if families.getFamilyByName(genome1[c1][gIdx1].n) is not None])
+        for setGenes in [setExtantGenes2, setExtantGenes2WithinSbsBoundaries]:
+            setGenes = set([(c2, gIdx2) for (c2, gIdx2) in setGenes if families.getFamilyByName(genome2[c2][gIdx2].n) is not None])
+
+    coverage1 = float(len(setExtantGenes1WithinSbsBoundaries)) / len(setExtantGenes1)
+    coverage2 = float(len(setExtantGenes2WithinSbsBoundaries)) / len(setExtantGenes2)
+
+    meanCoverage = 0.5 * (coverage1 + coverage2)
+
+    return meanCoverage
+
+
