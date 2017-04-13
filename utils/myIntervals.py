@@ -253,6 +253,7 @@ def analyseGenomeIntoAdjacencies(genome, oriented=True, asA=set, fixOrderInAdj=F
 # sn = sensitivity
 # sp = specificity
 # for pickle, 'Efficiency' variable must have the same name as the class 'Efficiency'
+#Efficiency = collections.namedtuple('Efficiency', ('tp', 'tn', 'fp', 'fn', 'r', 'p', 'f1'))
 Efficiency = collections.namedtuple('Efficiency', ('tp', 'tn', 'fp', 'fn', 'sn', 'sp'))
 
 def computeEfficiency(setIdentified, setTrue):
@@ -265,9 +266,10 @@ def computeEfficiency(setIdentified, setTrue):
     sFn = setTrue - setIdentified
     Fn = len(sFn)
     assert len(setTrue) == Tp + Fn
-    sensitivity = float(Tp) / float(Tp + Fn)
-    specificity = float(Tp) / float(Tp + Fp)
-    return (Efficiency(Tp, Tn, Fp, Fn, sensitivity, specificity), (sTp, sFp, sFn))
+    recall = float(Tp) / float(Tp + Fn)
+    precision = float(Tp) / float(Tp + Fp)
+    F1 = float(2 * recall * precision) / float(recall + precision)
+    return (Efficiency(Tp, Tn, Fp, Fn, recall, precision, F1), (sTp, sFp, sFn))
 
 @myTools.verbose
 def compareGenomes(genomeIdentified, genomeTrue, mode='adjacency', oriented=True, returnSets=False, verbose=False):
@@ -317,8 +319,9 @@ def compareGenomes(genomeIdentified, genomeTrue, mode='adjacency', oriented=True
     print >> sys.stderr, "Tp=%s" % eff.tp
     print >> sys.stderr, "Fp=%s" % eff.fp
     print >> sys.stderr, "Fn=%s" % eff.fn
-    print >> sys.stderr, "sensitivity=%s" % eff.sn
-    print >> sys.stderr, "specificity=%s" % eff.sp
+    print >> sys.stderr, "recall=%s" % eff.r
+    print >> sys.stderr, "precision=%s" % eff.p
+    print >> sys.stderr, "f1=%s" % eff.f1
 
     if not returnSets:
         return eff
