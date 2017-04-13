@@ -218,7 +218,7 @@ def calcDiags(g1, g2, orthos, fusionThreshold=-1, sameStrand=True, orthosFilter=
 	def translateGenome(genome):
 		newGenome = {}
 		for c in genome.chrList[utils.myGenomes.ContigType.Chromosome] + genome.chrList[utils.myGenomes.ContigType.Scaffold]:
-			tmp = [(orthos.getPosition(g.names),g.strand) for g in genome.lstGenes[c]]
+			tmp = [(orthos.getPositions(g.names),g.strand) for g in genome.lstGenes[c]]
 			#assert set(len(x[0]) for x in tmp).issubset(set([0,1]))
 			#assert set(list(x[0])[0].chromosome for x in tmp if len(x[0]) > 0).issubset([None])
 			newGenome[c] = [(g.pop().index if len(g) > 0 else -1, strand) for (g,strand) in tmp]
