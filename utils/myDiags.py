@@ -1142,6 +1142,10 @@ def strandProduct(sa, sb):
 #       locG2 : a dict {..., f:[(i2,s2)],...} with i2 the indices of the genes on gc2. For each f locG2 gives all its genes positions in the chromosome 2
 # f : family, often the ancGene index
 ###################################################################################################################################
+# TODO :
+# use the "sort-join" algorithm of "step2" (page 3) to increase the speed when building the homology matrix
+# ref : Khalid Mahmood, Geoffrey I. Webb, Jiangning Song, James C. Whisstock, Arun S. Konagurthu; Efficient large-scale protein sequence comparison and gene matching to identify orthologs and co-orthologs. Nucleic Acids Res 2012; 40 (6): e44. doi: 10.1093/nar/gkr1261
+# url : https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3315314/pdf/gkr1261.pdf
 def homologyMatrix(gc1, gc2):
     # 1 faster
     locG2 = {}
