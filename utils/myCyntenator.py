@@ -14,6 +14,9 @@ import subprocess
 import sys
 import myFile, myLightGenomes, myDiags
 
+# change this line for each local installation
+PATH_CYNTENATOR_BIN = '/home/jlucas/Libs/cyntenator/cyntenator'
+
 # mismatch de 0 si on veut des segments conservés !
 # Cyntenator génère parfois des alignements du genre
 #
@@ -172,7 +175,7 @@ def launchCyntenator(genome1, genome2, families,
                      filterType=myDiags.FilterType.InBothGenomes,
                      includeMicroRearrangedGenesInSbs=True,
                      outCyntenatorGenomes="../res/genome.%s.list.cyntenator",
-                     pathCyntenatorBin='/home/jlucas/Libs/cyntenator/cyntenator',
+                     pathCyntenatorBin=PATH_CYNTENATOR_BIN,
                      outAlignmentCyntenator='../res/alignment.cyntenator'):
 
     ((g1_tb, tb2g1, (nCL1, nGL1)), (g2_tb, tb2g2, (nCL2, nGL2))) = myDiags.editGenomes(genome1, genome2, families,
@@ -241,16 +244,8 @@ if __name__ == '__main__':
     #                       tandemGapMax=5,# minimalLengthForSbs=3,
     #                       filterType=myDiags.FilterType.InBothGenomes,
     #                       outCyntenatorGenomes="../res/genome.%s.list.cyntenator",
-    #                       pathCyntenatorBin='/home/jlucas/Libs/cyntenator/cyntenator',
+    #                       pathCyntenatorBin=PATH_CYNTENATOR_BIN,
     #                       outAlignmentCyntenator='../res/alignment.cyntenator')
 
     alignmentAsLightGenome = lightGenomeFromPairwiseAlignementOfCyntenator('../res/alignment.cyntenator', families, includeMicroRearrangedGenesInSbs=True)
     print >> sys.stdout, alignmentAsLightGenome
-
-#    print launchADHoRe(genome1, genome2, families,
-#                       gapMax=5, tandemGapMax=5, pThreshold=0.001, minimalLengthForSbs=3,
-#                       outADHoReChromosomes="../res/Genome.%s.Chr%s.list",
-#                       outAHoReFamilies="../res/families.csv",
-#                       outAHoReConfigurationFile="../res/dataset_G1_G2.ini",
-#                       resADHoRePath="../res/resADHoRe",
-#                       pathIADHOREbin='/home/jlucas/Libs/i-adhore-3.0.01/build/src/i-adhore')

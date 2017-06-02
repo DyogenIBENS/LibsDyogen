@@ -21,8 +21,8 @@ if arguments["fromNewick"]:
 
     # print into phylTree format, with tabulations
     def do(node, indent):
-        node = node.replace(myPhylTree.SYMBOL6X, "")
-        node = node.replace(myPhylTree.SYMBOL2X, "")
+        node = node if node[0] != myPhylTree.SYMBOL6X else node[1:]
+        node = node if node[0] != myPhylTree.SYMBOL6X else node[1:]
         names = myFile.myTSV.printLine([node] + [x for x in phylTree.commonNames.get(node,"") if isinstance(x, str) and (x != node)], delim="|")
         if node in phylTree.listSpecies :
             print ("\t" * indent) + str(names)

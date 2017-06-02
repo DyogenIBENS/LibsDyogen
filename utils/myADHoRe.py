@@ -15,6 +15,8 @@ import subprocess
 import sys
 import myFile, myLightGenomes, myDiags
 
+# change this line for each local installation
+PATH_ADHORE_BIN = '/home/jlucas/Libs/i-adhore-3.0.01/build/src/i-adhore'
 
 # [("out:Chromosomes",str,), ("withScaffolds",bool,False), ("minChromLength",int,1), ('removeSpeciesSpecificGenes',bool,True)]
 # genome1 = myLightGenomes.LightGenome(arguments["genome1"])
@@ -216,7 +218,7 @@ def launchADHoRe(genome1, genome2, families, gapMax=5, tandemGapMax=5, pThreshol
                  outAHoReFamilies="../res/families.csv",
                  outAHoReConfigurationFile="../res/dataset_G1_G2.ini",
                  resADHoRePath="../res/resADHoRe",
-                 pathIADHOREbin='/home/jlucas/Libs/i-adhore-3.0.01/build/src/i-adhore'):
+                 pathIADHOREbin=PATH_ADHORE_BIN):
     filesToRemove = glob.glob(os.path.dirname(outADHoReChromosomes) + '/Genome.*.list')
     filesToRemove += [outAHoReFamilies]
     filesToRemove += [outAHoReConfigurationFile]
@@ -299,4 +301,4 @@ if __name__ == '__main__':
                        outAHoReFamilies="../res/families.csv",
                        outAHoReConfigurationFile="../res/dataset_G1_G2.ini",
                        resADHoRePath="../res/resADHoRe",
-                       pathIADHOREbin='/home/jlucas/Libs/i-adhore-3.0.01/build/src/i-adhore')
+                       pathIADHOREbin=PATH_ADHORE_BIN)
