@@ -294,12 +294,20 @@ def launchADHoRe(genome1, genome2, families, gapMax=5, tandemGapMax=5, pThreshol
 
 if __name__ == '__main__':
     os.chdir('/home/' + getpass.getuser() + '/Libs/PhylDiag/data')
+    try:
+        os.mkdir('../res/adhore')
+    except:
+        pass
+    try:
+        os.mkdir('adhore')
+    except:
+        pass
     genome1 = myLightGenomes.LightGenome('genesST.Homo.sapiens.list.bz2')
     genome2 = myLightGenomes.LightGenome('genesST.Mus.musculus.list.bz2')
     families = myLightGenomes.Families('ancGenes.Euarchontoglires.list.bz2')
     print launchADHoRe(genome1, genome2, families, gapMax=5, tandemGapMax=5, pThreshold=0.001, minimalLengthForSbs=3,
-                       outADHoReChromosomes="../res/Genome.%s.Chr%s.list",
-                       outAHoReFamilies="../res/families.csv",
-                       outAHoReConfigurationFile="../res/dataset_G1_G2.ini",
-                       resADHoRePath="../res/resADHoRe",
+                       outADHoReChromosomes="adhore/Genome.%s.Chr%s.list",
+                       outAHoReFamilies="adhore/families.csv",
+                       outAHoReConfigurationFile="adhore/dataset_G1_G2.ini",
+                       resADHoRePath="../res/adhore",
                        pathIADHOREbin=PATH_ADHORE_BIN)
