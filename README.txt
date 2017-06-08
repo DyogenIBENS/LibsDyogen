@@ -76,7 +76,7 @@ unzip homologyteams-1.1.zip
 cd homologyteams-1.1/src
 make
 # To plug homologyteams to LibsDyogen, update the PATH_HOMOLOGYTEAMS_BIN variable in ${PATH_LIBSDYOGEN}/utils/myGeneTeams.py
-# PATH_HOMOLOGYTEAMS_BIN = <PATH_PARENT_ALL>/homologyteams-1.1/src/homologyteams
+# PATH_HOMOLOGYTEAMS_BIN = "<PATH_PARENT_ALL>/homologyteams-1.1/src/homologyteams"
 # with <PATH_PARENT_ALL> the appropriate path : in our case it's /home/<user>/Libs, with <user> your user name
 
 # Install i-ADHoRe 3.0
@@ -99,7 +99,7 @@ make
 cd ../testset/datasetI
 ../../build/src/i-adhore datasetI.ini
 # To plug i-adhore to LibsDyogen, update the PATH_ADHORE_BIN variable in ${PATH_LIBSDYOGEN}/utils/myADHoRe.py
-# PATH_ADHORE_BIN = <PATH_PARENT_ALL>/i-adhore-3.0.01/build/src/i-adhore
+# PATH_ADHORE_BIN = "<PATH_PARENT_ALL>/i-adhore-3.0.01/build/src/i-adhore"
 # with <PATH_PARENT_ALL> the appropriate path : in our case it's /home/<user>/Libs, with <user> your user name
 
 # Install Cyntenator
@@ -113,7 +113,7 @@ g++ -Wno-deprecated cyntenator.cpp localign.cpp genome.cpp flow.cpp species_tree
 # Read the INSTALL file to find tests to check the installation, for instance try:
 ./cyntenator -t "(HSX.txt MMX.txt)"     -h phylo HSCFMM.blast  "((HSX.txt:1.2 MMX.txt:1.3):0.5 CFX.txt:2.5):1" > human_mouse
 # To plug cyntenator to LibsDyogen, update the PATH_CYNTENATOR_BIN variable in ${PATH_LIBSDYOGEN}/utils/myCyntenator.py
-# PATH_CYNTENATOR_BIN = <PATH_PARENT_ALL>/cyntenator/cyntenator
+# PATH_CYNTENATOR_BIN = "<PATH_PARENT_ALL>/cyntenator/cyntenator"
 # with <PATH_PARENT_ALL> the appropriate path : in our case it's /home/<user>/Libs, with <user> your user name
 
 About Licences:
