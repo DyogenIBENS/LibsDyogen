@@ -1,7 +1,7 @@
 #!/bin/bash
 #Launch all the commands in the README file and stops on errors if any
 set -e
-# Any subsequent commands which fail will cause the shell script to exit
+# Any subsequent command which fails will cause the shell script to exit
 # immediately
 red='\e[0;31m'
 green='\e[0;32m'

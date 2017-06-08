@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# save initial working dir
+iwd=$(pwd)
+
 # Install dependencies
 # we assume that apt-get is the package manager
 sudo apt-get update
@@ -64,3 +67,16 @@ cd cyntenator
 g++ -Wno-deprecated cyntenator.cpp localign.cpp genome.cpp flow.cpp species_tree.cpp -o cyntenator
 # To plug cyntenator to LibsDyogen
 sed -i "/PATH_CYNTENATOR_BIN =/c\PATH_CYNTENATOR_BIN = \"${PATH_PARENT_ALL}/cyntenator/cyntenator\"" ${PATH_LIBSDYOGEN}/utils/myCyntenator.py
+
+# reinit working dir
+cd ${iwd}
+
+# Post-processing information
+green='\e[0;32m'
+NC='\e[0m' # No Color
+echo -e "${green}Installation finished${NC}"
+# Need to run bash to update PYTHONPATH, it is not possible to export a variable to the environment from a bash script
+# https://stackoverflow.com/questions/16618071/can-i-export-a-variable-to-the-environment-from-a-bash-script-without-sourcing-i
+echo -e "${green}please run 'export PYTHONPATH=\${PYTHONPATH}:${PATH_LIBSDYOGEN}' to update the PYTHONPATH environment variable${NC}"
+echo -e "${green}next time you open a bash session, you won't need this since your ~/.bashrc will be loaded${NC}"
+echo -e "${green}make sure that 'echo \${PYTHONPATH}' shows the path to the folder LibsDyogen${NC}"
