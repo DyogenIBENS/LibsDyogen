@@ -45,14 +45,21 @@ bash <(curl -s https://raw.githubusercontent.com/DyogenIBENS/LibsDyogen/master/I
 
 # If it does not work follow the next indications 
 
-# Install dependencies:
+# core dependencies:
+--------------------
 # git
 # python 2.7
 # cython
+
+# marginal dependencies:
+----------------------
 # scipy
 # numpy
 # matplotlib
+
+# Install dependencies:
 sudo apt-get update
+# depending on your distribution and version, you may need to change the names of packages
 sudo apt-get install git python2.7 cython python-matplotlib python-scipy python-numpy
 
 # Choose a path for the installation of the library and plugins (here we chose /home/<user>/Libs)
@@ -78,6 +85,7 @@ cd ${PATH_PARENT_ALL}
 wget http://euler.slu.edu/~goldwasser/homologyteams/homologyteams-1.1.zip
 unzip homologyteams-1.1.zip
 cd homologyteams-1.1/src
+# the next line will compile sources with gcc
 make
 # homolgyteams should be plugged automatically to LibsDyogen
 # If it is not plugged, update the PATH_HOMOLOGYTEAMS_BIN variable in ${PATH_LIBSDYOGEN}/utils/myGeneTeams.py
@@ -95,11 +103,12 @@ rm i-adhore-3.0.01.tar.gz
 cd i-adhore-3.0.01
 mkdir build
 cd build
-# you need cmake for this step (type "sudo apt-get install cmake", if you don't already have it)
-sudo apt-get install cmake
+# you need cmake and g++ for this step (type "sudo apt-get install cmake", if you don't already have it). libpng and zlib are marginal dependencies
+# depending on your distribution and version, you may need to change names of packages
+sudo apt-get install cmake g++ libpng-dev zlib1g-dev
 cmake ..
 make
-# You do not need to install it, skip the make install
+# You do not need to install it, skip 'make install'
 # Verify that i-adhore is working
 cd ../testset/datasetI
 ../../build/src/i-adhore datasetI.ini
