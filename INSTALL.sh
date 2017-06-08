@@ -6,10 +6,15 @@ iwd=$(pwd)
 # Install dependencies
 # we assume that apt-get is the package manager
 sudo apt-get update
-# core dependencies 
-sudo apt-get install python2.7 git 
-# marginal dependencies, you may need to change the name of some package depending on your distribution
-sudo apt-get install cython python-matplotlib python-scipy python-numpy
+# core dependencies: python2.7 git cython
+sudo apt-get install python2.7 
+sudo apt-get install git 
+sudo apt-get install cython 
+# marginal dependencies: matplotlib scipy numpy
+# you may need to change the name of some package depending on your distribution
+sudo apt-get install python-matplotlib 
+sudo apt-get install python-scipy 
+sudo apt-get install python-numpy
 
 PATH_PARENT_ALL="/home/${USER}/Libs"
 echo "LibsDyogen and plugged softwares will be installed in ${PATH_PARENT_ALL}" >&2
@@ -48,8 +53,12 @@ rm i-adhore-3.0.01.tar.gz
 cd i-adhore-3.0.01
 mkdir build
 cd build
-# you need cmake for this step (type "sudo apt-get install cmake", if you don't already have it)
-sudo apt-get install g++ cmake libpng-dev zlib1g-dev
+# core dependencies: cmake and g++ 
+sudo apt-get install cmake 
+sudo apt-get install g++
+# marginal dependencies: libpng and zlib
+sudo apt-get install libpng-dev 
+sudo apt-get install zlib1g-dev
 # I found no way to install easily MPI
 cmake ..
 make
@@ -63,8 +72,9 @@ cd ${PATH_PARENT_ALL}
 # download the cyntenator files (pointed by https://www.bioinformatics.org/cyntenator/wiki/Main/HomePage)
 wget -r -np -nH --cut-dirs=3 -R index.html https://bbc.mdc-berlin.de/svn/bioinformatics/Software/cyntenator/
 cd cyntenator
-# compile
+# core dependency g++
 sudo apt-get install g++
+# compile
 g++ -Wno-deprecated cyntenator.cpp localign.cpp genome.cpp flow.cpp species_tree.cpp -o cyntenator
 # To plug cyntenator to LibsDyogen
 # sed -i "/PATH_CYNTENATOR_BIN =/c\PATH_CYNTENATOR_BIN = \"${PATH_PARENT_ALL}/cyntenator/cyntenator\"" ${PATH_LIBSDYOGEN}/utils/myCyntenator.py
