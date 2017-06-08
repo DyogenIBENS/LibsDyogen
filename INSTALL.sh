@@ -12,9 +12,12 @@ sudo apt-get install git
 sudo apt-get install cython 
 # marginal dependencies: matplotlib scipy numpy
 # you may need to change the name of some package depending on your distribution
+sudo apt-get install python-numpy
+# Next packages needs to enable the deposit 'Universe' on debian/ubuntu
+# distributions
+sudo add-apt-repository universe
 sudo apt-get install python-matplotlib 
 sudo apt-get install python-scipy 
-sudo apt-get install python-numpy
 
 PATH_PARENT_ALL="/home/${USER}/Libs"
 echo "LibsDyogen and plugged softwares will be installed in ${PATH_PARENT_ALL}" >&2
@@ -59,7 +62,9 @@ sudo apt-get install g++
 # marginal dependencies: libpng and zlib
 sudo apt-get install libpng-dev 
 sudo apt-get install zlib1g-dev
-# I found no way to install easily MPI
+# We need to enable the deposit 'Universe' to install the mpi package
+sudo add-apt-repository universe
+sudo apt-get install mpi
 cmake ..
 make
 # You do not need to install it, skip the make install

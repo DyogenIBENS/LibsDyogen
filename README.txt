@@ -53,14 +53,20 @@ bash <(curl -s https://raw.githubusercontent.com/DyogenIBENS/LibsDyogen/master/I
 
 # marginal dependencies:
 ----------------------
-# scipy
 # numpy
+# scipy
 # matplotlib
 
+# Enable the deposit 'Universe' on debian/ubuntu distributions
+sudo add-apt-repository universe
 # Install dependencies:
 sudo apt-get update
 # depending on your distribution and version, you may need to change the names of packages
 sudo apt-get install git python2.7 cython python-matplotlib python-scipy python-numpy
+
+# Look at indications of authors if it was not possible to install packages
+# matplotlib : https://matplotlib.org/users/installing.html
+# scipy : https://www.scipy.org/install.html
 
 # Choose a path for the installation of the library and plugins (here we chose /home/<user>/Libs)
 PATH_PARENT_ALL="/home/${USER}/Libs"
