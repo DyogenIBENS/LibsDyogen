@@ -185,8 +185,8 @@ def launchCyntenator(genome1, genome2, families,
                                                                                        minChromLength=1,
                                                                                        keepOriginal=True)
     # remove genes that are not in the genome in gX_tb (genes not remapped in a anc. gene representative of a tb)
-    genes1ToRemove = set([g.n for (chr, chrom) in genome1.iteritems() for (gIdx, g) in enumerate(chrom) if gIdx not in tb2g1[chr].old])
-    genes2ToRemove = set([g.n for (chr, chrom) in genome2.iteritems() for (gIdx, g) in enumerate(chrom) if gIdx not in tb2g2[chr].old])
+    genes1ToRemove = set([g.n for (chr, chrom) in genome1.iteritems() for (gIdx, g) in enumerate(chrom) if ((chr not in tb2g1) or (gIdx not in tb2g1[chr].old))])
+    genes2ToRemove = set([g.n for (chr, chrom) in genome2.iteritems() for (gIdx, g) in enumerate(chrom) if ((chr not in tb2g2) or (gIdx not in tb2g2[chr].old))])
     # print >> sys.stderr, 'nb genes1 removed = %s' % len(genes1ToRemove)
     # print >> sys.stderr, 'nb nGL1 = %s' % nGL1
     # print >> sys.stderr, 'nb genes2 removed = %s' % len(genes2ToRemove)
@@ -233,19 +233,20 @@ def launchCyntenator(genome1, genome2, families,
 
 if __name__ == '__main__':
     os.chdir('/home/jlucas/Libs/PhylDiag/data')
-    genome1 = myLightGenomes.LightGenome('genesSTE.Homo.sapiens.list.bz2')
-    genome2 = myLightGenomes.LightGenome('genesSTE.Mus.musculus.list.bz2')
+    genome1 = myLightGenomes.LightGenome('genesST.Homo.sapiens.list.bz2')
+    genome2 = myLightGenomes.LightGenome('genesST.Mus.musculus.list.bz2')
     families = myLightGenomes.Families('ancGenes.Euarchontoglires.list.bz2')
 
     #default
-    #mismatch = -3
-    #print launchCyntenator(genome1, genome2, families,
-    #                       threshold=4, gap=-2, mismatch=-1000000,
-    #                       tandemGapMax=5,# minimalLengthForSbs=3,
-    #                       filterType=myDiags.FilterType.InBothGenomes,
-    #                       outCyntenatorGenomes="../res/genome.%s.list.cyntenator",
-    #                       pathCyntenatorBin=PATH_CYNTENATOR_BIN,
-    #                       outAlignmentCyntenator='../res/alignment.cyntenator')
+    mismatch = -3
+    #mismatch = -1000000
+    print launchCyntenator(genome1, genome2, families,
+                           threshold=4, gap=-2, mismatch=mismatch,
+                           tandemGapMax=5,# minimalLengthForSbs=3,
+                           filterType=myDiags.FilterType.InBothGenomes,
+                           outCyntenatorGenomes="../res/genome.%s.list.cyntenator",
+                           pathCyntenatorBin=PATH_CYNTENATOR_BIN,
+                           outAlignmentCyntenator='../res/alignment.cyntenator')
 
     alignmentAsLightGenome = lightGenomeFromPairwiseAlignementOfCyntenator('../res/alignment.cyntenator', families, includeMicroRearrangedGenesInSbs=True)
     print >> sys.stdout, alignmentAsLightGenome

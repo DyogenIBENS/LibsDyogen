@@ -10,6 +10,7 @@ NC='\e[0m' # No Color
 #############################################################
 #	Check integrity of pre-processing scripts in LibsDyogen #
 #############################################################
+mkdir -p test/res
 
 preProcessCommandLines=(
 # convet a .nhx tree into a protTree (forest of gene trees)

@@ -2414,6 +2414,7 @@ def editGenomes(g1, g2, families,
                 labelWith='FamID',
                 tandemGapMax=0,
                 minChromLength=2,
+                # TODO this option is useless for the moment
                 keepOriginal=False):
     assert labelWith in {'FamID', 'FamName'}
     nCini1 = len(g1.keys())
@@ -2424,10 +2425,12 @@ def editGenomes(g1, g2, families,
     ##############################################################
     # rewrite genomes by family names (ie ancGene names)
     if labelWith == 'FamID':
+        # TODO add a keepOriginal option, here it is always True
         g1_fID = myMapping.labelWithFamID(g1, families)
         g2_fID = myMapping.labelWithFamID(g2, families)
     else:
         assert labelWith == 'FamName'
+        # TODO add a keepOriginal option, here it is always True
         g1_fID = myMapping.labelWithFamNames(g1, families)
         g2_fID = myMapping.labelWithFamNames(g2, families)
     # genes that are not in ancGene have a aID=None
@@ -2439,8 +2442,9 @@ def editGenomes(g1, g2, families,
     print >> sys.stderr, "genome2 initially contains %s genes (%s genes are in families, %.2f%%)" % (nGini2, nGiniInFam2, (100 * float(nGiniInFam2) / float(nGini2)))
     # Must be applied on the two genomes, because of the mode inBothGenomes (InFamilies => not only anchor genes are kept but all genes herited from a gene of the LCA)
     #mfilt2origin1 -> mGf2Go1
+    # no need to keep the original genomes at this intermediary step, the original genomes are g1 and g2
     ((g1_fID, mGf2Go1, (nCL1, nGL1)), (g2_fID, mGf2Go2, (nCL2, nGL2))) =\
-        filter2D(g1_fID, g2_fID, filterType, minChromLength, keepOriginal=keepOriginal)
+        filter2D(g1_fID, g2_fID, filterType, minChromLength, keepOriginal=False)
     print >> sys.stderr, "genome1 after filterType=%s and minChromLength=%s contains %s genes" %\
         (filterType, minChromLength, sum([len(g1_fID[c1]) for c1 in g1_fID]))
     print >> sys.stderr, "genome2 after filterType=%s and minChromLength=%s contains %s genes" %\

@@ -293,8 +293,8 @@ def launchADHoRe(genome1, genome2, families, gapMax=5, tandemGapMax=5, pThreshol
 
 if __name__ == '__main__':
     os.chdir('/home/jlucas/Libs/PhylDiag/data')
-    genome1 = myLightGenomes.LightGenome('genesSTE.Homo.sapiens.list.bz2')
-    genome2 = myLightGenomes.LightGenome('genesSTE.Mus.musculus.list.bz2')
+    genome1 = myLightGenomes.LightGenome('genesST.Homo.sapiens.list.bz2')
+    genome2 = myLightGenomes.LightGenome('genesST.Mus.musculus.list.bz2')
     families = myLightGenomes.Families('ancGenes.Euarchontoglires.list.bz2')
     print launchADHoRe(genome1, genome2, families, gapMax=5, tandemGapMax=5, pThreshold=0.001, minimalLengthForSbs=3,
                        outADHoReChromosomes="../res/Genome.%s.Chr%s.list",

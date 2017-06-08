@@ -50,7 +50,7 @@ arguments = myTools.checkArgs(
     ],
     [
         ("orderGenesByIncreasingTranscriptionStart", bool, True),
-        ("orderChromosomesBy", bool, 'decreasingNbOfGenes'),
+        ("orderChromosomesBy", str, 'decreasingNbOfGenes'),
         ("out:genome", str, 'genes.outPutGenome.list.bz2'),
         ("removeUnofficialChrNames", bool, False)
     ],

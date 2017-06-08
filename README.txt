@@ -29,87 +29,87 @@ mail : hrc@ens.fr or jlucas@ens.fr
 
 Installation:
 -------------
-# We assume that the user uses the package manager "apt-get" of debian distributions
-# but any other package manager can be used
+# The easiest way is to launch the script INSTALL.sh
+# dependencies are installed with the package manager "apt-get" of debian distributions
+# LibsDyogen and its plugged softwares will be installed into /home/${USER}/Libs
+bash INSTALL.sh
 
-# Install python 2.7
-sudo apt-get install python2.7
-# Install git:
-sudo apt-get install git
-# Install cython (may not be necessary)
-# http://docs.cython.org/src/quickstart/install.html
-sudo apt-get install cython
-# you might need the "matplotlib", "scipy" or "numpy" packages for statistics
-# if so, sudo apt-get install python-matplotlib python-scipy python-numpy
+# If it does not work follow the indications 
+
+# Install dependencies:
+# git
+# python 2.7
+# cython
+# scipy
+# numpy
+# matplotlib
+sudo apt-get update
+sudo apt-get install git python2.7 cython python-matplotlib python-scipy python-numpy
 
 # Choose a path for the installation of the library and plugins (here we chose /home/<user>/Libs)
-PATH_PARENT_ALL = "/home/${USER}/Libs"
+PATH_PARENT_ALL="/home/${USER}/Libs"
+# Create the main folder for the installation
+mkdir -p ${PATH_PARENT_ALL}
 
 # Install LibsDyogen
-PATH_LIBSDYOGEN_PARENT=${PATH_PARENT_ALL}
-# Create the root folder of LibsDyogen
-mkdir ${PATH_LIBSDYOGEN_PARENT}
-cd ${PATH_LIBSDYOGEN_PARENT}
 # Clone the LibsDyogen library
-PATH_LIBSDYOGEN="${PATH_LIBSDYOGEN_PARENT}/LibsDyogen"
-git clone git@depot.biologie.ens.fr:LibsDyogen ${PATH_LIBSDYOGEN}
+PATH_LIBSDYOGEN="${PATH_PARENT_ALL}/LibsDyogen"
+git clone https://github.com/DyogenIBENS/LibsDyogen ${PATH_LIBSDYOGEN}
 # Add the LibsDyogen root folder to the PYTHONPATH environment variable
-echo "export PYTHONPATH=\"\$PYTHONPATH:${PATH_LIBSDYOGEN}\"" >> ~/.bashrc
-bash
-# Then cythonise the utils/extractSbs.pyx file
-chmod +x ${PATH_LIBSDYOGEN}/cythonisePyxFiles.sh
-# the first argument of the script should be the path to the LibsDyogen root folder
+echo "export PYTHONPATH=\"\${PYTHONPATH}:${PATH_LIBSDYOGEN}\"" >> ~/.bashrc
+export PYTHONPATH=${PYTHONPATH}:${PATH_LIBSDYOGEN}
+# Then cythonise *.pyx
 bash ${PATH_LIBSDYOGEN}/cythonisePyxFiles.sh ${PATH_LIBSDYOGEN}
 
 Install optional plugins:
 ------------------------------------
 # Install homology teams
 
-PATH_HOMOLOGYTEAMS_PARENT=${PATH_PARENT_ALL}
-mkdir -p ${PATH_HOMOLOGYTEAMS_PARENT}
-cd ${PATH_HOMOLOGYTEAMS_PARENT}
+cd ${PATH_PARENT_ALL}
 wget http://euler.slu.edu/~goldwasser/homologyteams/homologyteams-1.1.zip
 unzip homologyteams-1.1.zip
 cd homologyteams-1.1/src
 make
-# When the installation is finished update the PATH_HOMOLOGYTEAMS_BIN variable in ${PATH_LIBSDYOGEN}/utils/myGeneTeams.py
-# PATH_HOMOLOGYTEAMS_BIN = <${PATH_HOMOLOGYTEAMS_PARENT}>/homologyteams-1.1/src/homologyteams
-# with <${PATH_HOMOLOGYTEAMS_PARENT}> the appropriate path to ${PATH_HOMOLOGYTEAMS_PARENT}
+# To plug homologyteams to LibsDyogen, update the PATH_HOMOLOGYTEAMS_BIN variable in ${PATH_LIBSDYOGEN}/utils/myGeneTeams.py
+# PATH_HOMOLOGYTEAMS_BIN = <PATH_PARENT_ALL>/homologyteams-1.1/src/homologyteams
+# with <PATH_PARENT_ALL> the appropriate path : in our case it's /home/<user>/Libs, with <user> your user name
 
 # Install i-ADHoRe 3.0
 
-PATH_ADHORE_PARENT=${PATH_PARENT_ALL}
-mkdir -p ${PATH_ADHORE_PARENT}
-cd ${PATH_ADHORE_PARENT}
+cd ${PATH_PARENT_ALL}
 wget http://bioinformatics.psb.ugent.be/downloads/psb/i-adhore/i-adhore-3.0.01.tar.gz
 tar -zxvf i-adhore-3.0.01.tar.gz
+rm i-adhore-3.0.01.tar.gz
 # finish the installation following the INSTALL file provided by the ADHoRe team
 # less i-adhore-3.0.01/INSTALL
 cd i-adhore-3.0.01
 mkdir build
 cd build
 # you need cmake for this step (type "sudo apt-get install cmake", if you don't already have it)
+sudo apt-get install cmake
 cmake ..
 make
-# You should not need to install it , skip the make install
-# When the compilation is finished update the PATH_ADHORE_BIN variable in ${PATH_LIBSDYOGEN}/utils/myADHoRe.py
-# PATH_ADHORE_BIN = <${PATH_ADHORE_PARENT}>/i-adhore-3.0.01/build/src/i-adhore
-# with <${PATH_ADHORE_PARENT}> the appropriate path to ${PATH_ADHORE_PARENT}
+# You do not need to install it, skip the make install
+# Verify that i-adhore is working
+cd ../testset/datasetI
+../../build/src/i-adhore datasetI.ini
+# To plug i-adhore to LibsDyogen, update the PATH_ADHORE_BIN variable in ${PATH_LIBSDYOGEN}/utils/myADHoRe.py
+# PATH_ADHORE_BIN = <PATH_PARENT_ALL>/i-adhore-3.0.01/build/src/i-adhore
+# with <PATH_PARENT_ALL> the appropriate path : in our case it's /home/<user>/Libs, with <user> your user name
 
 # Install Cyntenator
 
-PATH_CYNTENATOR_PARENT=${PATH_PARENT_ALL}
-mkdir -p ${PATH_CYNTENATOR_PARENT}
-cd ${PATH_CYNTENATOR_PARENT}
+cd ${PATH_PARENT_ALL}
 # download the cyntenator files (pointed by https://www.bioinformatics.org/cyntenator/wiki/Main/HomePage)
 wget -r -np -nH --cut-dirs=3 -R index.html https://bbc.mdc-berlin.de/svn/bioinformatics/Software/cyntenator/
 cd cyntenator
 # compile
 g++ -Wno-deprecated cyntenator.cpp localign.cpp genome.cpp flow.cpp species_tree.cpp -o cyntenator
-# Read the INSTALL file to find tests to check the installation
-# When the installation is finished update the PATH_CYNTENATOR_BIN variable in ${PATH_LIBSDYOGEN}/utils/myCyntenator.py
-# PATH_CYNTENATOR_BIN = <${PATH_CYNTENATOR_PARENT}>/cyntenator/cyntenator
-# with <${PATH_CYNTENATOR_PARENT}> the appropriate path to ${PATH_CYNTENATOR_PARENT}
+# Read the INSTALL file to find tests to check the installation, for instance try:
+./cyntenator -t "(HSX.txt MMX.txt)"     -h phylo HSCFMM.blast  "((HSX.txt:1.2 MMX.txt:1.3):0.5 CFX.txt:2.5):1" > human_mouse
+# To plug cyntenator to LibsDyogen, update the PATH_CYNTENATOR_BIN variable in ${PATH_LIBSDYOGEN}/utils/myCyntenator.py
+# PATH_CYNTENATOR_BIN = <PATH_PARENT_ALL>/cyntenator/cyntenator
+# with <PATH_PARENT_ALL> the appropriate path : in our case it's /home/<user>/Libs, with <user> your user name
 
 About Licences:
 ---------------

@@ -28,6 +28,7 @@ def nbDup(g_fID):
     return (nbGeneDup, dupCounter)
 
 # Rewrite genomes as a list of family Ids
+# TODO : add a keepOriginal option, to allow rewrite the original genome
 def labelWithFamID(genome, families=None):
     """
     This function keeps the original copy
@@ -50,6 +51,7 @@ def labelWithFamID(genome, families=None):
     return newGenome
 
 # Rewrite genomes as a list of family names
+# TODO : add a keepOriginal option, to allow rewrite the original genome
 def labelWithFamNames(genome, families, keepGnOfGenesNotInFamilies=False):
     assert isinstance(families, myLightGenomes.Families)
     assert isinstance(genome, myLightGenomes.LightGenome)
