@@ -29,7 +29,7 @@ mail : hrc@ens.fr or jlucas@ens.fr
 
 Installation:
 -------------
-# The easiest way is to launch the remote script INSTALL.sh hosted on github
+# The easiest way to install LibsDyogen is to launch the remote script INSTALL.sh hosted on github
 # This script will clone the github deposit itself
 # Dependencies will be installed with the package manager "apt-get" of debian distributions
 # LibsDyogen and its plugged softwares will be installed into /home/${USER}/Libs
@@ -37,6 +37,10 @@ Installation:
 # 1) the installation of dependencies 
 # 2) the addition of the LibsDyogen folder into the PYTHONPATH, editing the ~/.bashrc
 
+# Install curl, if you don't have it
+sudo apt-get update
+sudo apt-get install curl
+# Use curl to execute the remote file INSTALL.sh hosted on github
 bash <(curl -s https://raw.githubusercontent.com/DyogenIBENS/LibsDyogen/master/INSTALL.sh)
 
 # If it does not work follow the next indications 
