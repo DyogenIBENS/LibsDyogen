@@ -8,7 +8,7 @@ iwd=$(pwd)
 sudo apt-get update
 # core dependencies 
 sudo apt-get install python2.7 git 
-# marginal dependencies 
+# marginal dependencies, you may need to change the name of some package depending on your distribution
 sudo apt-get install cython python-matplotlib python-scipy python-numpy
 
 PATH_PARENT_ALL="/home/${USER}/Libs"
@@ -32,6 +32,7 @@ cd ${PATH_PARENT_ALL}
 wget http://euler.slu.edu/~goldwasser/homologyteams/homologyteams-1.1.zip
 unzip homologyteams-1.1.zip
 cd homologyteams-1.1/src
+# compile with gcc
 make
 # To plug homologyteams to LibsDyogen
 # sed -i "/PATH_HOMOLOGYTEAMS_BIN =/c\PATH_HOMOLOGYTEAMS_BIN = \"${PATH_PARENT_ALL}/homologyteams-1.1/src/homologyteams\"" ${PATH_LIBSDYOGEN}/utils/myGeneTeams.py
