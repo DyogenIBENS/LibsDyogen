@@ -11,12 +11,13 @@
 import collections
 import glob
 import os
+import getpass # https://stackoverflow.com/questions/842059/is-there-a-portable-way-to-get-the-current-username-in-python
 import subprocess
 import sys
 import myFile, myLightGenomes, myDiags
 
 # change this line for each local installation
-PATH_ADHORE_BIN = "/home/jlucas/Libs/i-adhore-3.0.01/build/src/i-adhore"
+PATH_ADHORE_BIN = '/home/' + getpass.getuser() + '/Libs/i-adhore-3.0.01/build/src/i-adhore"
 
 # [("out:Chromosomes",str,), ("withScaffolds",bool,False), ("minChromLength",int,1), ('removeSpeciesSpecificGenes',bool,True)]
 # genome1 = myLightGenomes.LightGenome(arguments["genome1"])
@@ -292,7 +293,7 @@ def launchADHoRe(genome1, genome2, families, gapMax=5, tandemGapMax=5, pThreshol
     return baseClustersAsLightGenome
 
 if __name__ == '__main__':
-    os.chdir('/home/jlucas/Libs/PhylDiag/data')
+    os.chdir('/home/' + getpass.getuser() + '/Libs/PhylDiag/data')
     genome1 = myLightGenomes.LightGenome('genesST.Homo.sapiens.list.bz2')
     genome2 = myLightGenomes.LightGenome('genesST.Mus.musculus.list.bz2')
     families = myLightGenomes.Families('ancGenes.Euarchontoglires.list.bz2')

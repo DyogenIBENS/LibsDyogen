@@ -36,7 +36,7 @@ unzip homologyteams-1.1.zip
 cd homologyteams-1.1/src
 make
 # To plug homologyteams to LibsDyogen
-sed -i "/PATH_HOMOLOGYTEAMS_BIN =/c\PATH_HOMOLOGYTEAMS_BIN = \"${PATH_PARENT_ALL}/homologyteams-1.1/src/homologyteams\"" ${PATH_LIBSDYOGEN}/utils/myGeneTeams.py
+# sed -i "/PATH_HOMOLOGYTEAMS_BIN =/c\PATH_HOMOLOGYTEAMS_BIN = \"${PATH_PARENT_ALL}/homologyteams-1.1/src/homologyteams\"" ${PATH_LIBSDYOGEN}/utils/myGeneTeams.py
 
 # Install i-ADHoRe 3.0
 echo 'Install i-ADHoRe 3.0' >&2
@@ -55,7 +55,7 @@ cmake ..
 make
 # You do not need to install it, skip the make install
 # To plug i-adhore to LibsDyogen
-sed -i "/PATH_ADHORE_BIN =/c\PATH_ADHORE_BIN = \"${PATH_PARENT_ALL}/i-adhore-3.0.01/build/src/i-adhore\"" ${PATH_LIBSDYOGEN}/utils/myADHoRe.py
+# sed -i "/PATH_ADHORE_BIN =/c\PATH_ADHORE_BIN = \"${PATH_PARENT_ALL}/i-adhore-3.0.01/build/src/i-adhore\"" ${PATH_LIBSDYOGEN}/utils/myADHoRe.py
 
 # Install Cyntenator
 echo 'Install Cyntenator' >&2
@@ -64,9 +64,10 @@ cd ${PATH_PARENT_ALL}
 wget -r -np -nH --cut-dirs=3 -R index.html https://bbc.mdc-berlin.de/svn/bioinformatics/Software/cyntenator/
 cd cyntenator
 # compile
+sudo apt-get install g++
 g++ -Wno-deprecated cyntenator.cpp localign.cpp genome.cpp flow.cpp species_tree.cpp -o cyntenator
 # To plug cyntenator to LibsDyogen
-sed -i "/PATH_CYNTENATOR_BIN =/c\PATH_CYNTENATOR_BIN = \"${PATH_PARENT_ALL}/cyntenator/cyntenator\"" ${PATH_LIBSDYOGEN}/utils/myCyntenator.py
+# sed -i "/PATH_CYNTENATOR_BIN =/c\PATH_CYNTENATOR_BIN = \"${PATH_PARENT_ALL}/cyntenator/cyntenator\"" ${PATH_LIBSDYOGEN}/utils/myCyntenator.py
 
 # reinit working dir
 cd ${iwd}

@@ -10,12 +10,13 @@
 # Wrapper for 'Cyntenator'
 import collections
 import os
+import getpass # https://stackoverflow.com/questions/842059/is-there-a-portable-way-to-get-the-current-username-in-python
 import subprocess
 import sys
 import myFile, myLightGenomes, myDiags
 
 # change this line for each local installation
-PATH_CYNTENATOR_BIN = '/home/jlucas/Libs/cyntenator/cyntenator'
+PATH_CYNTENATOR_BIN = '/home/' + getpass.getuser() + '/Libs/cyntenator/cyntenator"
 
 # mismatch de 0 si on veut des segments conservés !
 # Cyntenator génère parfois des alignements du genre
@@ -232,7 +233,7 @@ def launchCyntenator(genome1, genome2, families,
     return alignmentAsLightGenome
 
 if __name__ == '__main__':
-    os.chdir('/home/jlucas/Libs/PhylDiag/data')
+    os.chdir('/home/' + getpass.getuser() + '/Libs/PhylDiag/data')
     genome1 = myLightGenomes.LightGenome('genesST.Homo.sapiens.list.bz2')
     genome2 = myLightGenomes.LightGenome('genesST.Mus.musculus.list.bz2')
     families = myLightGenomes.Families('ancGenes.Euarchontoglires.list.bz2')

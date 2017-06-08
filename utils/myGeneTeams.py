@@ -51,8 +51,9 @@ import myTools
 import myGenomes
 import myDiags
 import myMaths
+import getpass # https://stackoverflow.com/questions/842059/is-there-a-portable-way-to-get-the-current-username-in-python
 
-PATH_HOMOLOGYTEAMS_BIN = "/home/jlucas/Libs/homologyteams-1.1/src/homologyteams"
+PATH_HOMOLOGYTEAMS_BIN = '/home/' + getpass.getuser() + '/Libs/homologyteams-1.1/src/homologyteams"
 
 FilterType = myDiags.FilterType
 
