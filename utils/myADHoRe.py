@@ -16,7 +16,7 @@ import sys
 import myFile, myLightGenomes, myDiags
 
 # change this line for each local installation
-PATH_ADHORE_BIN = '/home/jlucas/Libs/i-adhore-3.0.01/build/src/i-adhore'
+PATH_ADHORE_BIN = "/home/jlucas/Libs/i-adhore-3.0.01/build/src/i-adhore"
 
 # [("out:Chromosomes",str,), ("withScaffolds",bool,False), ("minChromLength",int,1), ('removeSpeciesSpecificGenes',bool,True)]
 # genome1 = myLightGenomes.LightGenome(arguments["genome1"])
@@ -247,8 +247,8 @@ def launchADHoRe(genome1, genome2, families, gapMax=5, tandemGapMax=5, pThreshol
                                                                                        tandemGapMax=tandemGapMax,
                                                                                        minChromLength=1,
                                                                                        keepOriginal=True)
-    genes1Removed = set([g.n for (chr, chrom) in genome1.iteritems() for (gIdx, g) in enumerate(chrom) if gIdx not in tb2g1[chr].old])
-    genes2Removed = set([g.n for (chr, chrom) in genome2.iteritems() for (gIdx, g) in enumerate(chrom) if gIdx not in tb2g2[chr].old])
+    genes1Removed = set([g.n for (chr, chrom) in genome1.iteritems() for (gIdx, g) in enumerate(chrom) if ((chr not in tb2g1) or (gIdx not in tb2g1[chr].old))])
+    genes2Removed = set([g.n for (chr, chrom) in genome2.iteritems() for (gIdx, g) in enumerate(chrom) if ((chr not in tb2g2) or (gIdx not in tb2g2[chr].old))])
     # print >> sys.stderr, 'nb genes1 removed = %s' % len(genes1Removed)
     # print >> sys.stderr, 'nb nGL1 = %s' % nGL1
     # print >> sys.stderr, 'nb genes2 removed = %s' % len(genes2Removed)
