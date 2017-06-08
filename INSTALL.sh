@@ -5,6 +5,8 @@ iwd=$(pwd)
 
 # Install dependencies
 # we assume that apt-get is the package manager
+# enable the 'universe' deposit
+sudo add-apt-repository universe
 sudo apt-get update
 # core dependencies: python2.7 git cython
 sudo apt-get install python2.7 
@@ -13,9 +15,7 @@ sudo apt-get install cython
 # marginal dependencies: matplotlib scipy numpy
 # you may need to change the name of some package depending on your distribution
 sudo apt-get install python-numpy
-# Next packages needs to enable the deposit 'Universe' on debian/ubuntu
-# distributions
-sudo add-apt-repository universe
+# Next packages needs to enable the deposit 'Universe'
 sudo apt-get install python-matplotlib 
 sudo apt-get install python-scipy 
 
@@ -62,8 +62,7 @@ sudo apt-get install g++
 # marginal dependencies: libpng and zlib
 sudo apt-get install libpng-dev 
 sudo apt-get install zlib1g-dev
-# We need to enable the deposit 'Universe' to install the mpi package
-sudo add-apt-repository universe
+# We need to enable the deposit 'Universe' to install mpi
 sudo apt-get install mpi
 cmake ..
 make
