@@ -34,8 +34,9 @@ Installation:
 # Dependencies will be installed with the package manager "apt-get" of debian distributions
 # LibsDyogen and its plugged softwares will be installed into /home/${USER}/Libs
 # the sudo password is required for:
-# 1) the installation of dependencies 
-# 2) the addition of the LibsDyogen folder into the PYTHONPATH, editing the ~/.bashrc
+# 1) enabling the universe deposit 
+# 2) installation of dependencies with apt-get
+# 3) the addition of the LibsDyogen folder into the PYTHONPATH, editing the ~/.bashrc
 
 # Install curl, if you don't have it
 sudo apt-get update
