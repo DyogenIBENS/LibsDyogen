@@ -16,7 +16,7 @@ import sys
 import myFile, myLightGenomes, myDiags
 
 # change this line for each local installation
-PATH_CYNTENATOR_BIN = '/home/' + getpass.getuser() + '/Libs/cyntenator/cyntenator"
+PATH_CYNTENATOR_BIN = '/home/' + getpass.getuser() + '/Libs/cyntenator/cyntenator'
 
 # mismatch de 0 si on veut des segments conservés !
 # Cyntenator génère parfois des alignements du genre

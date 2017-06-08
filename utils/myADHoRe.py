@@ -17,7 +17,7 @@ import sys
 import myFile, myLightGenomes, myDiags
 
 # change this line for each local installation
-PATH_ADHORE_BIN = '/home/' + getpass.getuser() + '/Libs/i-adhore-3.0.01/build/src/i-adhore"
+PATH_ADHORE_BIN = '/home/' + getpass.getuser() + '/Libs/i-adhore-3.0.01/build/src/i-adhore'
 
 # [("out:Chromosomes",str,), ("withScaffolds",bool,False), ("minChromLength",int,1), ('removeSpeciesSpecificGenes',bool,True)]
 # genome1 = myLightGenomes.LightGenome(arguments["genome1"])
