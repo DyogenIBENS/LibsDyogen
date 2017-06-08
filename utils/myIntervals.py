@@ -253,8 +253,8 @@ def analyseGenomeIntoAdjacencies(genome, oriented=True, asA=set, fixOrderInAdj=F
 # sn = sensitivity
 # sp = specificity
 # for pickle, 'Efficiency' variable must have the same name as the class 'Efficiency'
-#Efficiency = collections.namedtuple('Efficiency', ('tp', 'tn', 'fp', 'fn', 'r', 'p', 'f1'))
-Efficiency = collections.namedtuple('Efficiency', ('tp', 'tn', 'fp', 'fn', 'sn', 'sp'))
+Efficiency = collections.namedtuple('Efficiency', ('tp', 'tn', 'fp', 'fn', 'r', 'p', 'f1'))
+#Efficiency = collections.namedtuple('Efficiency', ('tp', 'tn', 'fp', 'fn', 'sn', 'sp'))
 
 def computeEfficiency(setIdentified, setTrue):
     # True positive adjs

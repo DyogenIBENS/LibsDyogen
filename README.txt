@@ -125,6 +125,13 @@ About Licences:
 # Justify the use of snippets from stack overflow
 http://programmers.stackexchange.com/questions/12171/how-does-fair-use-apply-to-code-snippets
 
+##########
+# Update #
+##########
+# If you want to keep LibsDyogen up to date
+cd ${PATH_LIBSDYOGEN}
+git pull
+
 ##########################
 # Details about scripts/ #
 ##########################
