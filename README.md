@@ -3,20 +3,15 @@
 
 Collaborative python library used in the [DYOGEN team](http://www.ibens.ens.fr/?rubrique43&lang=fr) for studying the evolution of gene order in vertebrates.
 
-Contacts :
-* [Joseph Lucas](jlucas@ens.fr)
-* [Alexandra Louis](alouis@ens.fr)
-* [Hugues Roest Crollius](hrc@ens.fr)
-
 ## Installation
 The easiest way to install LibsDyogen is to execute the remote script INSTALL.sh hosted on github.
 This script will clone the github deposit itself.
 Dependencies will be installed with the package manager "apt-get" of debian distributions.
 LibsDyogen and its plugged softwares will be installed into /home/${USER}/Libs.
-The sudo password is required for
-* enabling the universe deposit
-* installation of dependencies with apt-get
-* the addition of the LibsDyogen folder into the PYTHONPATH, editing the ~/.bashrc
+The sudo password is required to
+* Enable the universe deposit
+* Instal dependencies with apt-get
+* Add the LibsDyogen folder into the PYTHONPATH, editing the ~/.bashrc
 
 Install *curl*, if you don't have it
 ```
@@ -221,27 +216,18 @@ often.
 This will upgrade your local git deposit to the last commit.
 
 If you want a more stable version, after `git pull`, you can downgrade to the latest tagged version (=stable release), just execute
-```bash
-# Get tags from the github deposit
-git fetch --tags
-# Get the latest tag name
-latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
-# Checkout the latest tag
-git checkout $latestTag
-```
 
-Otherwise you can list all tagged versions
-```
-git tag -l
-```
-And switch to the version you want
-```
-git checkout <tagName>
-```
+1. Get tags from the github deposit: `git fetch --tags`
+2. Get the latest tag name ``latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)``
+3. Checkout the latest tag: `git checkout $latestTag`
+
+Otherwise you can
+1. List all tagged versions: `git tag -l`
+2. Checkout the version you want: `git checkout <tagName>`
 
 ## Contributing
 If you want to contribute to this deposit please
-1. Fork it!
+1. Fork it
 2. Create your feature branch: `git checkout -b my-new-feature`
 3. Commit your changes: `git commit -am 'Add some feature'`
 4. Push to the branch: `git push origin my-new-feature`
@@ -261,3 +247,9 @@ and the CeCILL licence version 2 of the CNRS. These licences are contained in th
 * LICENCE-CeCILL.txt (or http://www.cecill.info/licences/Licence_CeCILL_V2-en.html)
 Copyright for this code is held jointly by the Dyogen (DYnamic and Organisation of GENomes) team
 of the Institut de Biologie de l'Ecole Normale Supérieure (IBENS) 46 rue d'Ulm Paris, and the individual authors.
+
+## Contacts
+
+* [Joseph Lucas](jlucas@ens.fr)
+* [Alexandra Louis](alouis@ens.fr)
+* [Hugues Roest Crollius](hrc@ens.fr)
