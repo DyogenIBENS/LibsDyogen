@@ -920,6 +920,14 @@ def keyNaturalSort(chrName):
     res = [atoi(c) for c in re.split('([0-9]+)', str(chrName))]
     return res
 
+# simple enum class
+# https://stackoverflow.com/questions/36932/how-can-i-represent-an-enum-in-python
+class Enum(set):
+    def __getattr__(self, name):
+        if name in self:
+            return name
+        raise AttributeError
+
 # http://stackoverflow.com/questions/14380371/export-a-latex-table-from-pandas-dataframe
 # for exemple tableIntoLatex(np.random.random((5, 5)))
 # in latex insert \usepackage{booktabs} in the imports

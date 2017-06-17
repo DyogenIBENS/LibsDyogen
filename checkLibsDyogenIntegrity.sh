@@ -18,7 +18,7 @@ preProcessCommandLines=(
 # convet a .nwk tree into a phylTree
 "scripts/newickSpeciesTree2phylTreeSpeciesTree.py test/data/speciesTree.nwk > test/res/speciesTree.phylTree"
 # extract ancGenes (family)  from the species tree and the forest of gene trees
-"scripts/ancGenesFromGeneTrees.py test/res/speciesTree.phylTree test/res/geneTrees.protTree -out:ancGenes=test/res/ancGenes.example.%s.list.bz2 > test/res/geneTrees.afterExtractingAncGenes.protTree"
+"scripts/familiesFromGeneTrees.py test/res/speciesTree.phylTree test/res/geneTrees.protTree -out:ancGenes=test/res/%s.families.bz2 > test/res/geneTreesAfterExtractingAncGenes.protTree"
 )
 for line in "${preProcessCommandLines[@]}"
 	do

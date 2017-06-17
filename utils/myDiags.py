@@ -64,25 +64,26 @@ import myLightGenomes
 import time
 import multiprocessing.dummy as multiprocessing  # for using threads
 import multiprocessing  # for using processes
-import enum
+#import enum
 
 if sys.platform != 'win32':
     import extractDiags
 
 from utils.myLightGenomes import OGene
 
-FilterType = enum.Enum('InFamilies', 'InBothGenomes', 'None')
+FilterType = myTools.Enum(['InBothGenomes', 'None', 'InFamilies'])
+DistanceMetric = myTools.Enum(['CD', 'MD', 'DPD', 'ED'])
 
 defaultArgsPhylDiag = \
     [("filterType", str, 'InBothGenomes'),
      ("tandemGapMax", int, 10),
      ("gapMax", str, 5),
      ("distinguishMonoGenicDiags", bool, True),
-     ('distanceMetric', str, 'CD'),
+     ('distanceMetric', str, DistanceMetric.CD),
      ('pThreshold', str, 'None'),
-     ('gapMaxMicroInv', str, '1'),
-     ('identifyMonoGenicInvs', bool, True),
-     ('identifyMicroRearrangements', bool, True),
+     ('gapMax_Diag_Sbs', str, '1'),
+     ('identifyMonoGenicCs', bool, True),
+     ('identifyMicroRearr', bool, True),
      ('truncationMax', str, 10),
      ("minChromLength", int, 2),
      ("sameStrand", bool, True),
@@ -90,7 +91,7 @@ defaultArgsPhylDiag = \
      ('validateImpossToCalc_mThreshold', int, 3),
      # The multiprocess does not seem to work well for most of the data. It work well only for some data
      # with ~ 800 contigs
-     ('optimisation', str, 'cython'),
+     ('optimisation', str, 'None'),
      ('verbose', bool, False)]
 
 defaultKwargsPhylDiagDict = dict((n, (t, v)) for (n, t, v) in defaultArgsPhylDiag)
@@ -101,7 +102,7 @@ def defaultKwargsPhylDiag(arguments=None):
         return res
     else:
         res.update(dict((k, v) for (k, v) in arguments.iteritems() if k in defaultKwargsPhylDiagDict.keys()))
-        for (argN, tpe) in [('gapMax', int), ('truncationMax', int), ('gapMaxMicroInv', int), ('pThreshold', float), ('optimisation', str)]:
+        for (argN, tpe) in [('gapMax', int), ('truncationMax', int), ('gapMax_Diag_Sbs', int), ('pThreshold', float), ('optimisation', str)]:
             if arguments[argN] == 'None':
                 res[argN] = None
             else:
@@ -109,7 +110,7 @@ def defaultKwargsPhylDiag(arguments=None):
                     res[argN] = tpe(arguments[argN])
                 except:
                     raise TypeError('%s should be either an int or None, not %s, a %s' % (argN, arguments[argN], type(arguments[argN])))
-        res['filterType'] = FilterType[list(FilterType._keys).index(arguments["filterType"])]
+        res['filterType'] = FilterType.__getattr__(arguments["filterType"])
     return res
 
 # TODO, write a diagonal class that is made for tbs containing genes
@@ -486,22 +487,22 @@ class queueWithBackup:
 ########################################################################################
 # TODO : optimize the search of diags by avoiding considering diags that are on the left of diagA
 @myTools.verbose
-def mergeDiags(listOfDiags, gapMax, gc2, distanceMetric = 'CD', verbose = False):
+def mergeDiags(listOfDiags, gapMax, gc2, distanceMetric = DistanceMetric.CD, verbose = False):
     assert gapMax>=0
     # assert that the diag elements in listOfDiags are either Diagonal objects or SyntenyBlock objects
     assert all(diag.__class__.__name__ == 'Diagonal' for diag in listOfDiags) or\
         all(diag.__class__.__name__ == 'SyntenyBlock' for diag in listOfDiags), listOfDiags[0]
 
-    if distanceMetric == 'DPD':
+    if distanceMetric == DistanceMetric.DPD:
         print >> sys.stderr, "Use Diagonal Pseudo Distance to merge diagonals with a gap up to %s elements" % gapMax
         distance = framed(DPD)
-    elif distanceMetric == 'CD':
+    elif distanceMetric == DistanceMetric.CD:
         print >> sys.stderr, "Use Chebyshev Distance to merge diagonals with a gap up to %s elements" % gapMax
         distance = framed(CD)
-    elif distanceMetric == 'MD':
+    elif distanceMetric == DistanceMetric.MD:
         print >> sys.stderr, "Use Manhattan Distance to merge diagonals with a gap up to %s elements" % gapMax
         distance = framed(MD)
-    elif distanceMetric == 'ED':
+    elif distanceMetric == DistanceMetric.ED:
         print >> sys.stderr, "Use Euclidean Distance to merge diagonals with a gap up to %s elements" % gapMax
         distance = framed(ED)
     else:
@@ -607,7 +608,7 @@ def mergeDiags(listOfDiags, gapMax, gc2, distanceMetric = 'CD', verbose = False)
                 #fusionableDiags = sorted(fusionableDiags, key=scoreNonDiagonality, reverse=True)
 
                 #sort by proximity to the diagonal line
-                #elif distanceMetric == 'MD': # Doesn't change the result
+                #elif distanceMetric == DistanceMetric.MD: # Doesn't change the result
                 #       #sort by proximity on chromosome 1
                 #       fusionableDiags = sorted(fusionableDiags, key=lambda x:x[4][0]-diagA[5][0])
 
@@ -1797,7 +1798,7 @@ def splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb)):
 # Split a sb as soon as one of its gap contains another sb
 # the other sb may be a micro-inversion or a transposition-like sb
 # FIXME : it seems that breakpoints in gaps due to mono-genic conserved segments are not identified
-def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=False):
+def fIdentifyMicroRearrFromSbs(sbsInPairComp, removeSingleHpSbs=False):
     # Find sbs that are nested within gaps of other sbs
     #   * nested inversions (micro-inversions, nested segments and inverted
     #     diagonalType).
@@ -1911,8 +1912,9 @@ def fIdentifyBreakpointsWithinGaps(sbsInPairComp, removeSingleHpSbs=False):
 
 # TODO: split this function in two modules:
 # 1) IdentifyMicroInversions nested in sbs gaps
-def fIdentifyMonoGcSsAndIdentifyMonoGinvsNestedInSbsGaps(sbsInPairComp, putativeMicroInversionsInPairComp,
-                                            gapMaxMicroInv=0, identifyMonogInvs=True):
+# former name : fIdentifyMonoGcSsAndIdentifyMonoGinvsNestedInSbsGaps
+def fIdentifyCsFromDiagsNestedInSbsGaps(sbsInPairComp, putativeMicroInversionsInPairComp,
+                                        gapMaxMicroInv=0, identifyMonogInvs=True):
     # 1) Give unique id to each sb and diag
     idsSbs = set()
     idsPutativeMicroInversions = set()
@@ -1939,7 +1941,7 @@ def fIdentifyMonoGcSsAndIdentifyMonoGinvsNestedInSbsGaps(sbsInPairComp, putative
     (N1, O1, I1) = findOverlapsOnGenome(1, sbsAndDiagsInPairCompWithIds, sbsG1, truncationMax=0)
     (N2, O2, I2) = findOverlapsOnGenome(2, sbsAndDiagsInPairCompWithIds, sbsG2, truncationMax=0)
 
-    # 3) identify micro-inversions nested in sbs gaps
+    # 3) identify micro-inversions (possibly mono-genic) nested in sbs gaps
     todo = set()
     id2splitRanks = collections.defaultdict(list)
     idsIdentifiedMicroInv = set()
@@ -1961,7 +1963,7 @@ def fIdentifyMonoGcSsAndIdentifyMonoGinvsNestedInSbsGaps(sbsInPairComp, putative
                                 continue
                         (splitRanks_a, splitRanks_b) = splitNestedSbs(((c1a, c2a), sba), ((c1b, c2b), sbb))
                         if len(splitRanks_a[1:-1]) == 1 and len(splitRanks_b[1:-1]) == 0:
-                            # if sbb is nested in a gap of sba, with a gapMaxMicroInv
+                            # if sbb is nested in a gap of sba, with a gapMax_Diag_Sbs
                             sbb_l = min(sbb.l1)
                             sbb_r = max(sbb.l1)
                             sbb_b = min(sbb.l2)
@@ -1977,7 +1979,7 @@ def fIdentifyMonoGcSsAndIdentifyMonoGinvsNestedInSbsGaps(sbsInPairComp, putative
                             distance = max(distance1, distance2)
                             gap = distance - 1
                             assert gap >= 0, gap
-                            # FIXME, gapMaxMicroInv=0 yields the same result as gapMaxMicroInv=None or -1 ...
+                            # FIXME, gapMax_Diag_Sbs=0 yields the same result as gapMax_Diag_Sbs=None or -1 ...
                             if gap <= gapMaxMicroInv:
                                 # its a micro-inversion perfectly nested
                                 # a is splited in one point
@@ -2031,8 +2033,8 @@ def fIdentifyMonoGcSsAndIdentifyMonoGinvsNestedInSbsGaps(sbsInPairComp, putative
 
     return (new_sbsInPairComp, diagsThatAreNotSbsInPairComp)
 
-def fIdentifyInversionsAtSbsExtremities(sbsInPairComp, putativeMicroInversionsInPairComp,
-                                        gapMaxMicroInv=0, identifyMonogInvs=True, hyperSensitive=False):
+def fIdentifyCsFromDiagsAtSbsExtremities(sbsInPairComp, putativeMicroInversionsInPairComp,
+                                         gapMaxMicroInv=0, identifyMonogInvs=True, hyperSensitive=False):
     # 1) Give unique id to each sb and diag
     idsSbs = myTools.Dict2d(set)
     idsOfPutativeMicroInversions = set()
@@ -2067,7 +2069,7 @@ def fIdentifyInversionsAtSbsExtremities(sbsInPairComp, putativeMicroInversionsIn
                 if hyperSensitive:
                     if sba.dt == '/' and sbb.dt == '\\' or sba.dt == '\\' and sbb.dt == '/' or sbb.dt == None:
                         if 1 <= distanceBetweenBoundingBoxesOfDiags(sbb, sba, distance=minimumOfDistancesIn1DGenomes) <= gapMaxMicroInv + 1:
-                            # if the distance from one infinite line around the bounding box is less than gapMaxMicroInv
+                            # if the distance from one infinite line around the bounding box is less than gapMax_Diag_Sbs
                             if len(sbb.la) == 1:
                                 if not identifyMonogInvs:
                                     continue
@@ -2076,7 +2078,7 @@ def fIdentifyInversionsAtSbsExtremities(sbsInPairComp, putativeMicroInversionsIn
                 # The next commented functioning is less sensible but more specific
                     if sba.dt == '/' and sbb.dt == '\\' or sba.dt == '\\' and sbb.dt == '/':
                         if 1 <= distanceBetweenBoundingBoxesOfDiags(sbb, sba, distance=CD) <= gapMaxMicroInv + 1:
-                            # if the distance from one corner is less than gapMaxMicroInv
+                            # if the distance from one corner is less than gapMax_Diag_Sbs
                             if len(sbb.la) == 1:
                                 if not identifyMonogInvs:
                                     continue
@@ -2133,7 +2135,7 @@ def doDistinguishMonoGenicDiags(diagsInPairComp):
     return (diagsInPairComp, monogenicDiagsInPairComp)
 
 @myTools.verbose
-def doIdentifyMicroInversions(sbsInPairComp, putativeMicroInvsInPairComp, gapMaxMicroInv, identifyMonogInvs, verbose=False):
+def IdentifyCsFromDiagsAroundSbs(sbsInPairComp, putativeMicroInvsInPairComp, gapMaxMicroInv, identifyMonogCs, verbose=False):
     # WARNING: the identification of "monogenic micro-inversion" may in fact hide a tandem duplication with a revert
     # orientation followed by the deletion of the initial gene.
     # Example:
@@ -2141,15 +2143,15 @@ def doIdentifyMicroInversions(sbsInPairComp, putativeMicroInvsInPairComp, gapMax
     # 2) tandem duplication: +A+B-B+C
     # 3) gene deletion: A-B+C
     # This looks like an inversion but it is not an inversion.
-    if identifyMonogInvs:
+    if identifyMonogCs:
         print >> sys.stderr, 'WARNING: returned mono-genic micro-inversions may be a hidden tandem duplication, with a ' \
                              'revert orientation, followed by the deletion of the initial gene.'
 
     print >> sys.stderr, "Nb sbs before identifying micro inversions within sbs gaps = %s" % len(sbsInPairComp.items2d())
-    (sbsInPairComp, diagsNotSbsInPairComp) = fIdentifyMonoGcSsAndIdentifyMonoGinvsNestedInSbsGaps(sbsInPairComp,
-                                                                                     putativeMicroInvsInPairComp,
-                                                                                     gapMaxMicroInv=gapMaxMicroInv,
-                                                                                     identifyMonogInvs=identifyMonogInvs)
+    (sbsInPairComp, diagsNotSbsInPairComp) = fIdentifyCsFromDiagsNestedInSbsGaps(sbsInPairComp,
+                                                                                 putativeMicroInvsInPairComp,
+                                                                                 gapMaxMicroInv=gapMaxMicroInv,
+                                                                                 identifyMonogInvs=identifyMonogCs)
     print >> sys.stderr, "Nb sbs after identifying micro inversions within sbs gaps = %s" % len(sbsInPairComp.items2d())
     print >> sys.stderr, "Nb sbs before identifying micro inversions at sbs extremities = %s" % len(sbsInPairComp.items2d())
 
@@ -2159,18 +2161,18 @@ def doIdentifyMicroInversions(sbsInPairComp, putativeMicroInvsInPairComp, gapMax
     # example:
     # G1: ABCDE-K-ZYX----123
     # G2: K-321------ABCDE-ZYK
-    (sbsInPairComp, diagsNotSbsInPairComp) = fIdentifyInversionsAtSbsExtremities(sbsInPairComp,
-                                                                                 diagsNotSbsInPairComp,
-                                                                                 gapMaxMicroInv=gapMaxMicroInv,
-                                                                                 identifyMonogInvs=identifyMonogInvs)
+    (sbsInPairComp, diagsNotSbsInPairComp) = fIdentifyCsFromDiagsAtSbsExtremities(sbsInPairComp,
+                                                                                  diagsNotSbsInPairComp,
+                                                                                  gapMaxMicroInv=gapMaxMicroInv,
+                                                                                  identifyMonogInvs=identifyMonogCs)
     print >> sys.stderr, "Nb sbs after identifying micro inversions at sbs extremities = %s" % len(sbsInPairComp.items2d())
     return (sbsInPairComp, diagsNotSbsInPairComp)
 
-def loopIdentifyBreakpointsWithinGaps(sbsInPairComp):
+def loopIdentifyMicroRearrFromSbs(sbsInPairComp):
     # Do this task until no more change (stability!)
     while True:
         nbSbsOld = len(sbsInPairComp.items2d())
-        sbsInPairComp = fIdentifyBreakpointsWithinGaps(sbsInPairComp)
+        sbsInPairComp = fIdentifyMicroRearrFromSbs(sbsInPairComp)
         nbSbsNew = len(sbsInPairComp.items2d())
         assert nbSbsNew >= nbSbsOld
         if nbSbsNew == nbSbsOld:
@@ -2185,8 +2187,8 @@ def doMergeAllDiags(diagsInPairComp, gapMax, g2_tb, distanceMetric):
     return diagsInPairComp
 
 def loop_Imi_Ibwg_Om_Mnosbs(sbsInPairComp, diagsInPairCompRejected,
-                            gapMaxMicroInv, identifyMonoGenicInvs, distinguishMonoGenicDiags,
-                            identifyMicroRearrangements, truncationMax, gapMax,
+                            gapMax_Diag_Sbs, identifyMonoGenicCs, distinguishMonoGenicDiags,
+                            identifyMicroRearr, truncationMax, gapMax,
                             g2_tb, distanceMetric,
                             monogenicDiagsInPairComp=None,
                             loopIterMax=4, mergeAfterSolveOverlaps=True):
@@ -2208,13 +2210,13 @@ def loop_Imi_Ibwg_Om_Mnosbs(sbsInPairComp, diagsInPairCompRejected,
     cptLoopIter = 0
     while cptLoopIter <= loopIterMax:
         if cptLoopIter  == loopIterMax:
-            print >> sys.stderr, "identifyMonoGSbAndMicroInvs|identifyMicroRearrangements|nonOverlappingSbs|mergeNonOverlappingSbs was repeated %s times" % (cptLoopIter - 1)
+            print >> sys.stderr, "identifyMonoGSbAndMicroInvs|identifyMicroRearr|nonOverlappingSbs|mergeNonOverlappingSbs was repeated %s times" % (cptLoopIter - 1)
 
         # identify micro-inversions
         # TODO: Put that into the loop
-        if gapMaxMicroInv is not None:
+        if gapMax_Diag_Sbs is not None:
             if cptLoopIter == 0:
-                if identifyMonoGenicInvs and distinguishMonoGenicDiags:
+                if identifyMonoGenicCs and distinguishMonoGenicDiags:
                     assert monogenicDiagsInPairComp is not None
                     putativeMicroInversionsInPairComp = diagsInPairCompRejected + monogenicDiagsInPairComp
                     typeOfMicroInv = ''
@@ -2225,14 +2227,14 @@ def loop_Imi_Ibwg_Om_Mnosbs(sbsInPairComp, diagsInPairCompRejected,
             else:
                 putativeMicroInversionsInPairComp = diagsNotSbsInPairComp
             if isfirstOrLastIter(cptLoopIter): print >> sys.stderr, "Nb sbs before identifying%s micro-inversions = %s" % (typeOfMicroInv, len(sbsInPairComp.items2d()))
-            (sbsInPairComp, diagsNotSbsInPairComp) = doIdentifyMicroInversions(sbsInPairComp, putativeMicroInversionsInPairComp, gapMaxMicroInv, identifyMonoGenicInvs, verbose=False)
-            # remark, doIdentifyMicroInversions may yield mono-genic sbs even if identifyMonoGenicInvs because of the identifyMicroRearrangements that may split a sb in two sub-sbs with one of them of one gene.
+            (sbsInPairComp, diagsNotSbsInPairComp) = IdentifyCsFromDiagsAroundSbs(sbsInPairComp, putativeMicroInversionsInPairComp, gapMax_Diag_Sbs, identifyMonoGenicCs, verbose=False)
+            # remark, IdentifyCsFromDiagsAroundSbs may yield mono-genic sbs even if identifyMonoGenicCs because of the identifyMicroRearr that may split a sb in two sub-sbs with one of them of one gene.
             if isfirstOrLastIter(cptLoopIter): print >> sys.stderr, "Nb sbs after identifying%s micro-inversions = %s" % (typeOfMicroInv, len(sbsInPairComp.items2d()))
 
         # identify breakpoints within gaps
-        if identifyMicroRearrangements:
+        if identifyMicroRearr:
             if isfirstOrLastIter(cptLoopIter): print >> sys.stderr, "Nb sbs before identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
-            sbsInPairComp = loopIdentifyBreakpointsWithinGaps(sbsInPairComp)
+            sbsInPairComp = loopIdentifyMicroRearrFromSbs(sbsInPairComp)
             if isfirstOrLastIter(cptLoopIter): print >> sys.stderr, "Nb sbs after identifying breakpoints within gaps = %s" % len(sbsInPairComp.items2d())
 
         # solve overlaps (truncation and removal) + merge non-overlapping sbs
@@ -2253,14 +2255,14 @@ def loop_Imi_Ibwg_Om_Mnosbs(sbsInPairComp, diagsInPairCompRejected,
 
     if cptLoopIter > 1 and cptLoopIter < loopIterMax:
         # the first merge non-overlapping sbs was useful, thus other iterations of
-        # identifyMicroRearrangements|nonOverlappingSbs|mergeNonOverlappingSbs were performed.
-        print >> sys.stderr, "identifyMonoGSbAndMicroInvs|identifyMicroRearrangements|nonOverlappingSbs|mergeNonOverlappingSbs was repeated %s times" % (cptLoopIter - 1)
+        # identifyMicroRearr|nonOverlappingSbs|mergeNonOverlappingSbs were performed.
+        print >> sys.stderr, "identifyMonoGSbAndMicroInvs|identifyMicroRearr|nonOverlappingSbs|mergeNonOverlappingSbs was repeated %s times" % (cptLoopIter - 1)
 
     return sbsInPairComp
 
 def postProcessDiags(diagsInPairComp, distinguishMonoGenicDiags,
-                     pThreshold,  g1_tb, g2_tb, N12s, p_hpSign, validateImpossToCalc_mThreshold,
-                     identifyMonoGenicInvs, gapMaxMicroInv, identifyMicroRearrangements, truncationMax,
+                     pThreshold, g1_tb, g2_tb, N12s, p_hpSign, validateImpossToCalc_mThreshold,
+                     identifyMonoGenicCs, gapMax_Diag_Sbs, identifyMicroRearr, truncationMax,
                      gapMax, distanceMetric):
 
     # distinguish mono-genic diagonals
@@ -2292,14 +2294,14 @@ def postProcessDiags(diagsInPairComp, distinguishMonoGenicDiags,
         print >> sys.stderr, "Nb%s diags%s validated as sbs = %s" % (typeOfDiags, ' stat' if pThreshold else '', len(sbsInPairCompStatVal.items2d()))
     sbsInPairComp = sbsInPairCompStatVal
 
-    assert not (identifyMonoGenicInvs and not distinguishMonoGenicDiags), "if 'identifyMonoGenicInvs' is set to True, 'distinguishMonoGenicDiags' should also be set to True"
+    assert not (identifyMonoGenicCs and not distinguishMonoGenicDiags), "if 'identifyMonoGenicCs' is set to True, 'distinguishMonoGenicDiags' should also be set to True"
 
     totalNbOfHps = sum([len(sb.la) for (_, sb) in sbsInPairComp.iteritems2d()])
 
     # TODO: identify micro-inversions in the loop (especially identify mono-genic sbs)
     sbsInPairComp = loop_Imi_Ibwg_Om_Mnosbs(sbsInPairComp, diagsInPairCompRejected,
-                                            gapMaxMicroInv, identifyMonoGenicInvs, distinguishMonoGenicDiags,
-                                            identifyMicroRearrangements, truncationMax, gapMax,
+                                            gapMax_Diag_Sbs, identifyMonoGenicCs, distinguishMonoGenicDiags,
+                                            identifyMicroRearr, truncationMax, gapMax,
                                             g2_tb, distanceMetric,
                                             monogenicDiagsInPairComp=monogenicDiagsInPairComp,
                                             loopIterMax=4, mergeAfterSolveOverlaps=True)
@@ -2310,12 +2312,12 @@ def postProcessDiags(diagsInPairComp, distinguishMonoGenicDiags,
 
 def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
                                      gapMax=None,
-                                     distanceMetric='CD',
+                                     distanceMetric=DistanceMetric.CD,
                                      distinguishMonoGenicDiags=True,
                                      pThreshold=None,
-                                     gapMaxMicroInv=0,
-                                     identifyMonoGenicInvs=False,
-                                     identifyMicroRearrangements=True,
+                                     gapMax_Diag_Sbs=0,
+                                     identifyMonoGenicCs=False,
+                                     identifyMicroRearr=True,
                                      truncationMax=None,
                                      sameStrand=True,
                                      nbHpsRecommendedGap=2,
@@ -2403,8 +2405,8 @@ def extractSbsInPairCompGenomesInTbs(g1_tb, g2_tb,
     print >> sys.stderr, "Nb diags after merging diags = %s" % len(diagsInPairComp.items2d())
 
     (sbsInPairComp, diagsInPairComp) = postProcessDiags(diagsInPairComp, distinguishMonoGenicDiags,
-                                                        pThreshold,  g1_tb, g2_tb, N12s, p_hpSign, validateImpossToCalc_mThreshold,
-                                                        identifyMonoGenicInvs, gapMaxMicroInv, identifyMicroRearrangements, truncationMax,
+                                                        pThreshold, g1_tb, g2_tb, N12s, p_hpSign, validateImpossToCalc_mThreshold,
+                                                        identifyMonoGenicCs, gapMax_Diag_Sbs, identifyMicroRearr, truncationMax,
                                                         gapMax, distanceMetric)
     return sbsInPairComp
 
@@ -2444,7 +2446,7 @@ def editGenomes(g1, g2, families,
     #mfilt2origin1 -> mGf2Go1
     # no need to keep the original genomes at this intermediary step, the original genomes are g1 and g2
     ((g1_fID, mGf2Go1, (nCL1, nGL1)), (g2_fID, mGf2Go2, (nCL2, nGL2))) =\
-        filter2D(g1_fID, g2_fID, filterType, minChromLength, keepOriginal=False)
+        filter2D(g1_fID, g2_fID, filterType, minChromLength, keepOriginal=keepOriginal)
     print >> sys.stderr, "genome1 after filterType=%s and minChromLength=%s contains %s genes" %\
         (filterType, minChromLength, sum([len(g1_fID[c1]) for c1 in g1_fID]))
     print >> sys.stderr, "genome2 after filterType=%s and minChromLength=%s contains %s genes" %\
@@ -2509,26 +2511,30 @@ def editGenomes(g1, g2, families,
 @myTools.tictac
 @myTools.verbose
 def extractSbsInPairCompGenomes(g1, g2, families,
+                                minChromLength=2,
                                 filterType=FilterType.InBothGenomes,
                                 tandemGapMax=0,
                                 gapMax=None,
-                                distanceMetric='CD',
+                                distanceMetric=DistanceMetric.CD,
                                 distinguishMonoGenicDiags=True,
                                 pThreshold=None,
-                                gapMaxMicroInv=0,
-                                identifyMonoGenicInvs=True,
-                                identifyMicroRearrangements=True,
+                                gapMax_Diag_Sbs=0,
+                                identifyMonoGenicCs=True,
+                                identifyMicroRearr=True,
                                 truncationMax=None,
                                 sameStrand=True,
-                                minChromLength=2,
                                 nbHpsRecommendedGap=2,
                                 targetProbaRecommendedGap=0.01,
                                 validateImpossToCalc_mThreshold=3,
                                 optimisation=None,
                                 verbose=False):
-    isinstance(g1, myLightGenomes.LightGenome)
-    isinstance(g2, myLightGenomes.LightGenome)
-    isinstance(families, myLightGenomes.Families)
+    # # DEBUG, show the values of the arguments
+    # import inspect
+    # frame = inspect.currentframe()
+    # args, _, _, values = inspect.getargvalues(frame)
+    # for i in args:
+    #     if i not in {'g1', 'g2', 'families'}:
+    #         print >> sys.stderr, "    %s = %s" % (i, values[i])
 
     if isinstance(g1, myGenomes.Genome) and isinstance(g2, myGenomes.Genome):
         g1 = g1.intoDict()
@@ -2550,9 +2556,9 @@ def extractSbsInPairCompGenomes(g1, g2, families,
                                                      distanceMetric=distanceMetric,
                                                      distinguishMonoGenicDiags=distinguishMonoGenicDiags,
                                                      pThreshold=pThreshold,
-                                                     identifyMonoGenicInvs=identifyMonoGenicInvs,
-                                                     gapMaxMicroInv=gapMaxMicroInv,
-                                                     identifyMicroRearrangements=identifyMicroRearrangements,
+                                                     identifyMonoGenicCs=identifyMonoGenicCs,
+                                                     gapMax_Diag_Sbs=gapMax_Diag_Sbs,
+                                                     identifyMicroRearr=identifyMicroRearr,
                                                      truncationMax=truncationMax,
                                                      sameStrand=sameStrand,
                                                      nbHpsRecommendedGap=nbHpsRecommendedGap,

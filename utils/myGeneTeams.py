@@ -55,8 +55,6 @@ import getpass # https://stackoverflow.com/questions/842059/is-there-a-portable-
 
 PATH_HOMOLOGYTEAMS_BIN = '/home/' + getpass.getuser() + '/Libs/homologyteams-1.1/src/homologyteams'
 
-FilterType = myDiags.FilterType
-
 #
 # Extract gene teams in a pairwise comparison of two chromosomes
 #################################################################
@@ -143,7 +141,7 @@ def extractGtsInPairCompChr(c1, c2, gc1, gc2, gapMax=0, verbose=False):
 def extractGtsInPairCompGenomes(g1, g2, families,
                                 tandemGapMax=0,
                                 gapMax=None,
-                                filterType=FilterType.None,
+                                filterType=myDiags.FilterType.None,
                                 minChromLength=0,
                                 verbose=True):
     if isinstance(g1, myGenomes.Genome) and isinstance(g2, myGenomes.Genome):

@@ -25,8 +25,6 @@ HomologyGroupRange = range(3, 44+1)
 # see the css joint file "NoHomologyInWindow" ranges from 0 to 14 (included)
 NoHomologyInWindowRange = range(3, 14+1)
 
-FilterType = myDiags.FilterType
-
 # parse the user input (text) for the chromosome range and asses if this query is consistent with the genome data
 # g2gtb is a dictionnary to convert indices from gene coordinates into tb coordinates
 def parseChrRange(text, genome, g2gtb=None):
@@ -816,7 +814,7 @@ def svgItemsMatrixFromRawData(range1, range2,
 
 def drawWholeGenomeHomologyMatrices(genome1, genome2, families,
                                     inSbsInPairComp=None,
-                                    filterType=FilterType.InBothGenomes,
+                                    filterType=myDiags.FilterType.InBothGenomes,
                                     minChromLength=0,
                                     tandemGapMax=0,
                                     scaleFactorRectangles=4.0,
@@ -848,8 +846,8 @@ def writeSVGFileForPairwiseCompOfGenomes(genomeName1,
                                          tandemGapMax,
                                          gapMax,
                                          distanceMetric,
-                                         gapMaxMicroInv,
-                                         identifyMicroRearrangements,
+                                         gapMax_Diag_Sbs,
+                                         identifyMicroRearr,
                                          truncationMax,
                                          nbSbs,
                                          outImageFileName,
@@ -884,8 +882,8 @@ def writeSVGFileForPairwiseCompOfGenomes(genomeName1,
          tandemGapMax,
          gapMax,
          distanceMetric,
-         gapMaxMicroInv,
-         identifyMicroRearrangements,
+         gapMax_Diag_Sbs,
+         identifyMicroRearr,
          truncationMax,
          nbSbs)
     var += ['<svg x="5" y="0" viewBox="5 0 95 5" width="95" height="5">\n',
@@ -1045,7 +1043,7 @@ def writeSVGFileForPairwiseCompOfChrs(genomeName1, chr1, range1,
 
 def prepareWholeGenomeHomologyMatrices(genome1, genome2, families,
                                        inSbsInPairComp=None,
-                                       filterType=FilterType.InBothGenomes,
+                                       filterType=myDiags.FilterType.InBothGenomes,
                                        minChromLength=0,
                                        tandemGapMax=0,
                                        outputFileName=None,
@@ -1409,7 +1407,7 @@ def editSbsInROIWithGenomesInGenes(inSbsInPairComp,
                                    genome1WithOnlyOneChr1, genome2WithOnlyOneChr2,
                                    chr1, chr2,
                                    range1, range2,
-                                   considerAllPairComps):
+                                   onlyROIcomp):
     assert inSbsInPairComp is not None
     assert isinstance(genome1WithOnlyOneChr1, myLightGenomes.LightGenome)
     assert isinstance(genome2WithOnlyOneChr2, myLightGenomes.LightGenome)
@@ -1425,7 +1423,7 @@ def editSbsInROIWithGenomesInGenes(inSbsInPairComp,
             sbsInPairComp.addToLocation((c1, c2), sb)
 
     assert isinstance(sbsInPairComp, myTools.OrderedDict2dOfLists)
-    if not considerAllPairComps:
+    if onlyROIcomp:
         # need to change the indexes of diags!
         for (_, sb) in sbsInPairComp.iteritems2d():
             sb.l1 = [[range1[0] + i1 for i1 in tb1] for tb1 in sb.l1]
@@ -1460,7 +1458,7 @@ def editSbsInROIWithGenomesInTbs(sbsInPairComp,
                                  g1_tb, g2_tb,
                                  chr1, chr2,
                                  range1, range2,
-                                 considerAllPairComps,
+                                 onlyROIcomp,
                                  g2tb1, g2tb2):
     assert isinstance(g1_tb, myLightGenomes.LightGenome)
     assert isinstance(g2_tb, myLightGenomes.LightGenome)
@@ -1487,7 +1485,7 @@ def editSbsInROIWithGenomesInTbs(sbsInPairComp,
                 assert isinstance(sb.l1[0], int)
 
         # need to change the indexes of diags!
-        if not considerAllPairComps:
+        if onlyROIcomp:
             xoffset = range1[0]
             yoffset = range2[0]
         else:
@@ -1495,6 +1493,7 @@ def editSbsInROIWithGenomesInTbs(sbsInPairComp,
             yoffset = 0
         if len(sb.l1) > 0:
                 assert isinstance(sb.l1[0], int)
+
         sb.l1 = [[xoffset + i1] for i1 in sb.l1]
         sb.l2 = [[yoffset + i2] for i2 in sb.l2]
 
@@ -1556,26 +1555,24 @@ def reduceFamiliesToFamiliesInFilteredChroms(chrom1, chrom2, families, filterTyp
 
 def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                          convertGenicToTbCoordinates=False,
-                         filterType=FilterType.InBothGenomes,
+                         filterType=myDiags.FilterType.InBothGenomes,
                          minChromLength = 2,
                          tandemGapMax=0,
                          distanceMetric='CD',
                          gapMax=None,
                          distinguishMonoGenicDiags=True,
                          pThreshold=None,
-                         gapMaxMicroInv=0,
-                         identifyMonoGenicInvs=False,
-                         identifyMicroRearrangements=True,
+                         gapMax_Diag_Sbs=0,
+                         identifyMonoGenicCs=False,
+                         identifyMicroRearr=True,
                          truncationMax=None,
                          sameStrand=True,
                          validateImpossToCalc_mThreshold=3,
                          nbHpsRecommendedGap=2,
                          targetProbaRecommendedGap=0.01,
                          chromosomesRewrittenInTbs=False,
-                         drawAllInformations=False,
-                         doDrawChromosomes=False,
                          scaleFactorRectangles=2.0,
-                         considerAllPairComps=True,
+                         onlyROIcomp=False,
                          switchOnDirectView=False,
                          optimisation=None,
                          inSbsInPairComp=None,
@@ -1583,8 +1580,21 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                          outImageFileName="./homologyMatrix.svg",
                          # the number of gene name caracters to write in gene symbols
                          nbCaractersForGeneNamesInSymlbols=1,
-                         showGeneNames=False,
+                         # drawAllInformations=False,
+                         # doDrawChromosomes=False,
+                         # showGeneNames=False,
                          verbose=True):
+    assert (onlyROIcomp and  inSbsInPairComp is None) or not onlyROIcomp
+    # # DEBUG
+    # import inspect
+    # frame = inspect.currentframe()
+    # args, _, _, values = inspect.getargvalues(frame)
+    # for i in args:
+    #     if i not in {'genome1', 'genome2', 'families', 'CDF1', 'CDF2', 'inSbsInPairComp'}:
+    #         print >> sys.stderr, "    %s = %s" % (i, values[i])
+    # print >> sys.stderr, len(values['inSbsInPairComp']), len(values['inSbsInPairComp'][list(values['inSbsInPairComp'].keys())[0]])
+    # print >> sys.stderr, len(values['genome1'])
+    # print >> sys.stderr, len(values['genome2'])
 
     assert isinstance(genome1, myLightGenomes.LightGenome)
     assert isinstance(genome2, myLightGenomes.LightGenome)
@@ -1592,10 +1602,10 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
 
     kwargs = {'gapMax': gapMax,
               'distinguishMonoGenicDiags': distinguishMonoGenicDiags,
-              'gapMaxMicroInv': gapMaxMicroInv,
+              'gapMax_Diag_Sbs': gapMax_Diag_Sbs,
               'distanceMetric': distanceMetric,
-              'identifyMonoGenicInvs': identifyMonoGenicInvs,
-              'identifyMicroRearrangements': identifyMicroRearrangements,
+              'identifyMonoGenicCs': identifyMonoGenicCs,
+              'identifyMicroRearr': identifyMicroRearr,
               'truncationMax': truncationMax,
               'sameStrand': sameStrand,
               'pThreshold': pThreshold,
@@ -1632,15 +1642,17 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
         nbSpeciesSpecificGenes2 = len([gn for gn in genome2OnlyChr2.getGeneNames(asA=list, checkNoDuplicates=False) if families.getFamilyByName(gn, default=None) is None])
         print >> sys.stderr, "the ROI2 contains %s genes (%s species specific genes)" % (len(genome2OnlyChr2[chr2]), nbSpeciesSpecificGenes2)
 
-        if considerAllPairComps:
-            comparedGenome1 = genome1
-            comparedGenome2 = genome2
-            familiesForComp = families
-        else:
+        if onlyROIcomp:
             # extract diagonals in the ROI without considering other pairwise comparisons
             comparedGenome1 = genome1OnlyChr1
             comparedGenome2 = genome2OnlyChr2
-            familiesForComp = reduceFamiliesToFamiliesInFilteredChroms(genome1[chr1], genome2[chr2], families, filterType=filterType)
+            familiesForComp = reduceFamiliesToFamiliesInFilteredChroms(genome1OnlyChr1[chr1], genome2OnlyChr2[chr2],
+                                                                       families, filterType=filterType)
+        else:
+            comparedGenome1 = genome1
+            comparedGenome2 = genome2
+            familiesForComp = families
+
 
         if inSbsInPairComp is None:
             inSbsInPairComp = myDiags.extractSbsInPairCompGenomes(comparedGenome1,
@@ -1650,12 +1662,11 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                                                                   minChromLength=minChromLength,
                                                                   filterType=filterType,
                                                                   **kwargs)
-
         (listOfDiagsWithIds, withSbIds)= editSbsInROIWithGenomesInGenes(inSbsInPairComp,
-                                                           comparedGenome1, comparedGenome2,
-                                                           chr1, chr2,
-                                                           range1, range2,
-                                                           considerAllPairComps)
+                                                                        comparedGenome1, comparedGenome2,
+                                                                        chr1, chr2,
+                                                                        range1, range2,
+                                                                        onlyROIcomp)
         # FIXME : not sure for the next two lines but seems to work to show homologies
         genome1OnlyChr1 = myMapping.labelWithFamNames(genome1OnlyChr1, familiesForComp)
         genome2OnlyChr2 = myMapping.labelWithFamNames(genome2OnlyChr2, familiesForComp)
@@ -1705,27 +1716,29 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
         tb2g2 = mtb2g2[chr2]
         g2tb2 = mtb2g2[chr2].old
 
-        if considerAllPairComps:
-            comparedGenome1 = g1_tb
-            comparedGenome2 = g2_tb
-            familiesForComp = families
-        else:
+        if onlyROIcomp:
             # extract diagonals in the ROI without considering other pairwise comparisons
             comparedGenome1 = genome1tbOnlyTChr1
             comparedGenome2 = genome2tbOnlyTChr2
-            familiesForComp = reduceFamiliesToFamiliesInFilteredChroms(genome1[chr1], genome2[chr2], families,
+            familiesForComp = reduceFamiliesToFamiliesInFilteredChroms(genome1tbOnlyTChr1[chr1],
+                                                                       genome2tbOnlyTChr2[chr2], families,
                                                                        filterType=filterType)
+        else:
+            comparedGenome1 = g1_tb
+            comparedGenome2 = g2_tb
+            familiesForComp = families
+
 
         if inSbsInPairComp is None:
             inSbsInPairComp = myDiags.extractSbsInPairCompGenomesInTbs(comparedGenome1,
                                                                        comparedGenome2,
                                                                        **kwargs)
         (listOfDiagsWithIds, withSbIds) = editSbsInROIWithGenomesInTbs(inSbsInPairComp,
-                                                           comparedGenome1, comparedGenome2,
-                                                           chr1, chr2,
-                                                           range1, range2,
-                                                           considerAllPairComps,
-                                                        g2tb1, g2tb2)
+                                                                       comparedGenome1, comparedGenome2,
+                                                                       chr1, chr2,
+                                                                       range1, range2,
+                                                                       onlyROIcomp,
+                                                                       g2tb1, g2tb2)
 
         svgItemsHM = svgItemsHMChrom1Chrom2(genome1tbOnlyTChr1[chr1], genome2tbOnlyTChr2[chr2],
                                             familiesForComp,
@@ -1771,8 +1784,8 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
                                       tandemGapMax,
                                       gapMax,
                                       distanceMetric,
-                                      gapMaxMicroInv,
-                                      identifyMicroRearrangements,
+                                      gapMax_Diag_Sbs,
+                                      identifyMicroRearr,
                                       truncationMax,
                                       nbSbs,
                                       outImageFileName,
@@ -1791,7 +1804,7 @@ if __name__ == '__main__':
     #families = myLightGenomes.Families('/home/jlucas/Libs/PhylDiag/data/ancGenes.Euarchontoglires.list.bz2')
 
     prepareWholeGenomeHomologyMatrices(genome1, genome2, families, inSbsInPairComp=None, maxWidth=100, maxHeight=100,
-                                filterType=FilterType.None,
+                                filterType=myDiags.FilterType.None,
                                 minChromLength=0,
                                 tandemGapMax=0,
                                 outputFileName='toto.svg',
