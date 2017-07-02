@@ -10,8 +10,8 @@ Dependencies will be installed with the package manager "apt-get" of debian dist
 LibsDyogen and its plugged softwares will be installed into /home/${USER}/Libs.
 The sudo password is required to
 * Enable the universe deposit
-* Instal dependencies with apt-get
-* Add the LibsDyogen folder into the PYTHONPATH, editing the ~/.bashrc
+* Install dependencies with apt-get
+* Add LibsDyogen folder into PYTHONPATH, via an edition of ~/.bashrc
 
 Install *curl*, if you don't have it
 ```
@@ -54,6 +54,7 @@ Depending on your distribution and version, you may need to change the names of 
 If this did not work, look at indications of authors
 * matplotlib : https://matplotlib.org/users/installing.html
 * scipy : https://www.scipy.org/install.html
+* ...
 
 Choose a path for the installation of the library and plugins.
 Here we choose /home/<user>/Libs.
@@ -76,7 +77,7 @@ Add the LibsDyogen root folder to the PYTHONPATH environment variable
 echo "export PYTHONPATH=\"\${PYTHONPATH}:${PATH_LIBSDYOGEN}\"" >> ~/.bashrc
 export PYTHONPATH=${PYTHONPATH}:${PATH_LIBSDYOGEN}
 ```
-Then cythonise *.pyx files (=compile C-like files)
+Cythonise *.pyx files (=compile C-like files)
 ```
 bash ${PATH_LIBSDYOGEN}/cythonisePyxFiles.sh ${PATH_LIBSDYOGEN}
 ```
@@ -93,7 +94,7 @@ Compile sources with gcc
 ```
 make
 ```
-homolgyteams should now be plugged automatically to LibsDyogen.
+Homolgyteams should now be plugged automatically to LibsDyogen.
 If it is not plugged, update the PATH_HOMOLOGYTEAMS_BIN variable in ${PATH_LIBSDYOGEN}/utils/myGeneTeams.py.
 ```
 PATH_HOMOLOGYTEAMS_BIN = "<PATH_PARENT_ALL>/homologyteams-1.1/src/homologyteams"
@@ -107,7 +108,7 @@ wget http://bioinformatics.psb.ugent.be/downloads/psb/i-adhore/i-adhore-3.0.01.t
 tar -zxvf i-adhore-3.0.01.tar.gz
 rm i-adhore-3.0.01.tar.gz
 ```
-Finish the installation following the INSTALL file provided by the ADHoRe team
+Finish the installation
 ```
 cd i-adhore-3.0.01
 mkdir build
@@ -162,7 +163,7 @@ Read the INSTALL file to find tests to check the installation, for instance try
 ```
 ./cyntenator -t "(HSX.txt MMX.txt)" -h phylo HSCFMM.blast  "((HSX.txt:1.2 MMX.txt:1.3):0.5 CFX.txt:2.5):1" > human_mouse
 ```
-cyntenator should be plugged automatically to LibsDyogen.
+Cyntenator should be plugged automatically to LibsDyogen.
 If it is not plugged, update the PATH_CYNTENATOR_BIN variable in ${PATH_LIBSDYOGEN}/utils/myCyntenator.py
 ```
 PATH_CYNTENATOR_BIN = "<PATH_PARENT_ALL>/cyntenator/cyntenator"
@@ -171,7 +172,7 @@ with <PATH_PARENT_ALL> the appropriate path : in our case it's /home/<user>/Libs
 
 ## Usage
 
-See each __main__ in module for usage.
+See each __main__ in python modules for usage.
 
 ### Details about the scripts/ folder
 
@@ -193,10 +194,9 @@ scripts/familiesFromGeneTrees.py res/speciesTree.phylTree res/geneTrees.protTree
 ```
 
 These families files define gene families. All descendant genes of the same ancestral gene belong to the same
-family.
+family. <Ancestor>.families.bz2 contains gene families that derive from a unique gene in the <Ancestor> genome.
 
-Usually, when two species S1 and S2 are compared, each gene family is defined as the set of genes deriving from the same ancestral gene of the most recent common ancestor of S1 and S2.
-
+Usually, when a set of species is considered, each gene family is defined as the set of genes deriving from the same ancestral gene of the most recent common ancestor.
 
 ## Update
 If you want to keep LibsDyogen up to date, execute
@@ -214,9 +214,9 @@ If you want a more stable version, after `git pull`, you can downgrade to the la
 2. Get the latest tag name ``latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)``
 3. Checkout the latest tag: `git checkout $latestTag`
 
-Otherwise you can
+After `git fetch --tags`, you can also switch to any anterior tagged version
 1. List all tagged versions: `git tag -l`
-2. Checkout the version you want: `git checkout <tagName>`
+2. Checkout to the version you want: `git checkout <tagName>`
 
 ## Contributing
 If you want to contribute to this deposit please
