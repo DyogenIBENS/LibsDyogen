@@ -3,6 +3,11 @@
 
 Collaborative python library used in the [DYOGEN team](http://www.ibens.ens.fr/?rubrique43&lang=fr) for studying the evolution of gene order in vertebrates.
 
+Contacts :
+* [Joseph Lucas](jlucas@ens.fr)
+* [Alexandra Louis](alouis@ens.fr)
+* [Hugues Roest Crollius](hrc@ens.fr)
+
 ## Installation
 The easiest way to install LibsDyogen is to execute the remote script INSTALL.sh hosted on github.
 This script will clone the github deposit itself.
