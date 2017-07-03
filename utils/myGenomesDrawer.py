@@ -1794,10 +1794,10 @@ def homologyMatrixViewer(genome1, genome2, families, CDF1, CDF2,
 if __name__ == '__main__':
     # genome1 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Homo.sapiens.light2.list.bz2')
     # genome2 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Mus.musculus.light.list.bz2')
-    families = myLightGenomes.Families('/home/jlucas/Libs/PhylDiag/data/ancGenes.Amniota.list.bz2')
+    families = myLightGenomes.Families('/home/jlucas/Libs/PhylDiag/data/Amniota.families.bz2')
     #genome1 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Homo.sapiens.list.bz2')
-    genome1 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Homo.sapiens.list.bz2')
-    genome2 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Gallus.gallus.list.bz2')
+    genome1 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/Homo.sapiens.genome.bz2')
+    genome2 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/Gallus.gallus.genome.bz2')
     #genome2 = myLightGenomes.LightGenome('/home/jlucas/Libs/PhylDiag/data/genesST.Mus.musculus.list.bz2')
     genome1.removeUnofficialChromosomes()
     genome2.removeUnofficialChromosomes()

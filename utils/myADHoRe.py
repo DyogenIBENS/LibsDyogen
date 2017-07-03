@@ -302,9 +302,9 @@ if __name__ == '__main__':
         os.mkdir('adhore')
     except:
         pass
-    genome1 = myLightGenomes.LightGenome('genesST.Homo.sapiens.list.bz2')
-    genome2 = myLightGenomes.LightGenome('genesST.Mus.musculus.list.bz2')
-    families = myLightGenomes.Families('ancGenes.Euarchontoglires.list.bz2')
+    genome1 = myLightGenomes.LightGenome('Homo.sapiens.genome.bz2')
+    genome2 = myLightGenomes.LightGenome('Mus.musculus.genome.bz2')
+    families = myLightGenomes.Families('Euarchontoglires.families.bz2')
     print launchADHoRe(genome1, genome2, families, gapMax=5, tandemGapMax=5, pThreshold=0.001, minimalLengthForSbs=3,
                        outADHoReChromosomes="adhore/Genome.%s.Chr%s.list",
                        outAHoReFamilies="adhore/families.csv",

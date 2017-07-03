@@ -234,9 +234,9 @@ def launchCyntenator(genome1, genome2, families,
 
 if __name__ == '__main__':
     os.chdir('/home/' + getpass.getuser() + '/Libs/PhylDiag/data')
-    genome1 = myLightGenomes.LightGenome('genesST.Homo.sapiens.list.bz2')
-    genome2 = myLightGenomes.LightGenome('genesST.Mus.musculus.list.bz2')
-    families = myLightGenomes.Families('ancGenes.Euarchontoglires.list.bz2')
+    genome1 = myLightGenomes.LightGenome('Homo.sapiens.genome.bz2')
+    genome2 = myLightGenomes.LightGenome('Mus.musculus.genome.bz2')
+    families = myLightGenomes.Families('Euarchontoglires.families.bz2')
 
     #default
     mismatch = -3

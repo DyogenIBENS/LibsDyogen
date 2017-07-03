@@ -3,11 +3,6 @@
 
 Collaborative python library used in the [DYOGEN team](http://www.ibens.ens.fr/?rubrique43&lang=fr) for studying the evolution of gene order in vertebrates.
 
-Contacts :
-* [Joseph Lucas](jlucas@ens.fr)
-* [Alexandra Louis](alouis@ens.fr)
-* [Hugues Roest Crollius](hrc@ens.fr)
-
 ## Installation
 The easiest way to install LibsDyogen is to execute the remote script INSTALL.sh hosted on github.
 This script will clone the github deposit itself.
@@ -223,7 +218,7 @@ After `git fetch --tags`, you can also switch to any anterior tagged version
 1. List all tagged versions: `git tag -l`
 2. Checkout to the version you want: `git checkout <tagName>`
 
-## Contributing
+## Contribute
 If you want to contribute to this deposit please
 1. Fork it
 2. Create your feature branch: `git checkout -b my-new-feature`
@@ -243,6 +238,7 @@ This code may be freely distributed and modified under the terms of the GNU Gene
 and the CeCILL licence version 2 of the CNRS. These licences are contained in the files:
 * LICENSE-GPL.txt (or http://www.gnu.org/licenses/gpl-3.0-standalone.html)
 * LICENCE-CeCILL.txt (or http://www.cecill.info/licences/Licence_CeCILL_V2-en.html)
+
 Copyright for this code is held jointly by the Dyogen (DYnamic and Organisation of GENomes) team
 of the Institut de Biologie de l'Ecole Normale Supérieure (IBENS) 46 rue d'Ulm Paris, and the individual authors.
 
