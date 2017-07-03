@@ -1,19 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-
-#  ____  _           _ ____  _
-# |  _ \| |__  _   _| |  _ \(_) __ _  __ _
-# | |_) | '_ \| | | | | | | | |/ _` |/ _` |
-# |  __/| | | | |_| | | |_| | | (_| | (_| |
-# |_|   |_| |_|\__, |_|____/|_|\__,_|\__, |
-#              |___/                 |___/
-#
-# PhylDiag version 2.0 (6/11/2015)
-# LibsDyogen version 1.0 (6/11/2015)
-# python v2.7 at least is needed
-# Copyright © 2015 IBENS/Dyogen : Joseph LUCAS, Lucas TITTMANN and Hugues ROEST CROLLIUS
-# mail : jlucas@ens.fr
+# Copyright IBENS/Dyogen : Joseph LUCAS, Matthieu MUFFATTO, Lucas TITTMANN and Hugues ROEST CROLLIUS
+# mail : jlucas@ens.fr or hrc@ens.fr
 # Licences GLP v3 and CeCILL v2
 
 ###################################################################
