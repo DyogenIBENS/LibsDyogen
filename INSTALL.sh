@@ -27,9 +27,6 @@ mkdir -p ${PATH_PARENT_ALL}
 echo 'Install LibsDyogen' >&2
 PATH_LIBSDYOGEN="${PATH_PARENT_ALL}/LibsDyogen"
 git clone https://github.com/DyogenIBENS/LibsDyogen ${PATH_LIBSDYOGEN}
-# Add the LibsDyogen root folder to the PYTHONPATH environment variable
-echo "export PYTHONPATH=\"\${PYTHONPATH}:${PATH_LIBSDYOGEN}\"" >> ~/.bashrc
-export PYTHONPATH=${PYTHONPATH}:${PATH_LIBSDYOGEN}
 # Then cythonise *.pyx
 bash ${PATH_LIBSDYOGEN}/cythonisePyxFiles.sh ${PATH_LIBSDYOGEN}
 
@@ -86,6 +83,26 @@ g++ -Wno-deprecated cyntenator.cpp localign.cpp genome.cpp flow.cpp species_tree
 # reinit working dir
 cd ${iwd}
 
+# Next 2 uncommented lines have been moved from the top to here since LibsDyogen/enum.py conflicts with python3. (at least while building the docker container)
+#    Traceback (most recent call last):
+#      File "/usr/bin/add-apt-repository", line 11, in <module>
+#        from softwareproperties.SoftwareProperties import SoftwareProperties, shortcut_handler
+#      File "/usr/lib/python3/dist-packages/softwareproperties/SoftwareProperties.py", line 49, in <module>
+#        from xml.sax.saxutils import escape
+#      File "/usr/lib/python3.5/xml/sax/saxutils.py", line 6, in <module>
+#        import os, urllib.parse, urllib.request
+#      File "/usr/lib/python3.5/urllib/request.py", line 88, in <module>
+#        import http.client
+#      File "/usr/lib/python3.5/http/__init__.py", line 1, in <module>
+#        from enum import IntEnum
+#      File "/home/Dev/LibsDyogen/enum.py", line 66
+#        raise NotImplementedError, \
+#                                 ^
+#    SyntaxError: invalid syntax
+# Add the LibsDyogen root folder to the PYTHONPATH environment variable
+echo "export PYTHONPATH=\"\${PYTHONPATH}:${PATH_LIBSDYOGEN}\"" >> ~/.bashrc
+export PYTHONPATH=${PYTHONPATH}:${PATH_LIBSDYOGEN}
+
 # Post-processing information
 green='\e[0;32m'
 NC='\e[0m' # No Color
@@ -95,3 +112,4 @@ echo -e "${green}Installation finished${NC}"
 echo -e "${green}please run 'export PYTHONPATH=\${PYTHONPATH}:${PATH_LIBSDYOGEN}' to update the PYTHONPATH environment variable${NC}"
 echo -e "${green}next time you open a bash session, you won't need this since your ~/.bashrc will be loaded${NC}"
 echo -e "${green}make sure that 'echo \${PYTHONPATH}' shows the path to the folder LibsDyogen${NC}"
+
