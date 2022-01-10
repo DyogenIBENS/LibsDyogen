@@ -78,7 +78,7 @@ def newChromName(genome):
         chosenChromName = 1
     else:
         maxChromName = max(chromNames)
-        chromNamesToFillGaps = set(range(maxChromName + 1)) - chromNames
+        chromNamesToFillGaps = set(range(1, maxChromName + 1)) - chromNames
         if len(chromNamesToFillGaps) > 0:
             chosenChromName = str(chromNamesToFillGaps.pop())
         else:
